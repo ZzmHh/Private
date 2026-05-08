@@ -927,6 +927,8 @@ footer a {
 
 .auth-hero {
   max-width: 760px;
+  text-align: center;
+  justify-self: center;
 }
 
 .auth-badge,
@@ -944,6 +946,7 @@ footer a {
   border-radius: 999px;
   color: #155eef;
   background: #f5f8ff;
+  margin: 0 auto;
 }
 
 .auth-hero h1 {
@@ -953,6 +956,8 @@ footer a {
 
 .auth-hero p {
   max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
   font-size: 18px;
 }
 
@@ -960,6 +965,7 @@ footer a {
   margin-top: 28px;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
 }
 
