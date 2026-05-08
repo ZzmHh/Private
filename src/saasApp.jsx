@@ -353,14 +353,14 @@ function Workspace() {
   const [showSubscription, setShowSubscription] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [answer, setAnswer] = useState("登录后已开启 3 天免费试用。请选择左侧模块，输入要求后由 OpenClaw 生成结果。");
-  const [input, setInput] = useState(agents[0].prompt);
-  const [autoInput, setAutoInput] = useState("我是 Amazon 美国站卖家，想做宠物用品类目，预算有限，适合新卖家，优先选择轻小件。");
+  const [input, setInput] = useState("");
+  const [autoInput, setAutoInput] = useState("");
   const [scrapeConfig, setScrapeConfig] = useState({
     enabled: false,
-    platform: "TikTok Shop",
-    market: "美国",
-    category: "宠物用品",
-    url: "https://www.tiktokshuju.com/goods/hot-sale",
+    platform: "",
+    market: "",
+    category: "",
+    url: "",
   });
   const [storeConfig, setStoreConfig] = useState({
     platform: "Amazon",
@@ -420,10 +420,7 @@ function Workspace() {
   function selectAgent(id) {
     setActiveId(id);
     setAnswer("");
-    const selected = agents.find((agent) => agent.id === id);
-    if (selected) {
-      setInput(selected.prompt);
-    }
+    setInput("");
   }
 
   async function handleLocalImport(event) {
@@ -479,7 +476,7 @@ function Workspace() {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
-          input: `${autoInput}${buildAttachmentContext()}`,
+          input: `${autoInput || "用户未填写具体要求，请先提示用户补充平台、市场、类目和目标。"}${buildAttachmentContext()}`,
           scrape: scrapeConfig.enabled ? scrapeConfig : { enabled: false },
         }),
       });
@@ -657,10 +654,10 @@ function Workspace() {
               </label>
               {scrapeConfig.enabled && (
                 <div className="scrape-fields">
-                  <input value={scrapeConfig.platform} onChange={(event) => setScrapeConfig({ ...scrapeConfig, platform: event.target.value })} placeholder="平台" />
-                  <input value={scrapeConfig.market} onChange={(event) => setScrapeConfig({ ...scrapeConfig, market: event.target.value })} placeholder="市场" />
-                  <input value={scrapeConfig.category} onChange={(event) => setScrapeConfig({ ...scrapeConfig, category: event.target.value })} placeholder="类目" />
-                  <input value={scrapeConfig.url} onChange={(event) => setScrapeConfig({ ...scrapeConfig, url: event.target.value })} placeholder="抓取 URL" />
+                  <input value={scrapeConfig.platform} onChange={(event) => setScrapeConfig({ ...scrapeConfig, platform: event.target.value })} placeholder="例：TikTok Shop" />
+                  <input value={scrapeConfig.market} onChange={(event) => setScrapeConfig({ ...scrapeConfig, market: event.target.value })} placeholder="例：美国" />
+                  <input value={scrapeConfig.category} onChange={(event) => setScrapeConfig({ ...scrapeConfig, category: event.target.value })} placeholder="例：宠物用品" />
+                  <input value={scrapeConfig.url} onChange={(event) => setScrapeConfig({ ...scrapeConfig, url: event.target.value })} placeholder="例：https://www.tiktokshuju.com/goods/hot-sale" />
                 </div>
               )}
             </div>
@@ -674,7 +671,7 @@ function Workspace() {
           )}
           {activeId === "autopilot" ? (
             <div className="auto-form">
-              <textarea value={autoInput} onChange={(event) => setAutoInput(event.target.value)} placeholder="例如：我是 Amazon 美国站卖家，想做宠物用品类目，预算有限，希望系统自动生成选品、内容、Listing、客服、业绩和利润方案。" />
+              <textarea value={autoInput} onChange={(event) => setAutoInput(event.target.value)} placeholder="例：我是 Amazon 美国站卖家，想做宠物用品类目，预算有限，希望系统自动生成选品、内容、Listing、客服、业绩和利润方案。" />
               <label className="import-btn">
                 <UploadCloud size={17} />
                 本地导入
@@ -686,7 +683,7 @@ function Workspace() {
             </div>
           ) : (
             <div className="agent-composer">
-              <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="输入你的具体要求..." />
+              <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={`例：${activeAgent.prompt}`} />
               <label className="import-btn">
                 <UploadCloud size={17} />
                 本地导入
