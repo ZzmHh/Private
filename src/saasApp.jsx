@@ -27,6 +27,7 @@ const pricingPlans = [
     price: "99",
     desc: "适合个人卖家试用 AI 工作流。",
     features: ["每日 100 次 Agent 调用", "6 个 Agent 基础使用", "本地文件导入", "任务历史 30 条", "社区/邮件支持"],
+    access: "开放选品、内容、Listing 三个基础 Agent；不含实时抓取和店铺 API 强数据 Agent。",
   },
   {
     id: "standard",
@@ -35,6 +36,7 @@ const pricingPlans = [
     desc: "适合已有店铺、希望稳定提效的卖家。",
     recommended: true,
     features: ["每日 500 次 Agent 调用", "店铺 API 配置", "业绩诊断与利润分析", "AI 客服售后模板", "实时抓取数据源", "优先支持"],
+    access: "开放全部 6 个 Agent、全自动运行、实时抓取和店铺 API 强数据 Agent。",
   },
   {
     id: "managed",
@@ -42,6 +44,7 @@ const pricingPlans = [
     price: "899",
     desc: "适合希望让 Agent 接管日常运营的团队。",
     features: ["每日 2,000 次 Agent 调用", "6 Agent 全自动运行增强", "多店铺/多站点管理", "自动化运营周报", "专属配置协助", "1 对 1 运营建议"],
+    access: "开放全部能力，增加多店铺、自动化周报和高频调用额度。",
   },
   {
     id: "enterprise",
@@ -49,6 +52,7 @@ const pricingPlans = [
     price: "联系定价",
     desc: "适合公司团队、私有化或深度数据集成。",
     features: ["自定义调用量", "ERP/BI/客服系统集成", "企业权限与团队席位", "专属知识库", "私有化部署方案", "专属客户成功经理"],
+    access: "按企业需求定制调用量、权限、数据集成和私有化部署。",
   },
 ];
 
@@ -229,10 +233,54 @@ function readFileAsText(file) {
   });
 }
 
-function SubscriptionModal({ onClose }) {
+function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="store-api-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p>Store API</p>
+            <h2>配置店铺 API</h2>
+          </div>
+          <button type="button" onClick={onClose}>关闭</button>
+        </div>
+        <div className="modal-store-config standalone">
+          <div className="config-title">
+            <PlugZap size={17} />
+            强数据 Agent 必须配置
+          </div>
+          <p>店铺业绩诊断、AI 客服售后、广告库存利润需要读取店铺、广告、库存或客服数据。配置后，OpenClaw 才能基于真实数据诊断。</p>
+          <div className="store-api-form vertical">
+            <input value={storeConfig.storeName} onChange={(event) => setStoreConfig({ ...storeConfig, storeName: event.target.value })} placeholder="店铺名称" />
+            <input value={storeConfig.apiEndpoint} onChange={(event) => setStoreConfig({ ...storeConfig, apiEndpoint: event.target.value })} placeholder="店铺 API Endpoint" />
+            <input value={storeConfig.apiToken} onChange={(event) => setStoreConfig({ ...storeConfig, apiToken: event.target.value })} placeholder="API Token / Access Key" />
+          </div>
+          <div className={storeConnected ? "status-ok" : "status-warn"}>
+            {storeConnected ? "店铺 API 已配置" : "未配置店铺 API，相关 Agent 会持续提醒"}
+          </div>
+        </div>
+        <button className="continue-checkout" type="button" onClick={onClose}>
+          保存配置
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function SubscriptionModal({ onClose, showToast }) {
   const [selectedPlanId, setSelectedPlanId] = useState("standard");
   const [checkoutPlan, setCheckoutPlan] = useState(null);
+  const [contactForm, setContactForm] = useState({ name: "", phone: "", wechat: "", email: "", note: "" });
   const selectedPlan = pricingPlans.find((plan) => plan.id === selectedPlanId);
+
+  function updateContactForm(field, value) {
+    setContactForm({ ...contactForm, [field]: value });
+  }
+
+  function submitEnterpriseContact() {
+    showToast("已记录定制版联系信息，正式上线后会接入表单/CRM。");
+    onClose();
+  }
 
   if (checkoutPlan) {
     return (
@@ -258,20 +306,36 @@ function SubscriptionModal({ onClose }) {
               <span>开通后权益</span>
               <p>{checkoutPlan.features.join("、")}</p>
             </div>
+            <div>
+              <span>功能权限</span>
+              <p>{checkoutPlan.access}</p>
+            </div>
           </div>
           {checkoutPlan.id === "enterprise" ? (
             <div className="payment-box">
               <h3>定制版需要联系我们</h3>
-              <p>请留下联系方式或添加企业微信，后续可接入表单、CRM 或人工客服。</p>
-              <button type="button">联系商务定价</button>
+              <p>请留下手机号、微信或邮箱。正式上线后，这里会接入表单通知、CRM 或企业微信客服。</p>
+              <div className="enterprise-form">
+                <input value={contactForm.name} onChange={(event) => updateContactForm("name", event.target.value)} placeholder="姓名 / 公司名" />
+                <input value={contactForm.phone} onChange={(event) => updateContactForm("phone", event.target.value)} placeholder="手机号" />
+                <input value={contactForm.wechat} onChange={(event) => updateContactForm("wechat", event.target.value)} placeholder="微信号" />
+                <input value={contactForm.email} onChange={(event) => updateContactForm("email", event.target.value)} placeholder="邮箱" />
+                <textarea value={contactForm.note} onChange={(event) => updateContactForm("note", event.target.value)} placeholder="需求说明：店铺数量、平台、是否需要私有化部署..." />
+              </div>
+              <button type="button" onClick={submitEnterpriseContact}>提交联系信息</button>
             </div>
           ) : (
             <div className="payment-box">
               <h3>付款方式</h3>
-              <p>这里是付款界面原型。正式上线时可接入微信支付、支付宝或 Stripe，并在支付成功后自动更新套餐。</p>
+              <p>当前为支付占位页。申请微信支付/支付宝商户后，这里会创建订单、展示支付二维码，并在支付回调成功后自动开通套餐。</p>
+              <div className="order-placeholder">
+                <span>订单状态</span>
+                <strong>等待接入支付通道</strong>
+                <p>预计流程：创建订单 → 返回二维码 → 用户扫码 → 支付回调 → 开通套餐。</p>
+              </div>
               <div className="pay-options">
-                <button type="button">微信支付</button>
-                <button type="button">支付宝</button>
+                <button type="button" onClick={() => showToast("微信支付即将接入，请先申请微信支付商户号。")}>微信支付 · 即将接入</button>
+                <button type="button" onClick={() => showToast("支付宝即将接入，请先申请支付宝开放平台应用。")}>支付宝 · 即将接入</button>
               </div>
             </div>
           )}
@@ -311,6 +375,7 @@ function SubscriptionModal({ onClose }) {
               {selectedPlanId === plan.id && <span className="selected-badge">已选中</span>}
               <h3>{plan.name}</h3>
               <p>{plan.desc}</p>
+              <p className="plan-access">{plan.access}</p>
               <div className="sub-price">
                 {plan.price === "联系定价" ? (
                   <strong>联系定价</strong>
@@ -345,12 +410,154 @@ function SubscriptionModal({ onClose }) {
   );
 }
 
+function StructuredAgentPreview({ agentId }) {
+  if (agentId === "growth") {
+    return (
+      <div className="structured-preview">
+        <div className="preview-heading">
+          <strong>经营诊断看板</strong>
+          <span>适合接入店铺 API 后自动生成</span>
+        </div>
+        <div className="metric-cards">
+          <div>
+            <span>GMV</span>
+            <strong>待分析</strong>
+            <em>环比 / 同比</em>
+          </div>
+          <div>
+            <span>转化率</span>
+            <strong>待分析</strong>
+            <em>流量到订单</em>
+          </div>
+          <div>
+            <span>广告 ROI</span>
+            <strong>待分析</strong>
+            <em>投产效率</em>
+          </div>
+          <div>
+            <span>库存周转</span>
+            <strong>待分析</strong>
+            <em>断货/积压</em>
+          </div>
+        </div>
+        <div className="diagnosis-layout">
+          <section>
+            <h4>异常诊断</h4>
+            <p>P0：销售下滑原因、亏损广告组、断货风险。</p>
+            <p>P1：转化率、评价、主图、价格带优化。</p>
+          </section>
+          <section>
+            <h4>行动清单</h4>
+            <p>暂停亏损广告、补货高利润 SKU、优化低转化 Listing。</p>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (agentId === "service") {
+    return (
+      <div className="structured-preview service-preview">
+        <div className="preview-heading">
+          <strong>客服工单处理台</strong>
+          <span>适合接入客服消息/订单物流数据后自动回复</span>
+        </div>
+        <div className="ticket-card">
+          <div>
+            <span>客户情绪</span>
+            <strong className="risk-high">高风险</strong>
+          </div>
+          <div>
+            <span>问题类型</span>
+            <strong>物流延迟 / 退款诉求</strong>
+          </div>
+          <div>
+            <span>处理策略</span>
+            <strong>安抚 + 查询物流 + 优惠券挽留</strong>
+          </div>
+        </div>
+        <div className="reply-box">
+          <h4>推荐英文回复模板</h4>
+          <p>Hi, we are truly sorry for the delay. We are checking the latest tracking status and will offer a solution as soon as possible...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (agentId === "profit") {
+    return (
+      <div className="structured-preview">
+        <div className="preview-heading">
+          <strong>广告库存利润决策表</strong>
+          <span>适合接入广告、库存、采购成本和订单数据后自动决策</span>
+        </div>
+        <div className="sku-table">
+          <div className="sku-row header">
+            <span>SKU</span>
+            <span>利润状态</span>
+            <span>库存风险</span>
+            <span>建议动作</span>
+          </div>
+          <div className="sku-row">
+            <span>SKU-A</span>
+            <span className="good">高利润</span>
+            <span>可售 28 天</span>
+            <span>加预算 / 补货</span>
+          </div>
+          <div className="sku-row">
+            <span>SKU-B</span>
+            <span className="bad">实际亏损</span>
+            <span>积压风险</span>
+            <span>停投 / 清仓</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ResultDocument({ content }) {
+  if (!content) {
+    return <div className="result-empty">等待输入要求...</div>;
+  }
+
+  const lines = content.split("\n").map((line) => line.trim()).filter(Boolean);
+
+  return (
+    <article className="result-document">
+      {lines.map((line, index) => {
+        const normalized = line.replace(/^#{1,6}\s*/, "");
+
+        if (/^#{1,6}\s+/.test(line) || /^[一二三四五六七八九十]+[、.]/.test(line)) {
+          return <h3 key={`${line}-${index}`}>{normalized}</h3>;
+        }
+
+        if (/^[-*]\s+/.test(line) || /^\d+[.)、]\s*/.test(line)) {
+          return <p className="doc-list-item" key={`${line}-${index}`}>{line.replace(/^[-*]\s+/, "").replace(/^\d+[.)、]\s*/, "")}</p>;
+        }
+
+        if (/[:：]$/.test(line) && line.length < 32) {
+          return <h4 key={`${line}-${index}`}>{line}</h4>;
+        }
+
+        return <p key={`${line}-${index}`}>{line}</p>;
+      })}
+    </article>
+  );
+}
+
 function Workspace() {
   const [activeId, setActiveId] = useState("autopilot");
+  const [isBetaMode, setIsBetaMode] = useState(() => new URLSearchParams(window.location.search).get("beta") === "1");
   const [token, setToken] = useState(() => localStorage.getItem("fanmeng_token") || "");
   const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [showSubscription, setShowSubscription] = useState(false);
+  const [showStoreApiModal, setShowStoreApiModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [toast, setToast] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [answer, setAnswer] = useState("登录后已开启 3 天免费试用。请选择左侧模块，输入要求后由 OpenClaw 生成结果。");
   const [input, setInput] = useState("");
@@ -371,6 +578,7 @@ function Workspace() {
   const [attachments, setAttachments] = useState([]);
 
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === activeId), [activeId]);
+  const visibleTasks = useMemo(() => tasks.filter((task) => task.type === activeId), [tasks, activeId]);
   const storeConnected = Boolean(storeConfig.storeName && storeConfig.apiEndpoint && storeConfig.apiToken);
 
   useEffect(() => {
@@ -413,13 +621,40 @@ function Workspace() {
     };
   }
 
+  function showToast(message) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 3200);
+  }
+
   if (!token) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
+  function hasFeature(feature, detail) {
+    if (isBetaMode) return true;
+
+    const features = user?.planFeatures;
+    if (!features) return false;
+
+    if (feature === "agent") return features.agents?.includes(detail);
+    return Boolean(features[feature]);
+  }
+
   function selectAgent(id) {
+    if (!hasFeature("agent", id)) {
+      showToast("当前套餐不支持该 Agent，请升级到标准版或更高套餐。");
+      setShowSubscription(true);
+      return;
+    }
+
     setActiveId(id);
     setAnswer("");
+    setInput("");
+  }
+
+  function openTaskHistory(task) {
+    setActiveId(task.type);
+    setAnswer(task.answer);
     setInput("");
   }
 
@@ -469,6 +704,24 @@ function Workspace() {
   }
 
   async function runAutopilot() {
+    if (!isBetaMode && !user?.trialActive && user?.plan === "trial") {
+      showToast("3 天免费试用已结束，请先订阅套餐后继续使用。");
+      setShowSubscription(true);
+      return;
+    }
+
+    if (!hasFeature("autopilot")) {
+      showToast("当前套餐不支持 6 Agent 全自动运行，请升级套餐。");
+      setShowSubscription(true);
+      return;
+    }
+
+    if (scrapeConfig.enabled && !hasFeature("scraper")) {
+      showToast("当前套餐不支持实时抓取数据源，请升级到标准版或更高套餐。");
+      setShowSubscription(true);
+      return;
+    }
+
     setIsRunning(true);
     setAnswer("OpenClaw 正在调度 6 个 Agent 自动生成完整方案...");
     try {
@@ -492,8 +745,27 @@ function Workspace() {
   }
 
   async function runAgent() {
-    if (activeAgent?.requiresStoreApi && !storeConnected) {
-      setAnswer("该 Agent 需要先配置店铺 API。请在结果区顶部的“店铺 API 配置”中填写店铺名称、接口地址和 Token。");
+    if (!isBetaMode && !user?.trialActive && user?.plan === "trial") {
+      showToast("3 天免费试用已结束，请先订阅套餐后继续使用。");
+      setShowSubscription(true);
+      return;
+    }
+
+    if (!hasFeature("agent", activeAgent.id)) {
+      showToast("当前套餐不支持该 Agent，请升级套餐。");
+      setShowSubscription(true);
+      return;
+    }
+
+    if (scrapeConfig.enabled && !hasFeature("scraper")) {
+      showToast("当前套餐不支持实时抓取数据源，请升级到标准版或更高套餐。");
+      setShowSubscription(true);
+      return;
+    }
+
+    if (!isBetaMode && activeAgent?.requiresStoreApi && !storeConnected) {
+      showToast("该 Agent 需要先配置店铺 API。");
+      setShowStoreApiModal(true);
       return;
     }
 
@@ -531,7 +803,40 @@ function Workspace() {
 
   return (
     <main className="app-shell">
-      {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
+      {toast && <div className="toast-message">{toast}</div>}
+      {showSubscription && (
+        <SubscriptionModal
+          onClose={() => setShowSubscription(false)}
+          showToast={showToast}
+        />
+      )}
+      {showFeedbackModal && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setShowFeedbackModal(false)}>
+          <section className="store-api-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <p>Beta Feedback</p>
+                <h2>内测反馈</h2>
+              </div>
+              <button type="button" onClick={() => setShowFeedbackModal(false)}>关闭</button>
+            </div>
+            <div className="feedback-box">
+              <input placeholder="你的称呼 / 公司" />
+              <input placeholder="微信 / 手机 / 邮箱" />
+              <textarea placeholder="你觉得哪里不好用？还希望增加什么功能？" />
+              <button type="button" onClick={() => { showToast("感谢反馈，正式上线后这里会接入反馈收集系统。"); setShowFeedbackModal(false); }}>提交反馈</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {showStoreApiModal && (
+        <StoreApiModal
+          onClose={() => setShowStoreApiModal(false)}
+          storeConfig={storeConfig}
+          setStoreConfig={setStoreConfig}
+          storeConnected={storeConnected}
+        />
+      )}
       <aside className="app-sidebar">
         <div className="app-brand">
           <span className="brand-mark">
@@ -539,14 +844,19 @@ function Workspace() {
           </span>
           <div>
             <strong>凡梦AI</strong>
-            <small>{user?.trialActive ? "3 天免费试用中" : user?.planName || "订阅状态"}</small>
+            <small>{isBetaMode ? "内测版 · 全功能开放" : user?.trialActive ? "3 天免费试用中" : user?.planName || "订阅状态"}</small>
           </div>
         </div>
 
         <div className="account-card">
           <strong>{user?.storeName || user?.name || "跨境卖家"}</strong>
           <span>{user?.email}</span>
+          {isBetaMode && <em>内测版已开放全部功能</em>}
+          {!isBetaMode && !user?.trialActive && user?.plan === "trial" && <em>试用期结束，请订阅后继续使用</em>}
+          {!isBetaMode && !storeConnected && <em>请配置店铺 API</em>}
           <button type="button" onClick={() => setShowSubscription(true)}>查看/升级订阅</button>
+          <button type="button" onClick={() => setShowStoreApiModal(true)}>店铺 API 配置</button>
+          <button type="button" onClick={() => setIsBetaMode((value) => !value)}>{isBetaMode ? "退出内测版" : "进入内测版"}</button>
           <button type="button" onClick={logout}>退出登录</button>
         </div>
 
@@ -576,11 +886,11 @@ function Workspace() {
           );
         })}
 
-        <div className="side-label">任务历史</div>
+        <div className="side-label">{activeId === "autopilot" ? "全自动运行历史" : `${activeAgent?.name}历史`}</div>
         <div className="history-list">
-          {tasks.length ? (
-            tasks.slice(0, 5).map((task) => (
-              <button key={task.id} type="button" onClick={() => setAnswer(task.answer)}>
+          {visibleTasks.length ? (
+            visibleTasks.slice(0, 5).map((task) => (
+              <button key={task.id} type="button" onClick={() => openTaskHistory(task)}>
                 <strong>{task.title}</strong>
                 <small>{new Date(task.createdAt).toLocaleString()}</small>
               </button>
@@ -597,36 +907,23 @@ function Workspace() {
             <p>OpenClaw Agent Console</p>
             <h2>{activeId === "autopilot" ? "6 Agent 全自动运行" : activeAgent.name}</h2>
           </div>
-          <div className="trial-pill">
-            <Zap size={16} />
-            {user?.trialActive ? "免费试用中" : user?.planName || "订阅状态"}
+          <div className="header-actions">
+            <div className={isBetaMode ? "trial-pill beta" : "trial-pill"}>
+              <Zap size={16} />
+              {isBetaMode ? "内测版全功能开放" : user?.trialActive ? "免费试用中" : user?.planName || "订阅状态"}
+            </div>
+            {isBetaMode && (
+              <button className="header-ghost" type="button" onClick={() => setShowFeedbackModal(true)}>
+                提交反馈
+              </button>
+            )}
+            <button className="header-subscribe" type="button" onClick={() => setShowSubscription(true)}>
+              订阅套餐
+            </button>
           </div>
-          <button className="header-subscribe" type="button" onClick={() => setShowSubscription(true)}>
-            订阅套餐
-          </button>
         </header>
 
         <div className="content-layout">
-          {activeAgent?.requiresStoreApi && (
-            <section className="store-api-strip">
-              <div className="config-title">
-                <PlugZap size={17} />
-                店铺 API 配置
-              </div>
-              <p>
-                {activeAgent.name} 需要卖家授权店铺 API、广告数据、库存数据或客服工单数据，OpenClaw 才能做真实诊断。
-              </p>
-              <div className="store-api-form">
-                <input value={storeConfig.storeName} onChange={(event) => setStoreConfig({ ...storeConfig, storeName: event.target.value })} placeholder="店铺名称" />
-                <input value={storeConfig.apiEndpoint} onChange={(event) => setStoreConfig({ ...storeConfig, apiEndpoint: event.target.value })} placeholder="店铺 API Endpoint" />
-                <input value={storeConfig.apiToken} onChange={(event) => setStoreConfig({ ...storeConfig, apiToken: event.target.value })} placeholder="API Token / Access Key" />
-              </div>
-              <div className={storeConnected ? "status-ok" : "status-warn"}>
-                {storeConnected ? "已配置，当前 Agent 可使用店铺数据执行" : "未配置，当前 Agent 会先提示授权"}
-              </div>
-            </section>
-          )}
-
           <section className="output-panel">
             <div className="output-top">
               <div className="output-icon">
@@ -637,7 +934,8 @@ function Workspace() {
                 <p>{activeId === "autopilot" ? "OpenClaw 会按 6 个 Agent 的顺序自动生成跨境运营方案。" : activeAgent.desc}</p>
               </div>
             </div>
-            <pre>{answer || "等待输入要求..."}</pre>
+            <StructuredAgentPreview agentId={activeAgent?.id} />
+            <ResultDocument content={answer} />
           </section>
         </div>
 

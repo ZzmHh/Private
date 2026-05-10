@@ -6,11 +6,70 @@ const dbPath = path.join(process.cwd(), "data", "app-db.json");
 const tokenSecret = process.env.JWT_SECRET || process.env.OPENCLAW_API_KEY || "local-dev-secret";
 
 const plans = {
-  trial: { name: "3天免费试用", dailyLimit: 30 },
-  starter: { name: "尝鲜版", price: 99, dailyLimit: 100 },
-  standard: { name: "标准版", price: 299, dailyLimit: 500 },
-  managed: { name: "全托版", price: 899, dailyLimit: 2000 },
-  enterprise: { name: "企业版", price: "定制", dailyLimit: 10000 },
+  trial: {
+    name: "3天免费试用",
+    dailyLimit: 30,
+    features: {
+      agents: ["trend", "content", "listing"],
+      autopilot: true,
+      scraper: false,
+      storeApiAgents: false,
+      historyLimit: 10,
+    },
+  },
+  starter: {
+    name: "尝鲜版",
+    price: 99,
+    dailyLimit: 100,
+    features: {
+      agents: ["trend", "content", "listing"],
+      autopilot: false,
+      scraper: false,
+      storeApiAgents: false,
+      historyLimit: 30,
+    },
+  },
+  standard: {
+    name: "标准版",
+    price: 299,
+    dailyLimit: 500,
+    features: {
+      agents: ["trend", "content", "listing", "growth", "service", "profit"],
+      autopilot: true,
+      scraper: true,
+      storeApiAgents: true,
+      historyLimit: 100,
+    },
+  },
+  managed: {
+    name: "全托版",
+    price: 899,
+    dailyLimit: 2000,
+    features: {
+      agents: ["trend", "content", "listing", "growth", "service", "profit"],
+      autopilot: true,
+      scraper: true,
+      storeApiAgents: true,
+      historyLimit: 500,
+      multiStore: true,
+      weeklyReport: true,
+    },
+  },
+  enterprise: {
+    name: "企业版",
+    price: "定制",
+    dailyLimit: 10000,
+    features: {
+      agents: ["trend", "content", "listing", "growth", "service", "profit"],
+      autopilot: true,
+      scraper: true,
+      storeApiAgents: true,
+      historyLimit: 2000,
+      multiStore: true,
+      weeklyReport: true,
+      privateDeploy: true,
+    },
+  },
 };
 
 function ensureDb() {
@@ -79,6 +138,8 @@ export function sanitizeUser(user) {
     ...safeUser,
     trialActive: Date.now() < new Date(user.trialEndsAt).getTime(),
     planName: plans[user.plan]?.name || "未知套餐",
+    planFeatures: plans[user.plan]?.features || plans.trial.features,
+    dailyLimit: plans[user.plan]?.dailyLimit || plans.trial.dailyLimit,
   };
 }
 
@@ -166,6 +227,61 @@ export function incrementUsage(userId, type) {
 
   writeDb(db);
   return { usage: user.usage[today], limit: plan.dailyLimit };
+}
+
+export function ensureFeatureAccess(user, feature, detail) {
+  const plan = plans[user.plan] || plans.trial;
+  const features = plan.features;
+
+  if (feature === "agent" && !features.agents.includes(detail)) {
+    const error = new Error(`当前套餐不支持该 Agent，请升级到标准版或更高套餐。`);
+    error.status = 403;
+    throw error;
+  }
+
+  if (feature === "autopilot" && !features.autopilot) {
+    const error = new Error("当前套餐不支持 6 Agent 全自动运行，请升级到标准版或更高套餐。");
+    error.status = 403;
+    throw error;
+  }
+
+  if (feature === "scraper" && !features.scraper) {
+    const error = new Error("当前套餐不支持实时抓取数据源，请升级到标准版或更高套餐。");
+    error.status = 403;
+    throw error;
+  }
+
+  if (feature === "storeApiAgents" && !features.storeApiAgents) {
+    const error = new Error("当前套餐不支持店铺 API 强数据 Agent，请升级到标准版或更高套餐。");
+    error.status = 403;
+    throw error;
+  }
+}
+
+export function activatePlan(userId, planId) {
+  if (!plans[planId] || planId === "trial") {
+    const error = new Error("请选择有效套餐。");
+    error.status = 400;
+    throw error;
+  }
+
+  const db = readDb();
+  const user = db.users.find((entry) => entry.id === userId);
+
+  if (!user) {
+    const error = new Error("用户不存在。");
+    error.status = 401;
+    throw error;
+  }
+
+  const now = new Date();
+  const subscriptionEndsAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 30);
+  user.plan = planId;
+  user.subscriptionStartedAt = now.toISOString();
+  user.subscriptionEndsAt = subscriptionEndsAt.toISOString();
+
+  writeDb(db);
+  return user;
 }
 
 export function saveTask({ userId, type, title, input, answer, metadata = {} }) {

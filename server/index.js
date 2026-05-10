@@ -5,7 +5,9 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
 import {
+  activatePlan,
   createToken,
+  ensureFeatureAccess,
   getUserById,
   incrementUsage,
   listPlans,
@@ -188,6 +190,16 @@ app.get("/api/me", authMiddleware, (req, res) => {
   res.json({ user: sanitizeUser(req.user), tasks: listTasks(req.user.id), plans: listPlans() });
 });
 
+app.post("/api/billing/activate", authMiddleware, (req, res) => {
+  try {
+    const { planId } = req.body || {};
+    const user = activatePlan(req.user.id, planId);
+    res.json({ user: sanitizeUser(user), plans: listPlans() });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "套餐开通失败。" });
+  }
+});
+
 app.get("/api/agents", (_req, res) => {
   res.json({
     provider: providerName,
@@ -205,6 +217,7 @@ app.get("/api/agents", (_req, res) => {
 app.post("/api/scrape/run", authMiddleware, async (req, res) => {
   try {
     const { platform, market, category, url } = req.body || {};
+    ensureFeatureAccess(req.user, "scraper");
     incrementUsage(req.user.id, "scrape");
     const result = await runPythonScraper({ platform, market, category, url });
     res.status(result.ok ? 200 : 500).json(result);
@@ -264,12 +277,15 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
       });
     }
 
+    ensureFeatureAccess(req.user, "autopilot");
+
     const usage = incrementUsage(req.user.id, "autopilot");
 
     let scrapeResult = null;
     let enrichedInput = input || extra || "";
 
     if (scrape?.enabled) {
+      ensureFeatureAccess(req.user, "scraper");
       scrapeResult = await runPythonScraper({
         platform: scrape.platform,
         market: scrape.market,
@@ -338,11 +354,18 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
       });
     }
 
+    ensureFeatureAccess(req.user, "agent", agentId);
+
+    if (["growth", "service", "profit"].includes(agentId)) {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+    }
+
     const usage = incrementUsage(req.user.id, agentId);
     let scrapeResult = null;
     let enrichedInput = input.trim();
 
     if (agentId === "trend" && scrape?.enabled) {
+      ensureFeatureAccess(req.user, "scraper");
       scrapeResult = await runPythonScraper({
         platform: scrape.platform,
         market: scrape.market,
