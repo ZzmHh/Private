@@ -90,8 +90,8 @@ const agents = [
     id: "service",
     name: "AI 客服售后",
     icon: Headphones,
-    desc: "需要店铺 API/客服工单数据，处理售前、物流、退款和差评。",
-    prompt: "客户说包裹延迟并要求退款，请用英文回复并尽量保留订单。",
+    desc: "售前咨询、订单查询、退款退货、差评挽回和多语言消息自动处理。",
+    prompt: "客户咨询库存、物流时效并要求优惠，请识别意图、查询应调接口、给出处理动作和英文回复。",
     requiresStoreApi: true,
   },
   {
@@ -459,26 +459,57 @@ function StructuredAgentPreview({ agentId }) {
     return (
       <div className="structured-preview service-preview">
         <div className="preview-heading">
-          <strong>客服工单处理台</strong>
-          <span>适合接入客服消息/订单物流数据后自动回复</span>
+          <strong>AI 客服售后中枢</strong>
+          <span>售前识别、API 执行、22 种语言回复、售后闭环</span>
         </div>
-        <div className="ticket-card">
+        <div className="service-flow">
+          <div>意图识别</div>
+          <span>→</span>
+          <div>知识库检索</div>
+          <span>→</span>
+          <div>平台 API 执行</div>
+          <span>→</span>
+          <div>生成回复</div>
+        </div>
+        <div className="service-matrix">
+          <section>
+            <h4>售前能力</h4>
+            <p>产品咨询：库存、规格、材质、适配场景。</p>
+            <p>物流时效：调用平台/仓库 API 查询预计送达。</p>
+            <p>价格优惠：识别折扣诉求，推荐优惠券或组合购。</p>
+            <p>对比推荐：根据需求推荐合适商品。</p>
+            <p>催单/改单：确认规则后调用店铺 API 修改订单。</p>
+          </section>
+          <section>
+            <h4>售后能力</h4>
+            <p>订单状态：实时查订单、物流、履约节点。</p>
+            <p>退款退货：按政策判断并触发退款/退货流程。</p>
+            <p>物流投诉：生成安抚话术并创建投诉记录。</p>
+            <p>差评挽回：识别高风险情绪并给补偿建议。</p>
+            <p>换货补发：核对订单后创建补发或换货任务。</p>
+          </section>
+        </div>
+        <div className="service-system">
           <div>
-            <span>客户情绪</span>
-            <strong className="risk-high">高风险</strong>
+            <span>店铺接入层</span>
+            <strong>Shopify / Amazon / WooCommerce API</strong>
           </div>
           <div>
-            <span>问题类型</span>
-            <strong>物流延迟 / 退款诉求</strong>
+            <span>消息通道</span>
+            <strong>接收客户消息 / 发送回复</strong>
           </div>
           <div>
-            <span>处理策略</span>
-            <strong>安抚 + 查询物流 + 优惠券挽留</strong>
+            <span>语言层</span>
+            <strong>22 种语言自动切换</strong>
+          </div>
+          <div>
+            <span>知识库</span>
+            <strong>商品信息 / 售后政策 / 回复历史</strong>
           </div>
         </div>
         <div className="reply-box">
-          <h4>推荐英文回复模板</h4>
-          <p>Hi, we are truly sorry for the delay. We are checking the latest tracking status and will offer a solution as soon as possible...</p>
+          <h4>推荐输出格式</h4>
+          <p>意图：物流时效 + 优惠咨询；动作：查询库存和仓库时效，匹配优惠策略；回复：自动生成客户语言版本并等待人工确认或自动发送。</p>
         </div>
       </div>
     );
