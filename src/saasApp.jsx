@@ -107,6 +107,10 @@ const agents = [
 function LoginScreen({ onLogin }) {
   const [authMode, setAuthMode] = useState("login");
   const [resetStep, setResetStep] = useState("request");
+  const [registerStep, setRegisterStep] = useState("email");
+  const [registerSendInfo, setRegisterSendInfo] = useState(null);
+  const [resendCooldownUntil, setResendCooldownUntil] = useState(0);
+  const [resendCooldownLeft, setResendCooldownLeft] = useState(0);
   const [authForm, setAuthForm] = useState({
     name: "",
     storeName: "",
@@ -124,40 +128,113 @@ function LoginScreen({ onLogin }) {
   const isRegister = authMode === "register";
   const isReset = authMode === "reset";
 
+  useEffect(() => {
+    if (!resendCooldownUntil || Date.now() >= resendCooldownUntil) {
+      setResendCooldownLeft(0);
+      return undefined;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((resendCooldownUntil - Date.now()) / 1000));
+      setResendCooldownLeft(left);
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [resendCooldownUntil]);
+
   function updateAuthForm(field, value) {
     setAuthForm({ ...authForm, [field]: value });
+  }
+
+  function resetRegisterFlow() {
+    setRegisterStep("email");
+    setRegisterSendInfo(null);
+    setVerificationCode("");
+    setResendCooldownUntil(0);
+  }
+
+  async function sendRegistrationCode() {
+    setAuthError("");
+    if (!authForm.email.trim()) {
+      setAuthError("请填写邮箱。");
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const response = await fetch("/api/auth/register/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: authForm.email }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setRegisterStep("complete");
+      setRegisterSendInfo({ emailDelivered: data.emailDelivered, devCode: data.devCode });
+      setVerificationCode(data.devCode ? String(data.devCode) : "");
+      setResendCooldownUntil(Date.now() + 60_000);
+    } catch (error) {
+      setAuthError(formatError(error));
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function submitCompleteRegistration(event) {
+    event.preventDefault();
+    setAuthError("");
+    if (authForm.password !== authForm.confirmPassword) {
+      setAuthError("两次输入的密码不一致。");
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const response = await fetch("/api/auth/register/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: authForm.email,
+          code: verificationCode,
+          password: authForm.password,
+          confirmPassword: authForm.confirmPassword,
+          name: authForm.name,
+          storeName: authForm.storeName,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      resetRegisterFlow();
+      onLogin(data);
+    } catch (error) {
+      setAuthError(formatError(error));
+    } finally {
+      setAuthLoading(false);
+    }
   }
 
   async function submitAuth(event) {
     event.preventDefault();
     setAuthError("");
 
-    if (isRegister && authForm.password !== authForm.confirmPassword) {
-      setAuthError("两次输入的密码不一致。");
-      return;
-    }
-
     setAuthLoading(true);
     try {
-      const response = await fetch(isRegister ? "/api/auth/register" : "/api/auth/login", {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(authForm),
+        body: JSON.stringify({ email: authForm.email, password: authForm.password }),
       });
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.registrationIncomplete) {
+          setAuthError("该邮箱注册尚未完成，请切换到「免费注册」，先收验证码再设置密码。");
+          return;
+        }
         if (data.verificationRequired) {
-          setPendingVerification(data);
+          setPendingVerification({ email: data.email, emailDelivered: data.emailDelivered, devCode: data.devCode });
           setVerificationCode("");
           return;
         }
         throw new Error(data.error);
-      }
-      if (data.verificationRequired) {
-        setPendingVerification(data);
-        setVerificationCode(data.devCode || "");
-        return;
       }
       onLogin(data);
     } catch (error) {
@@ -165,6 +242,28 @@ function LoginScreen({ onLogin }) {
     } finally {
       setAuthLoading(false);
     }
+  }
+
+  function handleFormSubmit(event) {
+    if (isReset) {
+      if (resetStep === "confirm") submitPasswordReset(event);
+      else requestPasswordReset(event);
+      return;
+    }
+    if (pendingVerification) {
+      submitVerification(event);
+      return;
+    }
+    if (isRegister) {
+      if (registerStep === "complete") {
+        submitCompleteRegistration(event);
+        return;
+      }
+      event.preventDefault();
+      sendRegistrationCode();
+      return;
+    }
+    submitAuth(event);
   }
 
   async function submitVerification(event) {
@@ -282,9 +381,9 @@ function LoginScreen({ onLogin }) {
         </div>
       </section>
 
-      <form className="auth-card" onSubmit={isReset ? (resetStep === "confirm" ? submitPasswordReset : requestPasswordReset) : pendingVerification ? submitVerification : submitAuth}>
+      <form className="auth-card" onSubmit={handleFormSubmit}>
         <div className="login-icon">
-          {isRegister ? <UserPlus size={22} /> : <LockKeyhole size={22} />}
+          {isRegister ? <UserPlus size={22} /> : isReset ? <LockKeyhole size={22} /> : <LockKeyhole size={22} />}
         </div>
         {isReset ? (
           <>
@@ -327,45 +426,74 @@ function LoginScreen({ onLogin }) {
               <input type="text" inputMode="numeric" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} placeholder="输入 6 位验证码" required />
             </label>
           </>
+        ) : isRegister && registerStep === "complete" ? (
+          <>
+            <h2>完成注册</h2>
+            <p>
+              验证码已发送至 <strong>{authForm.email}</strong>，请查收邮件后填写 6 位验证码，并设置登录密码与店铺信息。
+            </p>
+            {registerSendInfo && !registerSendInfo.emailDelivered && registerSendInfo.devCode && (
+              <div className="auth-info">
+                当前未配置 SMTP，开发测试验证码：<strong>{registerSendInfo.devCode}</strong>
+              </div>
+            )}
+            <label>
+              邮箱验证码
+              <input type="text" inputMode="numeric" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} placeholder="输入 6 位验证码" required />
+            </label>
+            <label>
+              姓名
+              <input type="text" value={authForm.name} onChange={(event) => updateAuthForm("name", event.target.value)} placeholder="请输入联系人姓名" required />
+            </label>
+            <label>
+              公司或店铺名
+              <input type="text" value={authForm.storeName} onChange={(event) => updateAuthForm("storeName", event.target.value)} placeholder="例如：凡梦跨境店铺" required />
+            </label>
+            <label>
+              登录密码
+              <input type="password" value={authForm.password} onChange={(event) => updateAuthForm("password", event.target.value)} placeholder="至少 6 位" minLength={6} required />
+            </label>
+            <label>
+              确认密码
+              <input type="password" value={authForm.confirmPassword} onChange={(event) => updateAuthForm("confirmPassword", event.target.value)} placeholder="再次输入密码" required />
+            </label>
+          </>
+        ) : isRegister && registerStep === "email" ? (
+          <>
+            <h2>注册账号</h2>
+            <p>第一步：输入注册邮箱并发送验证码；第二步：查收邮件后填写验证码与密码完成注册。</p>
+            <label>
+              邮箱
+              <input type="email" value={authForm.email} onChange={(event) => updateAuthForm("email", event.target.value)} placeholder="seller@example.com" required />
+            </label>
+          </>
         ) : (
           <>
-            <h2>{isRegister ? "创建新账号" : "登录你的账号"}</h2>
-            <p>
-              {isRegister
-                ? "注册后先验证邮箱，再自动开启 3 天免费试用。"
-                : "当前是产品原型登录，后续可接入真实用户系统、支付订阅和权限控制。"}
-            </p>
-            {isRegister && (
-              <>
-                <label>
-                  姓名
-                  <input type="text" value={authForm.name} onChange={(event) => updateAuthForm("name", event.target.value)} placeholder="请输入联系人姓名" required />
-                </label>
-                <label>
-                  公司或店铺名
-                  <input type="text" value={authForm.storeName} onChange={(event) => updateAuthForm("storeName", event.target.value)} placeholder="例如：凡梦跨境店铺" required />
-                </label>
-              </>
-            )}
+            <h2>登录你的账号</h2>
+            <p>使用已验证邮箱与密码登录。若账号尚未完成注册，请先完成邮件验证流程。</p>
             <label>
               邮箱
               <input type="email" value={authForm.email} onChange={(event) => updateAuthForm("email", event.target.value)} placeholder="seller@example.com" required />
             </label>
             <label>
               密码
-              <input type="password" value={authForm.password} onChange={(event) => updateAuthForm("password", event.target.value)} placeholder="输入密码" required />
+              <input type="password" value={authForm.password} onChange={(event) => updateAuthForm("password", event.target.value)} placeholder="输入密码" required autoComplete="current-password" />
             </label>
-            {isRegister && (
-              <label>
-                确认密码
-                <input type="password" value={authForm.confirmPassword} onChange={(event) => updateAuthForm("confirmPassword", event.target.value)} placeholder="再次输入密码" required />
-              </label>
-            )}
           </>
         )}
         {authError && <div className="auth-error">{authError}</div>}
         <button type="submit" disabled={authLoading}>
-          {authLoading ? "处理中..." : isReset ? (resetStep === "confirm" ? "重置密码并登录" : "发送重置验证码") : pendingVerification ? "验证并进入工作台" : isRegister ? "注册并发送验证码" : "登录并进入工作台"}
+          {authLoading
+            ? "处理中..."
+            : isReset
+              ? (resetStep === "confirm" ? "重置密码并登录" : "发送重置验证码")
+              : pendingVerification
+                ? "验证并进入工作台"
+                : isRegister && registerStep === "complete"
+                  ? "完成注册并进入工作台"
+                  : isRegister && registerStep === "email"
+                    ? "发送验证码"
+                    : "登录并进入工作台"}
         </button>
         {isReset ? (
           <>
@@ -376,12 +504,59 @@ function LoginScreen({ onLogin }) {
           <>
             <small>验证码 10 分钟内有效。没有收到邮件时，请检查垃圾邮箱或重新发送。</small>
             <button type="button" className="register-link" onClick={resendVerification} disabled={authLoading}>重新发送验证码</button>
-            <button type="button" className="register-link" onClick={() => setPendingVerification(null)}>返回登录/注册</button>
+            <button type="button" className="register-link" onClick={() => { setPendingVerification(null); setVerificationCode(""); }}>返回登录/注册</button>
+          </>
+        ) : isRegister && registerStep === "complete" ? (
+          <>
+            <small>验证码 10 分钟内有效。完成注册后将进入工作台并开启 3 天免费试用。</small>
+            <button
+              type="button"
+              className="register-link"
+              onClick={sendRegistrationCode}
+              disabled={authLoading || resendCooldownLeft > 0}
+            >
+              {resendCooldownLeft > 0 ? `重新发送验证码（${resendCooldownLeft}s）` : "重新发送验证码"}
+            </button>
+            <button
+              type="button"
+              className="register-link"
+              onClick={() => {
+                setRegisterStep("email");
+                setRegisterSendInfo(null);
+                setVerificationCode("");
+                setAuthForm((f) => ({ ...f, password: "", confirmPassword: "" }));
+              }}
+            >
+              返回修改邮箱
+            </button>
+            <button
+              type="button"
+              className="register-link"
+              onClick={() => {
+                setAuthMode("login");
+                resetRegisterFlow();
+              }}
+            >
+              已有账号？返回登录
+            </button>
           </>
         ) : (
           <>
             <small>{isRegister ? "注册即代表同意订阅服务条款，试用期内不会自动扣费。" : "3 天免费试用，试用期结束后再选择订阅套餐。"}</small>
-            <button type="button" className="register-link" onClick={() => setAuthMode(isRegister ? "login" : "register")}>
+            <button
+              type="button"
+              className="register-link"
+              onClick={() => {
+                if (isRegister) {
+                  setAuthMode("login");
+                  resetRegisterFlow();
+                } else {
+                  setAuthMode("register");
+                  resetRegisterFlow();
+                  setAuthForm((f) => ({ ...f, password: "", confirmPassword: "" }));
+                }
+              }}
+            >
               {isRegister ? "已有账号？返回登录" : "还没有账号？免费注册"}
             </button>
             {!isRegister && (

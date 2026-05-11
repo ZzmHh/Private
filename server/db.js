@@ -203,7 +203,7 @@ export function verifyToken(token) {
 
 export function sanitizeUser(user) {
   if (!user) return null;
-  const { passwordHash, emailVerification, passwordReset, loginSecurity, ...safeUser } = user;
+  const { passwordHash, emailVerification, passwordReset, loginSecurity, registrationPending, ...safeUser } = user;
   const plan = getPlan(user);
   const today = new Date().toISOString().slice(0, 10);
   const trialPlan = plans.trial;
@@ -243,6 +243,96 @@ export function sanitizeUser(user) {
   };
 }
 
+/**
+ * 注册第一步：仅邮箱，创建「待完成」账号并发送验证码（邮件内 6 位数字）。
+ */
+export function startRegistrationEmail(email) {
+  const db = readDb();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) throw createError("请填写邮箱。", 400);
+
+  const existingUser = db.users.find((user) => user.email === normalizedEmail);
+  const now = new Date();
+  const trialEndsAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3);
+
+  if (existingUser) {
+    if (existingUser.emailVerified !== false) {
+      throw createError("该邮箱已注册，请直接登录。", 409);
+    }
+    const verificationCode = attachEmailVerification(existingUser, now);
+    writeDb(db);
+    return { user: existingUser, verificationCode };
+  }
+
+  const user = {
+    id: crypto.randomUUID(),
+    name: "跨境卖家",
+    storeName: "",
+    email: normalizedEmail,
+    passwordHash: "",
+    registrationPending: true,
+    plan: "trial",
+    trialStartedAt: now.toISOString(),
+    trialEndsAt: trialEndsAt.toISOString(),
+    subscriptionEndsAt: null,
+    usage: {},
+    trialLifetimeTotal: 0,
+    loginSecurity: { failedCount: 0, lockedUntil: null },
+    emailVerified: false,
+    isAdmin: db.users.length === 0,
+    createdAt: now.toISOString(),
+  };
+  const verificationCode = attachEmailVerification(user, now);
+  db.users.push(user);
+  writeDb(db);
+  return { user, verificationCode };
+}
+
+/**
+ * 注册第二步：校验邮箱验证码并设置密码与资料，激活账号。
+ */
+export function completeRegistrationWithCode({ email, code, password, name, storeName }) {
+  const db = readDb();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const normalizedCode = String(code || "").trim();
+  const user = db.users.find((entry) => entry.email === normalizedEmail);
+
+  if (!user) throw createError("请先发送验证码。", 404);
+  if (user.emailVerified !== false) {
+    throw createError("该邮箱已注册，请直接登录。", 409);
+  }
+  if (!password || String(password).length < 6) {
+    throw createError("密码至少 6 位。", 400);
+  }
+  if (!/^\d{6}$/.test(normalizedCode)) throw createError("请输入 6 位邮箱验证码。", 400);
+
+  const verification = user.emailVerification;
+  if (!verification?.codeHash || Date.now() > new Date(verification.expiresAt).getTime()) {
+    throw createError("验证码已过期，请重新发送。", 410);
+  }
+
+  verification.attempts = (verification.attempts || 0) + 1;
+  if (verification.attempts > 6) {
+    writeDb(db);
+    throw createError("验证码错误次数过多，请重新发送验证码。", 429);
+  }
+
+  if (verification.codeHash !== hashVerificationCode(normalizedEmail, normalizedCode, "email")) {
+    writeDb(db);
+    throw createError("验证码不正确，请检查邮箱后重试。", 400);
+  }
+
+  user.passwordHash = hashPassword(password);
+  user.name = name?.trim() || user.name || "跨境卖家";
+  user.storeName = storeName?.trim() || "";
+  user.emailVerified = true;
+  user.emailVerifiedAt = new Date().toISOString();
+  delete user.emailVerification;
+  if (user.registrationPending) delete user.registrationPending;
+  writeDb(db);
+  return user;
+}
+
 export function registerUser({ name, storeName, email, password }) {
   const db = readDb();
   const normalizedEmail = email.trim().toLowerCase();
@@ -258,6 +348,7 @@ export function registerUser({ name, storeName, email, password }) {
     existingUser.name = name || existingUser.name || "跨境卖家";
     existingUser.storeName = storeName || existingUser.storeName || "";
     existingUser.passwordHash = hashPassword(password);
+    delete existingUser.registrationPending;
     const verificationCode = attachEmailVerification(existingUser, now);
     writeDb(db);
     return { user: existingUser, verificationCode };
@@ -296,6 +387,10 @@ export function loginUser({ email, password }) {
     throw createError("邮箱或密码错误。", 401);
   }
 
+  if (user.registrationPending || !user.passwordHash) {
+    throw createError("该邮箱注册尚未完成，请先完成验证码与密码设置。", 403, "REGISTRATION_INCOMPLETE");
+  }
+
   user.loginSecurity ||= { failedCount: 0, lockedUntil: null };
   if (user.loginSecurity.lockedUntil && Date.now() < new Date(user.loginSecurity.lockedUntil).getTime()) {
     throw createError("登录失败次数过多，请 15 分钟后再试。", 429, "LOGIN_LOCKED");
@@ -328,6 +423,9 @@ export function verifyEmailCode({ email, code }) {
   const user = db.users.find((entry) => entry.email === normalizedEmail);
 
   if (!user) throw createError("账号不存在，请重新注册。", 404);
+  if (user.registrationPending) {
+    throw createError("请返回注册页，填写验证码、密码与资料后点击「完成注册」。", 400);
+  }
   if (user.emailVerified !== false) return user;
   if (!/^\d{6}$/.test(normalizedCode)) throw createError("请输入 6 位邮箱验证码。", 400);
 

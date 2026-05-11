@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email.js";
 import {
+  completeRegistrationWithCode,
   createToken,
   createOrder,
   ensureFeatureAccess,
@@ -27,6 +28,7 @@ import {
   saveFeedback,
   saveStoreConnection,
   simulatePayOrder,
+  startRegistrationEmail,
   submitEnterpriseLead,
   updateTaskFavorite,
   verifyEmailCode,
@@ -244,6 +246,51 @@ function handleAuthError(res, error) {
   res.status(error.status || 500).json({ error: error.message || "账号服务异常。" });
 }
 
+app.post("/api/auth/register/start", (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({ error: "请填写邮箱。" });
+    }
+
+    const { user, verificationCode } = startRegistrationEmail(email);
+    sendVerificationEmail({ to: user.email, code: verificationCode, name: user.name })
+      .then((emailResult) => {
+        res.json({
+          registrationStep: "verify",
+          email: user.email,
+          emailDelivered: emailResult.delivered,
+          devCode: emailResult.devCode,
+          message: emailResult.delivered
+            ? "验证码已发送到邮箱，请填写验证码并设置密码完成注册。"
+            : "已生成验证码。当前未配置 SMTP，开发环境可直接使用页面提示的验证码。",
+        });
+      })
+      .catch((error) => {
+        res.status(500).json({ error: error.message || "验证码邮件发送失败，请稍后重试。" });
+      });
+  } catch (error) {
+    handleAuthError(res, error);
+  }
+});
+
+app.post("/api/auth/register/complete", (req, res) => {
+  try {
+    const { email, code, password, confirmPassword, name, storeName } = req.body || {};
+    if (!email || !code || !password) {
+      return res.status(400).json({ error: "请填写邮箱、验证码和密码。" });
+    }
+    if (password !== confirmPassword) {
+      return res.status(400).json({ error: "两次输入的密码不一致。" });
+    }
+
+    const user = completeRegistrationWithCode({ email, code, password, name, storeName });
+    res.json({ token: createToken(user), user: sanitizeUser(user) });
+  } catch (error) {
+    handleAuthError(res, error);
+  }
+});
+
 app.post("/api/auth/register", (req, res) => {
   try {
     const { name, storeName, email, password } = req.body || {};
@@ -288,6 +335,13 @@ app.post("/api/auth/login", (req, res) => {
       return res.status(error.status).json({
         error: error.message,
         verificationRequired: true,
+        email: req.body?.email,
+      });
+    }
+    if (error.code === "REGISTRATION_INCOMPLETE") {
+      return res.status(error.status).json({
+        error: error.message,
+        registrationIncomplete: true,
         email: req.body?.email,
       });
     }
