@@ -106,6 +106,7 @@ const agents = [
 
 function LoginScreen({ onLogin }) {
   const [authMode, setAuthMode] = useState("login");
+  const [resetStep, setResetStep] = useState("request");
   const [authForm, setAuthForm] = useState({
     name: "",
     storeName: "",
@@ -115,9 +116,13 @@ function LoginScreen({ onLogin }) {
   });
   const [pendingVerification, setPendingVerification] = useState(null);
   const [verificationCode, setVerificationCode] = useState("");
+  const [passwordReset, setPasswordReset] = useState(null);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const isRegister = authMode === "register";
+  const isReset = authMode === "reset";
 
   function updateAuthForm(field, value) {
     setAuthForm({ ...authForm, [field]: value });
@@ -206,6 +211,52 @@ function LoginScreen({ onLogin }) {
     }
   }
 
+  async function requestPasswordReset(event) {
+    event.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: authForm.email }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error);
+      setPasswordReset(data);
+      setResetCode(data.devCode || "");
+      setResetStep("confirm");
+    } catch (error) {
+      setAuthError(formatError(error));
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function submitPasswordReset(event) {
+    event.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: passwordReset.email, code: resetCode, password: newPassword }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error);
+      onLogin(data);
+    } catch (error) {
+      setAuthError(formatError(error));
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
   return (
     <main className="auth-page">
       <section className="auth-hero">
@@ -231,11 +282,38 @@ function LoginScreen({ onLogin }) {
         </div>
       </section>
 
-      <form className="auth-card" onSubmit={pendingVerification ? submitVerification : submitAuth}>
+      <form className="auth-card" onSubmit={isReset ? (resetStep === "confirm" ? submitPasswordReset : requestPasswordReset) : pendingVerification ? submitVerification : submitAuth}>
         <div className="login-icon">
           {isRegister ? <UserPlus size={22} /> : <LockKeyhole size={22} />}
         </div>
-        {pendingVerification ? (
+        {isReset ? (
+          <>
+            <h2>找回密码</h2>
+            <p>{resetStep === "confirm" ? `验证码已发送到 ${passwordReset.email}，请输入验证码和新密码。` : "输入注册邮箱，我们会发送 6 位验证码用于重置密码。"}</p>
+            {resetStep === "confirm" && !passwordReset.emailDelivered && passwordReset.devCode && (
+              <div className="auth-info">
+                当前未配置 SMTP，开发测试验证码：<strong>{passwordReset.devCode}</strong>
+              </div>
+            )}
+            {resetStep === "request" ? (
+              <label>
+                邮箱
+                <input type="email" value={authForm.email} onChange={(event) => updateAuthForm("email", event.target.value)} placeholder="seller@example.com" required />
+              </label>
+            ) : (
+              <>
+                <label>
+                  验证码
+                  <input type="text" inputMode="numeric" maxLength={6} value={resetCode} onChange={(event) => setResetCode(event.target.value)} placeholder="输入 6 位验证码" required />
+                </label>
+                <label>
+                  新密码
+                  <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="输入新密码" required />
+                </label>
+              </>
+            )}
+          </>
+        ) : pendingVerification ? (
           <>
             <h2>验证邮箱</h2>
             <p>验证码已发送到 {pendingVerification.email}，验证成功后会自动进入工作台并开启 3 天免费试用。</p>
@@ -286,8 +364,15 @@ function LoginScreen({ onLogin }) {
           </>
         )}
         {authError && <div className="auth-error">{authError}</div>}
-        <button type="submit" disabled={authLoading}>{authLoading ? "处理中..." : pendingVerification ? "验证并进入工作台" : isRegister ? "注册并发送验证码" : "登录并进入工作台"}</button>
-        {pendingVerification ? (
+        <button type="submit" disabled={authLoading}>
+          {authLoading ? "处理中..." : isReset ? (resetStep === "confirm" ? "重置密码并登录" : "发送重置验证码") : pendingVerification ? "验证并进入工作台" : isRegister ? "注册并发送验证码" : "登录并进入工作台"}
+        </button>
+        {isReset ? (
+          <>
+            <small>验证码 10 分钟内有效。重置后会自动登录。</small>
+            <button type="button" className="register-link" onClick={() => { setAuthMode("login"); setResetStep("request"); setPasswordReset(null); }}>返回登录</button>
+          </>
+        ) : pendingVerification ? (
           <>
             <small>验证码 10 分钟内有效。没有收到邮件时，请检查垃圾邮箱或重新发送。</small>
             <button type="button" className="register-link" onClick={resendVerification} disabled={authLoading}>重新发送验证码</button>
@@ -299,6 +384,11 @@ function LoginScreen({ onLogin }) {
             <button type="button" className="register-link" onClick={() => setAuthMode(isRegister ? "login" : "register")}>
               {isRegister ? "已有账号？返回登录" : "还没有账号？免费注册"}
             </button>
+            {!isRegister && (
+              <button type="button" className="register-link" onClick={() => setAuthMode("reset")}>
+                忘记密码？邮箱验证找回
+              </button>
+            )}
           </>
         )}
       </form>
@@ -319,7 +409,7 @@ function readFileAsText(file) {
   });
 }
 
-function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected }) {
+function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected, onSave }) {
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <section className="store-api-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -345,7 +435,7 @@ function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected })
             {storeConnected ? "店铺 API 已配置" : "未配置店铺 API，相关 Agent 会持续提醒"}
           </div>
         </div>
-        <button className="continue-checkout" type="button" onClick={onClose}>
+        <button className="continue-checkout" type="button" onClick={onSave}>
           保存配置
         </button>
       </section>
@@ -353,9 +443,11 @@ function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected })
   );
 }
 
-function SubscriptionModal({ onClose, showToast }) {
+function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
   const [selectedPlanId, setSelectedPlanId] = useState("standard");
   const [checkoutPlan, setCheckoutPlan] = useState(null);
+  const [checkoutOrder, setCheckoutOrder] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [contactForm, setContactForm] = useState({ name: "", phone: "", wechat: "", email: "", note: "" });
   const selectedPlan = pricingPlans.find((plan) => plan.id === selectedPlanId);
 
@@ -363,9 +455,63 @@ function SubscriptionModal({ onClose, showToast }) {
     setContactForm({ ...contactForm, [field]: value });
   }
 
-  function submitEnterpriseContact() {
-    showToast("已记录定制版联系信息，正式上线后会接入表单/CRM。");
-    onClose();
+  async function submitEnterpriseContact() {
+    setCheckoutLoading(true);
+    try {
+      const response = await fetch("/api/billing/enterprise-leads", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(contactForm),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast("已记录定制版联系信息，后续可在运营后台查看。");
+      onClose();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
+
+  async function createCheckoutOrder(plan, paymentMethod) {
+    setCheckoutLoading(true);
+    try {
+      const response = await fetch("/api/billing/orders", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ planId: plan.id, paymentMethod }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setCheckoutOrder(data.order);
+      showToast("订单已创建，正式支付通道接入后会展示二维码。");
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
+
+  async function simulatePayment() {
+    if (!checkoutOrder) return;
+    setCheckoutLoading(true);
+    try {
+      const response = await fetch(`/api/billing/orders/${checkoutOrder.id}/simulate-pay`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setCheckoutOrder(data.order);
+      onUserUpdate(data.user);
+      showToast("开发模式已模拟支付成功，套餐已开通。");
+      onClose();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setCheckoutLoading(false);
+    }
   }
 
   if (checkoutPlan) {
@@ -416,16 +562,19 @@ function SubscriptionModal({ onClose, showToast }) {
               <p>当前为支付占位页。申请微信支付/支付宝商户后，这里会创建订单、展示支付二维码，并在支付回调成功后自动开通套餐。</p>
               <div className="order-placeholder">
                 <span>订单状态</span>
-                <strong>等待接入支付通道</strong>
+                <strong>{checkoutOrder ? `订单 ${checkoutOrder.orderNo} · ${checkoutOrder.status}` : "等待创建订单"}</strong>
                 <p>预计流程：创建订单 → 返回二维码 → 用户扫码 → 支付回调 → 开通套餐。</p>
               </div>
               <div className="pay-options">
-                <button type="button" onClick={() => showToast("微信支付即将接入，请先申请微信支付商户号。")}>微信支付 · 即将接入</button>
-                <button type="button" onClick={() => showToast("支付宝即将接入，请先申请支付宝开放平台应用。")}>支付宝 · 即将接入</button>
+                <button type="button" disabled={checkoutLoading} onClick={() => createCheckoutOrder(checkoutPlan, "wechat")}>微信支付 · 创建订单</button>
+                <button type="button" disabled={checkoutLoading} onClick={() => createCheckoutOrder(checkoutPlan, "alipay")}>支付宝 · 创建订单</button>
               </div>
+              {checkoutOrder && (
+                <button type="button" disabled={checkoutLoading} onClick={simulatePayment}>开发/内测模拟支付成功</button>
+              )}
             </div>
           )}
-          <button className="back-to-plans" type="button" onClick={() => setCheckoutPlan(null)}>
+          <button className="back-to-plans" type="button" onClick={() => { setCheckoutPlan(null); setCheckoutOrder(null); }}>
             返回选择套餐
           </button>
         </section>
@@ -665,6 +814,71 @@ function ResultDocument({ content }) {
   );
 }
 
+function FeedbackForm({ onSubmit }) {
+  const [form, setForm] = useState({ name: "", contact: "", message: "" });
+
+  return (
+    <div className="feedback-box">
+      <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="你的称呼 / 公司" />
+      <input value={form.contact} onChange={(event) => setForm({ ...form, contact: event.target.value })} placeholder="微信 / 手机 / 邮箱" />
+      <textarea value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} placeholder="你觉得哪里不好用？还希望增加什么功能？" />
+      <button type="button" onClick={() => onSubmit({ type: "beta-feedback", ...form })}>提交反馈</button>
+    </div>
+  );
+}
+
+function AdminModal({ summary, onClose }) {
+  if (!summary) return null;
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="admin-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p>Admin Console</p>
+            <h2>凡梦AI运营后台</h2>
+          </div>
+          <button type="button" onClick={onClose}>关闭</button>
+        </div>
+        <div className="admin-metrics">
+          {Object.entries(summary.metrics || {}).map(([key, value]) => (
+            <div key={key}>
+              <span>{key}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="admin-sections">
+          <section>
+            <h3>最近用户</h3>
+            {(summary.users || []).slice(0, 8).map((item) => (
+              <p key={item.id}>{item.email} · {item.planName} · {item.accessActive ? "可用" : "已过期"}</p>
+            ))}
+          </section>
+          <section>
+            <h3>最近订单</h3>
+            {(summary.orders || []).slice(0, 8).map((item) => (
+              <p key={item.id}>{item.orderNo} · {item.planName} · ¥{item.amount} · {item.status}</p>
+            ))}
+          </section>
+          <section>
+            <h3>调用记录</h3>
+            {(summary.usageLogs || []).slice(0, 8).map((item) => (
+              <p key={item.id}>{item.userEmail} · {item.type} · {item.status}</p>
+            ))}
+          </section>
+          <section>
+            <h3>反馈/线索</h3>
+            {(summary.feedback || []).slice(0, 8).map((item) => (
+              <p key={item.id}>{item.userEmail || item.contact?.email || "访客"} · {item.type}</p>
+            ))}
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Workspace() {
   const [activeId, setActiveId] = useState("autopilot");
   const [isBetaMode, setIsBetaMode] = useState(() => new URLSearchParams(window.location.search).get("beta") === "1");
@@ -674,6 +888,9 @@ function Workspace() {
   const [showSubscription, setShowSubscription] = useState(false);
   const [showStoreApiModal, setShowStoreApiModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminSummary, setAdminSummary] = useState(null);
+  const [historyQuery, setHistoryQuery] = useState("");
   const [toast, setToast] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [answer, setAnswer] = useState("登录后已开启 3 天免费试用。请选择左侧模块，输入要求后由 OpenClaw 生成结果。");
@@ -695,8 +912,12 @@ function Workspace() {
   const [attachments, setAttachments] = useState([]);
 
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === activeId), [activeId]);
-  const visibleTasks = useMemo(() => tasks.filter((task) => task.type === activeId), [tasks, activeId]);
+  const visibleTasks = useMemo(
+    () => tasks.filter((task) => task.type === activeId && `${task.title} ${task.input} ${task.answer}`.toLowerCase().includes(historyQuery.toLowerCase())),
+    [tasks, activeId, historyQuery],
+  );
   const storeConnected = Boolean(storeConfig.storeName && storeConfig.apiEndpoint && storeConfig.apiToken);
+  const accessActive = isBetaMode || user?.accessActive;
 
   useEffect(() => {
     if (!token) return;
@@ -709,6 +930,14 @@ function Workspace() {
         if (!response.ok) throw new Error(data.error);
         setUser(data.user);
         setTasks(data.tasks || []);
+        if (data.storeConnection) {
+          setStoreConfig({
+            platform: data.storeConnection.platform || "Amazon",
+            storeName: data.storeConnection.storeName || "",
+            apiEndpoint: data.storeConnection.apiEndpoint || "",
+            apiToken: data.storeConnection.apiTokenMasked || "",
+          });
+        }
       })
       .catch(() => {
         localStorage.removeItem("fanmeng_token");
@@ -743,6 +972,10 @@ function Workspace() {
     window.setTimeout(() => setToast(""), 3200);
   }
 
+  function updateUser(nextUser) {
+    setUser(nextUser);
+  }
+
   if (!token) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -773,6 +1006,90 @@ function Workspace() {
     setActiveId(task.type);
     setAnswer(task.answer);
     setInput("");
+  }
+
+  async function saveStoreApiConfig() {
+    try {
+      const response = await fetch("/api/store-connection", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(storeConfig),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setStoreConfig({
+        platform: data.storeConnection.platform || "Amazon",
+        storeName: data.storeConnection.storeName || "",
+        apiEndpoint: data.storeConnection.apiEndpoint || "",
+        apiToken: data.storeConnection.apiTokenMasked || storeConfig.apiToken,
+      });
+      showToast("店铺 API 配置已保存。");
+      setShowStoreApiModal(false);
+    } catch (error) {
+      showToast(formatError(error));
+    }
+  }
+
+  async function toggleFavorite(task) {
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/favorite`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ favorite: !task.favorite }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setTasks((current) => current.map((item) => (item.id === task.id ? data.task : item)));
+    } catch (error) {
+      showToast(formatError(error));
+    }
+  }
+
+  function copyAnswer() {
+    navigator.clipboard.writeText(answer || "");
+    showToast("结果已复制。");
+  }
+
+  function downloadAnswer(format) {
+    const extension = format === "html" ? "html" : "md";
+    const content = format === "html"
+      ? `<!doctype html><meta charset="utf-8"><title>凡梦AI结果</title><article>${(answer || "").split("\n").map((line) => `<p>${line}</p>`).join("")}</article>`
+      : `# 凡梦AI生成结果\n\n${answer || ""}`;
+    const blob = new Blob([content], { type: format === "html" ? "text/html;charset=utf-8" : "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `fanmeng-ai-result.${extension}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function submitFeedback(payload) {
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast("感谢反馈，已保存到运营后台。");
+      setShowFeedbackModal(false);
+    } catch (error) {
+      showToast(formatError(error));
+    }
+  }
+
+  async function loadAdminSummary() {
+    try {
+      const response = await fetch("/api/admin/summary", { headers: authHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setAdminSummary(data);
+      setShowAdmin(true);
+    } catch (error) {
+      showToast(formatError(error));
+    }
   }
 
   async function handleLocalImport(event) {
@@ -821,8 +1138,8 @@ function Workspace() {
   }
 
   async function runAutopilot() {
-    if (!isBetaMode && !user?.trialActive && user?.plan === "trial") {
-      showToast("3 天免费试用已结束，请先订阅套餐后继续使用。");
+    if (!accessActive) {
+      showToast(user?.plan === "trial" ? "3 天免费试用已结束，请先订阅套餐后继续使用。" : "当前套餐已到期，请续费后继续使用。");
       setShowSubscription(true);
       return;
     }
@@ -853,7 +1170,7 @@ function Workspace() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setAnswer(data.answer);
-      if (data.task) setTasks((current) => [data.task, ...current].slice(0, 30));
+      if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
     } catch (error) {
       setAnswer(formatError(error));
     } finally {
@@ -862,8 +1179,8 @@ function Workspace() {
   }
 
   async function runAgent() {
-    if (!isBetaMode && !user?.trialActive && user?.plan === "trial") {
-      showToast("3 天免费试用已结束，请先订阅套餐后继续使用。");
+    if (!accessActive) {
+      showToast(user?.plan === "trial" ? "3 天免费试用已结束，请先订阅套餐后继续使用。" : "当前套餐已到期，请续费后继续使用。");
       setShowSubscription(true);
       return;
     }
@@ -907,7 +1224,7 @@ function Workspace() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setAnswer(data.answer);
-      if (data.task) setTasks((current) => [data.task, ...current].slice(0, 30));
+      if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
     } catch (error) {
       setAnswer(formatError(error));
     } finally {
@@ -925,6 +1242,8 @@ function Workspace() {
         <SubscriptionModal
           onClose={() => setShowSubscription(false)}
           showToast={showToast}
+          authHeaders={authHeaders}
+          onUserUpdate={updateUser}
         />
       )}
       {showFeedbackModal && (
@@ -937,14 +1256,12 @@ function Workspace() {
               </div>
               <button type="button" onClick={() => setShowFeedbackModal(false)}>关闭</button>
             </div>
-            <div className="feedback-box">
-              <input placeholder="你的称呼 / 公司" />
-              <input placeholder="微信 / 手机 / 邮箱" />
-              <textarea placeholder="你觉得哪里不好用？还希望增加什么功能？" />
-              <button type="button" onClick={() => { showToast("感谢反馈，正式上线后这里会接入反馈收集系统。"); setShowFeedbackModal(false); }}>提交反馈</button>
-            </div>
+            <FeedbackForm onSubmit={submitFeedback} />
           </section>
         </div>
+      )}
+      {showAdmin && (
+        <AdminModal summary={adminSummary} onClose={() => setShowAdmin(false)} />
       )}
       {showStoreApiModal && (
         <StoreApiModal
@@ -952,6 +1269,7 @@ function Workspace() {
           storeConfig={storeConfig}
           setStoreConfig={setStoreConfig}
           storeConnected={storeConnected}
+          onSave={saveStoreApiConfig}
         />
       )}
       <aside className="app-sidebar">
@@ -974,6 +1292,7 @@ function Workspace() {
           <button type="button" onClick={() => setShowSubscription(true)}>查看/升级订阅</button>
           <button type="button" onClick={() => setShowStoreApiModal(true)}>店铺 API 配置</button>
           <button type="button" onClick={() => setIsBetaMode((value) => !value)}>{isBetaMode ? "退出内测版" : "进入内测版"}</button>
+          {user?.isAdmin && <button type="button" onClick={loadAdminSummary}>运营后台</button>}
           <button type="button" onClick={logout}>退出登录</button>
         </div>
 
@@ -1004,13 +1323,17 @@ function Workspace() {
         })}
 
         <div className="side-label">{activeId === "autopilot" ? "全自动运行历史" : `${activeAgent?.name}历史`}</div>
+        <input className="history-search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="搜索历史任务" />
         <div className="history-list">
           {visibleTasks.length ? (
             visibleTasks.slice(0, 5).map((task) => (
-              <button key={task.id} type="button" onClick={() => openTaskHistory(task)}>
-                <strong>{task.title}</strong>
-                <small>{new Date(task.createdAt).toLocaleString()}</small>
-              </button>
+              <div className="history-item" key={task.id}>
+                <button type="button" onClick={() => openTaskHistory(task)}>
+                  <strong>{task.favorite ? "★ " : ""}{task.title}</strong>
+                  <small>{new Date(task.createdAt).toLocaleString()}</small>
+                </button>
+                <button type="button" className="favorite-btn" onClick={() => toggleFavorite(task)}>{task.favorite ? "取消" : "收藏"}</button>
+              </div>
             ))
           ) : (
             <p>暂无历史任务</p>
@@ -1049,6 +1372,11 @@ function Workspace() {
               <div>
                 <h3>{activeId === "autopilot" ? "自动生成结果" : `${activeAgent.name} 输出`}</h3>
                 <p>{activeId === "autopilot" ? "OpenClaw 会按 6 个 Agent 的顺序自动生成跨境运营方案。" : activeAgent.desc}</p>
+              </div>
+              <div className="output-actions">
+                <button type="button" onClick={copyAnswer}>复制</button>
+                <button type="button" onClick={() => downloadAnswer("md")}>导出 Markdown</button>
+                <button type="button" onClick={() => downloadAnswer("html")}>导出 HTML</button>
               </div>
             </div>
             <StructuredAgentPreview agentId={activeAgent?.id} />

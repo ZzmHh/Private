@@ -4,11 +4,14 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
-import { sendVerificationEmail } from "./email.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "./email.js";
 import {
-  activatePlan,
   createToken,
+  createOrder,
   ensureFeatureAccess,
+  finalizeUsageLog,
+  getAdminSummary,
+  getStoreConnection,
   getUserById,
   incrementUsage,
   listPlans,
@@ -16,8 +19,15 @@ import {
   loginUser,
   registerUser,
   resendEmailVerification,
+  requestPasswordReset,
+  resetPassword,
   sanitizeUser,
   saveTask,
+  saveFeedback,
+  saveStoreConnection,
+  simulatePayOrder,
+  submitEnterpriseLead,
+  updateTaskFavorite,
   verifyEmailCode,
   verifyToken,
 } from "./db.js";
@@ -155,6 +165,13 @@ function authMiddleware(req, res, next) {
   next();
 }
 
+function adminMiddleware(req, res, next) {
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({ error: "需要管理员权限。" });
+  }
+  next();
+}
+
 function handleAuthError(res, error) {
   res.status(error.status || 500).json({ error: error.message || "账号服务异常。" });
 }
@@ -254,18 +271,119 @@ app.post("/api/auth/resend-verification", (req, res) => {
   }
 });
 
-app.get("/api/me", authMiddleware, (req, res) => {
-  res.json({ user: sanitizeUser(req.user), tasks: listTasks(req.user.id), plans: listPlans() });
+app.post("/api/auth/request-password-reset", (req, res) => {
+  try {
+    const { email } = req.body || {};
+
+    if (!email) {
+      return res.status(400).json({ error: "请填写邮箱。" });
+    }
+
+    const { user, resetCode } = requestPasswordReset(email);
+    sendPasswordResetEmail({ to: user.email, code: resetCode, name: user.name })
+      .then((emailResult) => {
+        res.json({
+          email: user.email,
+          emailDelivered: emailResult.delivered,
+          devCode: emailResult.devCode,
+          message: emailResult.delivered
+            ? "重置密码验证码已发送到邮箱。"
+            : "已生成重置验证码。当前未配置 SMTP，开发环境可直接使用页面提示的验证码。",
+        });
+      })
+      .catch((error) => {
+        res.status(500).json({ error: error.message || "重置密码邮件发送失败，请稍后重试。" });
+      });
+  } catch (error) {
+    handleAuthError(res, error);
+  }
 });
 
-app.post("/api/billing/activate", authMiddleware, (req, res) => {
+app.post("/api/auth/reset-password", (req, res) => {
   try {
-    const { planId } = req.body || {};
-    const user = activatePlan(req.user.id, planId);
-    res.json({ user: sanitizeUser(user), plans: listPlans() });
+    const { email, code, password } = req.body || {};
+
+    if (!email || !code || !password) {
+      return res.status(400).json({ error: "请填写邮箱、验证码和新密码。" });
+    }
+
+    const user = resetPassword({ email, code, password });
+    res.json({ token: createToken(user), user: sanitizeUser(user) });
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message || "套餐开通失败。" });
+    handleAuthError(res, error);
   }
+});
+
+app.get("/api/me", authMiddleware, (req, res) => {
+  res.json({
+    user: sanitizeUser(req.user),
+    tasks: listTasks(req.user.id),
+    plans: listPlans(),
+    storeConnection: getStoreConnection(req.user.id),
+  });
+});
+
+app.post("/api/billing/orders", authMiddleware, (req, res) => {
+  try {
+    const { planId, paymentMethod } = req.body || {};
+    const order = createOrder({ userId: req.user.id, planId, paymentMethod });
+    res.json({ order });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "订单创建失败。" });
+  }
+});
+
+app.post("/api/billing/orders/:orderId/simulate-pay", authMiddleware, (req, res) => {
+  try {
+    const { order, user } = simulatePayOrder({ userId: req.user.id, orderId: req.params.orderId });
+    res.json({ order, user: sanitizeUser(user), plans: listPlans() });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "模拟支付失败。" });
+  }
+});
+
+app.post("/api/billing/enterprise-leads", authMiddleware, (req, res) => {
+  try {
+    const lead = submitEnterpriseLead({ userId: req.user.id, contact: req.body || {} });
+    res.json({ lead });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "提交定制需求失败。" });
+  }
+});
+
+app.post("/api/store-connection", authMiddleware, (req, res) => {
+  try {
+    const storeConnection = saveStoreConnection({ userId: req.user.id, config: req.body || {} });
+    res.json({ storeConnection });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "店铺 API 配置保存失败。" });
+  }
+});
+
+app.post("/api/tasks/:taskId/favorite", authMiddleware, (req, res) => {
+  try {
+    const task = updateTaskFavorite({
+      userId: req.user.id,
+      taskId: req.params.taskId,
+      favorite: req.body?.favorite,
+    });
+    res.json({ task });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "任务收藏失败。" });
+  }
+});
+
+app.post("/api/feedback", authMiddleware, (req, res) => {
+  try {
+    const feedback = saveFeedback({ userId: req.user.id, payload: req.body || {} });
+    res.json({ feedback });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "反馈提交失败。" });
+  }
+});
+
+app.get("/api/admin/summary", authMiddleware, adminMiddleware, (_req, res) => {
+  res.json(getAdminSummary());
 });
 
 app.get("/api/agents", (_req, res) => {
@@ -283,13 +401,25 @@ app.get("/api/agents", (_req, res) => {
 });
 
 app.post("/api/scrape/run", authMiddleware, async (req, res) => {
+  const startedAt = Date.now();
+  let usage;
   try {
     const { platform, market, category, url } = req.body || {};
     ensureFeatureAccess(req.user, "scraper");
-    incrementUsage(req.user.id, "scrape");
+    usage = incrementUsage(req.user.id, "scrape");
     const result = await runPythonScraper({ platform, market, category, url });
+    finalizeUsageLog(usage.logId, {
+      type: "scrape",
+      status: result.ok ? "success" : "failed",
+      inputLength: JSON.stringify(req.body || {}).length,
+      outputLength: JSON.stringify(result).length,
+      startedAt,
+    });
     res.status(result.ok ? 200 : 500).json(result);
   } catch (error) {
+    if (usage?.logId) {
+      finalizeUsageLog(usage.logId, { type: "scrape", status: "failed", error: error.message, startedAt });
+    }
     res.status(error.status || 500).json({ error: error.message || "爬虫执行失败。" });
   }
 });
@@ -332,6 +462,8 @@ function buildAutopilotMessages({ platform, market, category, extra }) {
 }
 
 app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
+  const startedAt = Date.now();
+  let usage;
   try {
     const { input, platform, market, category, extra, scrape } = req.body || {};
 
@@ -347,13 +479,14 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
 
     ensureFeatureAccess(req.user, "autopilot");
 
-    const usage = incrementUsage(req.user.id, "autopilot");
+    usage = incrementUsage(req.user.id, "autopilot");
 
     let scrapeResult = null;
     let enrichedInput = input || extra || "";
 
     if (scrape?.enabled) {
       ensureFeatureAccess(req.user, "scraper");
+      incrementUsage(req.user.id, "scrape");
       scrapeResult = await runPythonScraper({
         platform: scrape.platform,
         market: scrape.market,
@@ -371,13 +504,21 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
     const { response, data, endpoint } = await callChatCompletions({
       model,
       temperature: 0.4,
-      max_tokens: 1800,
+      max_tokens: usage.maxTokens,
       messages: input
         ? buildAutopilotMessages({ platform: "用户自由输入", market: "用户自由输入", category: "用户自由输入", extra: enrichedInput })
         : buildAutopilotMessages({ platform, market, category, extra: enrichedInput }),
     });
 
     if (!response.ok) {
+      finalizeUsageLog(usage.logId, {
+        type: "autopilot",
+        status: "failed",
+        inputLength: enrichedInput.length,
+        outputLength: JSON.stringify(data).length,
+        error: data?.error?.message || data?.message,
+        startedAt,
+      });
       return res.status(response.status).json({
         error: data?.error?.message || data?.message || `${providerName} 全自动运行失败。`,
         endpoint,
@@ -386,6 +527,14 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
     }
 
     const answer = data?.choices?.[0]?.message?.content || "模型没有返回内容。";
+    finalizeUsageLog(usage.logId, {
+      type: "autopilot",
+      status: "success",
+      inputLength: enrichedInput.length,
+      outputLength: answer.length,
+      model,
+      startedAt,
+    });
     const task = saveTask({
       userId: req.user.id,
       type: "autopilot",
@@ -404,11 +553,16 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
       usage,
     });
   } catch (error) {
+    if (usage?.logId) {
+      finalizeUsageLog(usage.logId, { type: "autopilot", status: "failed", error: error.message, startedAt });
+    }
     res.status(error.status || 500).json({ error: error.message || "全自动运行失败。" });
   }
 });
 
 app.post("/api/agents/run", authMiddleware, async (req, res) => {
+  const startedAt = Date.now();
+  let usage;
   try {
     const { agentId, input, scrape } = req.body || {};
 
@@ -428,12 +582,13 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
       ensureFeatureAccess(req.user, "storeApiAgents");
     }
 
-    const usage = incrementUsage(req.user.id, agentId);
+    usage = incrementUsage(req.user.id, agentId);
     let scrapeResult = null;
     let enrichedInput = input.trim();
 
     if (agentId === "trend" && scrape?.enabled) {
       ensureFeatureAccess(req.user, "scraper");
+      incrementUsage(req.user.id, "scrape");
       scrapeResult = await runPythonScraper({
         platform: scrape.platform,
         market: scrape.market,
@@ -451,10 +606,19 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
     const { response, data, endpoint } = await callChatCompletions({
         model,
         temperature: 0.45,
+        max_tokens: usage.maxTokens,
         messages: buildAgentMessages(agentId, enrichedInput),
     });
 
     if (!response.ok) {
+      finalizeUsageLog(usage.logId, {
+        type: agentId,
+        status: "failed",
+        inputLength: enrichedInput.length,
+        outputLength: JSON.stringify(data).length,
+        error: data?.error?.message || data?.message,
+        startedAt,
+      });
       return res.status(response.status).json({
         error: data?.error?.message || data?.message || `${providerName} 模型调用失败。`,
         endpoint,
@@ -463,6 +627,14 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
     }
 
     const answer = data?.choices?.[0]?.message?.content || "模型没有返回内容。";
+    finalizeUsageLog(usage.logId, {
+      type: agentId,
+      status: "success",
+      inputLength: enrichedInput.length,
+      outputLength: answer.length,
+      model,
+      startedAt,
+    });
     const task = saveTask({
       userId: req.user.id,
       type: agentId,
@@ -482,6 +654,9 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
       usage,
     });
   } catch (error) {
+    if (usage?.logId) {
+      finalizeUsageLog(usage.logId, { type: req.body?.agentId || "agent", status: "failed", error: error.message, startedAt });
+    }
     res.status(error.status || 500).json({ error: error.message || "Agent 执行失败。" });
   }
 });

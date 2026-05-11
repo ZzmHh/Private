@@ -1244,6 +1244,24 @@ footer a {
   gap: 8px;
 }
 
+.history-search {
+  width: 100%;
+  min-height: 38px;
+  margin-bottom: 2px;
+  padding: 0 11px;
+  border: 1px solid #edf1f7;
+  border-radius: 14px;
+  outline: none;
+  background: #fff;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: stretch;
+}
+
 .history-list button,
 .history-list p {
   margin: 0;
@@ -1252,6 +1270,13 @@ footer a {
   border-radius: 15px;
   text-align: left;
   background: #fff;
+}
+
+.history-list .favorite-btn {
+  padding: 0 8px;
+  color: #155eef;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .history-list strong,
@@ -1625,6 +1650,11 @@ footer a {
   color: rgba(255, 255, 255, 0.72);
 }
 
+.payment-box > button {
+  width: 100%;
+  margin-top: 12px;
+}
+
 .pay-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1731,6 +1761,66 @@ footer a {
   opacity: 0.7;
 }
 
+.admin-modal {
+  width: min(1100px, 100%);
+  max-height: min(860px, calc(100vh - 56px));
+  overflow: auto;
+  padding: 26px;
+  border: 1px solid #e5ebf3;
+  border-radius: 34px;
+  background: #fff;
+  box-shadow: 0 34px 100px rgba(15, 23, 42, 0.22);
+}
+
+.admin-metrics {
+  margin: 22px 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.admin-metrics div,
+.admin-sections section {
+  padding: 16px;
+  border: 1px solid #edf1f7;
+  border-radius: 18px;
+  background: #fbfcff;
+}
+
+.admin-metrics span,
+.admin-metrics strong {
+  display: block;
+}
+
+.admin-metrics span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-metrics strong {
+  margin-top: 6px;
+  color: #101828;
+  font-size: 26px;
+}
+
+.admin-sections {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.admin-sections h3 {
+  margin: 0 0 10px;
+}
+
+.admin-sections p {
+  margin: 8px 0;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .content-layout {
   min-height: 0;
   padding: 0;
@@ -1764,6 +1854,27 @@ footer a {
   background:
     radial-gradient(circle at 100% 0%, rgba(21, 94, 239, 0.10), transparent 24rem),
     linear-gradient(180deg, #fff, #fbfcff);
+}
+
+.output-top > div:nth-child(2) {
+  flex: 1;
+}
+
+.output-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.output-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #d9e4ff;
+  border-radius: 999px;
+  color: #155eef;
+  background: #f5f8ff;
+  font-weight: 900;
 }
 
 .output-icon {
