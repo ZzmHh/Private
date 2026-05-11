@@ -636,12 +636,28 @@ export function updateTaskFavorite({ userId, taskId, favorite }) {
   return task;
 }
 
+function normalizeStorePlatform(p) {
+  const x = String(p || "amazon").toLowerCase();
+  return ["shopify", "woocommerce", "amazon", "tiktok"].includes(x) ? x : "amazon";
+}
+
+export function listStoreConnections(userId) {
+  const db = readDb();
+  return db.storeConnections
+    .filter((entry) => entry.userId === userId)
+    .map((c) => sanitizeStoreConnection(c))
+    .filter(Boolean);
+}
+
 export function saveStoreConnection({ userId, config }) {
   const db = readDb();
   const user = db.users.find((entry) => entry.id === userId);
   if (!user) throw createError("用户不存在。", 401);
 
-  const existing = db.storeConnections.find((entry) => entry.userId === userId);
+  const platform = normalizeStorePlatform(config.platform);
+  const existing = db.storeConnections.find(
+    (entry) => entry.userId === userId && normalizeStorePlatform(entry.platform) === platform,
+  );
   const incomingToken = String(config.apiToken || "").trim();
   const looksMasked = incomingToken.includes("****");
   let apiTokenEncrypted = existing?.apiTokenEncrypted || "";
@@ -650,9 +666,6 @@ export function saveStoreConnection({ userId, config }) {
     apiTokenEncrypted = Buffer.from(incomingToken).toString("base64");
     apiTokenMasked = maskToken(incomingToken);
   }
-
-  const rawPlat = String(config.platform || "amazon").toLowerCase();
-  const platform = ["shopify", "woocommerce", "amazon", "tiktok"].includes(rawPlat) ? rawPlat : "amazon";
 
   const connection = {
     id: existing?.id || crypto.randomUUID(),
@@ -685,15 +698,22 @@ export function saveStoreConnection({ userId, config }) {
 }
 
 export function getStoreConnection(userId) {
-  const db = readDb();
-  const connection = db.storeConnections.find((entry) => entry.userId === userId);
-  return sanitizeStoreConnection(connection);
+  const list = listStoreConnections(userId);
+  return list[0] || null;
 }
 
-/** 仅供服务端调用：解密已保存的 Token（当前为 Base64，生产建议换 AES + DATA_ENCRYPTION_KEY） */
-export function getStoreConnectionSecret(userId) {
+/** @param {string} [platform] — tiktok / amazon / shopify / woocommerce；省略则取该用户任意一条（兼容旧逻辑） */
+export function getStoreConnectionSecret(userId, platform) {
   const db = readDb();
-  const connection = db.storeConnections.find((entry) => entry.userId === userId);
+  let connection;
+  if (platform) {
+    const p = normalizeStorePlatform(platform);
+    connection = db.storeConnections.find(
+      (entry) => entry.userId === userId && normalizeStorePlatform(entry.platform) === p,
+    );
+  } else {
+    connection = db.storeConnections.find((entry) => entry.userId === userId);
+  }
   if (!connection?.apiTokenEncrypted) return null;
   try {
     const apiToken = Buffer.from(connection.apiTokenEncrypted, "base64").toString("utf8");

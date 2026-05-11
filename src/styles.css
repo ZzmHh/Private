@@ -1467,6 +1467,104 @@ footer a {
   box-shadow: 0 34px 100px rgba(15, 23, 42, 0.22);
 }
 
+.store-api-modal-wide {
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.store-api-intro {
+  margin: 12px 0 18px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #344054;
+}
+
+.store-platform-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.store-platform-block {
+  padding: 16px 18px;
+  border: 1px solid #e5ebf3;
+  border-radius: 20px;
+  background: #fafbfc;
+}
+
+.store-platform-block.is-ready {
+  border-color: #abefc6;
+  background: #f6fef9;
+}
+
+.store-platform-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.store-platform-block-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.pill-ok,
+.pill-warn {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.pill-ok {
+  color: #067647;
+  background: #ecfdf3;
+}
+
+.pill-warn {
+  color: #b54708;
+  background: #fffaeb;
+}
+
+.store-platform-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  align-items: center;
+}
+
+.continue-checkout.slim {
+  padding: 10px 18px;
+  font-size: 14px;
+  min-height: auto;
+}
+
+.store-snapshot-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.store-snapshot-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.store-snapshot-label select {
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+}
+
 .modal-head {
   display: flex;
   justify-content: space-between;

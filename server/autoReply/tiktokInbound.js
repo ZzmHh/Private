@@ -96,7 +96,7 @@ export async function handleTiktokBuyerMessageWebhook(payload, options = {}) {
     return { ok: true, skipped: "重复消息，已处理过。" };
   }
 
-  const secret = getStoreConnectionSecret(connection.userId);
+  const secret = getStoreConnectionSecret(connection.userId, connection.platform);
   if (!secret) {
     return { ok: false, error: "无法解密店铺凭据。" };
   }

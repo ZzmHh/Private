@@ -11,11 +11,11 @@ import {
   ensureFeatureAccess,
   finalizeUsageLog,
   getAdminSummary,
-  getStoreConnection,
   getStoreConnectionSecret,
   getUserById,
   incrementUsage,
   listPlans,
+  listStoreConnections,
   listTasks,
   loginUser,
   registerUser,
@@ -201,22 +201,43 @@ function adminMiddleware(req, res, next) {
   next();
 }
 
-/** 合并已保存凭据与 body.testConfig（试连时可不先入库） */
-function resolveStoreSnapshotSecret(req) {
+/** 合并已保存凭据与 body.testConfig；storePlatform / testConfig.platform 指定多店铺中的哪一条 */
+function resolveStoreSnapshotSecret(req, platformOverride) {
   const tc = req.body?.testConfig;
+  const storePlatform = platformOverride || req.body?.storePlatform || tc?.platform;
   const testTok = String(tc?.apiToken || "").trim();
   const testMasked = testTok.includes("****");
 
-  let secret = getStoreConnectionSecret(req.user.id);
+  let secret = getStoreConnectionSecret(req.user.id, storePlatform ? String(storePlatform) : undefined);
   if (testTok && !testMasked) {
     secret = {
-      platform: tc.platform || secret?.platform || "amazon",
+      platform: tc.platform || storePlatform || secret?.platform || "amazon",
       storeName: tc.storeName ?? secret?.storeName ?? "",
       apiEndpoint: tc.apiEndpoint ?? secret?.apiEndpoint ?? "",
       apiToken: testTok,
     };
   }
   return secret;
+}
+
+function pickStoreSnapshotSecret(userId, preferredPlatform) {
+  const order = ["tiktok", "shopify", "woocommerce", "amazon"];
+  const tryOne = (p) => {
+    const s = getStoreConnectionSecret(userId, p);
+    if (!s?.apiToken) return null;
+    const merged = { ...s, platform: p };
+    if (!snapshotRequiresSavedSecret(merged)) return null;
+    return merged;
+  };
+  if (preferredPlatform && order.includes(String(preferredPlatform).toLowerCase())) {
+    const hit = tryOne(String(preferredPlatform).toLowerCase());
+    if (hit) return hit;
+  }
+  for (const p of order) {
+    const hit = tryOne(p);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function handleAuthError(res, error) {
@@ -362,11 +383,13 @@ app.post("/api/auth/reset-password", (req, res) => {
 });
 
 app.get("/api/me", authMiddleware, (req, res) => {
+  const connections = listStoreConnections(req.user.id);
   res.json({
     user: sanitizeUser(req.user),
     tasks: listTasks(req.user.id),
     plans: listPlans(),
-    storeConnection: getStoreConnection(req.user.id),
+    storeConnections: connections,
+    storeConnection: connections[0] || null,
   });
 });
 
@@ -433,7 +456,7 @@ app.post("/api/store/snapshot", authMiddleware, async (req, res) => {
 app.post("/api/store/amazon/snapshot", authMiddleware, async (req, res) => {
   try {
     ensureFeatureAccess(req.user, "storeApiAgents");
-    const secret = resolveStoreSnapshotSecret(req);
+    const secret = resolveStoreSnapshotSecret(req, "amazon");
     const gate = assertPlatformSecret("amazon", secret);
     if (!gate.ok) {
       return res.status(400).json({ ok: false, error: gate.error });
@@ -455,7 +478,7 @@ app.post("/api/store/amazon/snapshot", authMiddleware, async (req, res) => {
 app.post("/api/store/tiktok/snapshot", authMiddleware, async (req, res) => {
   try {
     ensureFeatureAccess(req.user, "storeApiAgents");
-    const secret = resolveStoreSnapshotSecret(req);
+    const secret = resolveStoreSnapshotSecret(req, "tiktok");
     const gate = assertPlatformSecret("tiktok", secret);
     if (!gate.ok) {
       return res.status(400).json({ ok: false, error: gate.error });
@@ -479,7 +502,7 @@ app.post("/api/store/tiktok/snapshot", authMiddleware, async (req, res) => {
 app.post("/api/store/tiktok/auto-reply/simulate", authMiddleware, async (req, res) => {
   try {
     ensureFeatureAccess(req.user, "storeApiAgents");
-    const secretFull = getStoreConnectionSecret(req.user.id);
+    const secretFull = getStoreConnectionSecret(req.user.id, "tiktok");
     if (!secretFull || String(secretFull.platform).toLowerCase() !== "tiktok") {
       return res.status(400).json({ error: "请先在店铺 API 中选择 TikTok 并保存凭据。" });
     }
@@ -714,7 +737,7 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
   const startedAt = Date.now();
   let usage;
   try {
-    const { agentId, input, scrape, useStoreSnapshot } = req.body || {};
+    const { agentId, input, scrape, useStoreSnapshot, storeSnapshotPlatform } = req.body || {};
 
     if (!agentId || typeof input !== "string" || !input.trim()) {
       return res.status(400).json({ error: "请提供 agentId 和要执行的业务问题。" });
@@ -754,7 +777,7 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
     }
 
     if (useStoreSnapshot && ["growth", "service", "profit"].includes(agentId)) {
-      const secret = getStoreConnectionSecret(req.user.id);
+      const secret = pickStoreSnapshotSecret(req.user.id, storeSnapshotPlatform);
       const plat = String(secret?.platform || "").toLowerCase();
       if (secret?.apiToken && snapshotRequiresSavedSecret(secret) && ["shopify", "woocommerce", "amazon", "tiktok"].includes(plat)) {
         const snap = await fetchStoreSnapshot(secret);
