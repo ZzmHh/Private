@@ -468,6 +468,7 @@ function isPlatformBlockReady(platform, block) {
 
 function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform, showToast, authHeaders }) {
   const [snapshotLoading, setSnapshotLoading] = useState(null);
+  const [activePlatform, setActivePlatform] = useState("tiktok");
 
   async function testSnapshot(platform) {
     const cfg = { platform, ...storeBlocks[platform] };
@@ -515,15 +516,47 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
         <div className="modal-head">
           <div>
             <p>Store API</p>
-            <h2>分平台配置店铺连接</h2>
+            <h2>配置店铺 API</h2>
           </div>
           <button type="button" onClick={onClose}>关闭</button>
         </div>
+        <div className="store-api-callout" role="note">
+          <strong>强数据 Agent 建议配置</strong>
+          <span>
+            诊断、客服、广告与库存等能力需要对接店铺数据。请选择一个平台标签，分别填写并保存；TikTok 与 Amazon 凭据互不影响。
+          </span>
+        </div>
         <p className="store-api-intro">
-          TikTok 与 Amazon <strong>互不影响</strong>，可分别填写并点击「保存」；Shopify、WooCommerce 同样各占一块。密钥仍只存服务器。
+          点击下方 <strong>TikTok / Amazon</strong> 等标签切换表单，每平台独立「测试快照」与「保存」。
         </p>
-        <div className="store-platform-blocks">
+        <div className="store-platform-tabs" role="tablist" aria-label="选择店铺平台">
           {STORE_PLATFORM_ORDER.map((platform) => {
+            const ready = isPlatformBlockReady(platform, storeBlocks[platform] || emptyStoreBlock());
+            const isActive = activePlatform === platform;
+            return (
+              <button
+                key={platform}
+                type="button"
+                className={`store-platform-tab ${isActive ? "is-active" : ""} ${ready ? "is-ready" : ""}`}
+                role="tab"
+                aria-selected={isActive}
+                id={`store-tab-${platform}`}
+                aria-controls={`store-panel-${platform}`}
+                onClick={() => setActivePlatform(platform)}
+              >
+                {STORE_PLATFORM_LABELS[platform]}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="store-platform-blocks"
+          role="tabpanel"
+          id={`store-panel-${activePlatform}`}
+          aria-labelledby={`store-tab-${activePlatform}`}
+        >
+          {(() => {
+            const platform = activePlatform;
             const block = storeBlocks[platform] || emptyStoreBlock();
             const ready = isPlatformBlockReady(platform, block);
             return (
@@ -536,18 +569,19 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
                   <input
                     value={block.storeName}
                     onChange={(e) => updateBlock(platform, "storeName", e.target.value)}
-                    placeholder={`${STORE_PLATFORM_LABELS[platform]} · 显示名`}
+                    placeholder="店铺名称 / 显示名"
                   />
                   <input
                     value={block.apiEndpoint}
                     onChange={(e) => updateBlock(platform, "apiEndpoint", e.target.value)}
-                    placeholder={platformEndpointHint(platform)}
+                    placeholder={platform === "shopify" ? "店铺 API Endpoint（如 Shopify 店铺地址）" : "店铺 API Endpoint"}
                   />
                   <input
                     value={block.apiToken}
                     onChange={(e) => updateBlock(platform, "apiToken", e.target.value)}
-                    placeholder={platformTokenHint(platform)}
+                    placeholder="API Token / Access Key"
                   />
+                  <p className="store-field-hint">{platformEndpointHint(platform)} · {platformTokenHint(platform)}</p>
                   {platform === "tiktok" && (
                     <label className="scrape-toggle tiktok-autoreply-toggle">
                       <input
@@ -564,12 +598,12 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
                     {snapshotLoading === platform ? "测试中…" : "测试本台快照"}
                   </button>
                   <button type="button" className="continue-checkout slim" onClick={() => saveStorePlatform(platform)}>
-                    保存 {STORE_PLATFORM_LABELS[platform]}
+                    保存配置
                   </button>
                 </div>
               </div>
             );
-          })}
+          })()}
         </div>
       </section>
     </div>

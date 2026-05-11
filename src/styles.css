@@ -1480,6 +1480,68 @@ footer a {
   color: #344054;
 }
 
+.store-api-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #fde68a;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef9c3 100%);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #854d0e;
+}
+
+.store-api-callout strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: #713f12;
+}
+
+.store-platform-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.store-platform-tab {
+  border: 1px solid #e5ebf3;
+  background: #fff;
+  color: #344054;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.store-platform-tab:hover {
+  border-color: #c7d5e8;
+  background: #f8fafc;
+}
+
+.store-platform-tab.is-active {
+  border-color: #155eef;
+  background: #eef2ff;
+  color: #1d39c4;
+  box-shadow: 0 0 0 1px rgba(21, 94, 239, 0.12);
+}
+
+.store-platform-tab.is-ready:not(.is-active) {
+  border-color: #abefc6;
+}
+
+.store-field-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #667085;
+}
+
 .store-platform-blocks {
   display: flex;
   flex-direction: column;
