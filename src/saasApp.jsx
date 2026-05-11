@@ -891,6 +891,7 @@ function Workspace() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminSummary, setAdminSummary] = useState(null);
   const [historyQuery, setHistoryQuery] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem("fanmeng_onboarding_done") !== "1");
   const [toast, setToast] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [answer, setAnswer] = useState("登录后已开启 3 天免费试用。请选择左侧模块，输入要求后由 OpenClaw 生成结果。");
@@ -970,6 +971,11 @@ function Workspace() {
   function showToast(message) {
     setToast(message);
     window.setTimeout(() => setToast(""), 3200);
+  }
+
+  function finishOnboarding() {
+    localStorage.setItem("fanmeng_onboarding_done", "1");
+    setShowOnboarding(false);
   }
 
   function updateUser(nextUser) {
@@ -1365,6 +1371,26 @@ function Workspace() {
 
         <div className="content-layout">
           <section className="output-panel">
+            {showOnboarding && (
+              <div className="onboarding-card">
+                <div>
+                  <span>1</span>
+                  <strong>选择平台和市场</strong>
+                  <p>先描述你经营的平台、市场、类目和预算。</p>
+                </div>
+                <div>
+                  <span>2</span>
+                  <strong>配置店铺 API</strong>
+                  <p>需要业绩、客服、利润数据时先保存店铺接口。</p>
+                </div>
+                <div>
+                  <span>3</span>
+                  <strong>运行第一个 Agent</strong>
+                  <p>生成结果后可复制、导出和收藏历史任务。</p>
+                </div>
+                <button type="button" onClick={finishOnboarding}>我知道了</button>
+              </div>
+            )}
             <div className="output-top">
               <div className="output-icon">
                 <ActiveIcon size={24} />

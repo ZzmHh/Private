@@ -1845,6 +1845,58 @@ footer a {
   overflow: hidden;
 }
 
+.onboarding-card {
+  margin: 18px 18px 0;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) auto;
+  gap: 12px;
+  align-items: stretch;
+  border: 1px solid #d9e4ff;
+  border-radius: 24px;
+  background: #f5f8ff;
+}
+
+.onboarding-card div {
+  padding: 12px;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.onboarding-card span {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #fff;
+  background: #155eef;
+  font-weight: 900;
+}
+
+.onboarding-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #101828;
+}
+
+.onboarding-card p {
+  margin: 5px 0 0;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.onboarding-card button {
+  min-width: 96px;
+  border: 0;
+  border-radius: 18px;
+  color: #fff;
+  background: #101828;
+  font-weight: 900;
+}
+
 .output-top {
   padding: 28px 34px;
   display: flex;
