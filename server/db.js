@@ -108,6 +108,29 @@ function verifyPassword(password, storedHash) {
   return hashPassword(password, salt) === `${salt}:${hash}`;
 }
 
+function createVerificationCode() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashVerificationCode(email, code) {
+  return crypto.createHmac("sha256", tokenSecret).update(`${email}:${code}`).digest("hex");
+}
+
+function attachEmailVerification(user, now = new Date()) {
+  const code = createVerificationCode();
+  const expiresAt = new Date(now.getTime() + 1000 * 60 * 10);
+
+  user.emailVerified = false;
+  user.emailVerification = {
+    codeHash: hashVerificationCode(user.email, code),
+    expiresAt: expiresAt.toISOString(),
+    sentAt: now.toISOString(),
+    attempts: 0,
+  };
+
+  return code;
+}
+
 export function createToken(user) {
   const payload = base64url(
     JSON.stringify({
@@ -133,9 +156,10 @@ export function verifyToken(token) {
 
 export function sanitizeUser(user) {
   if (!user) return null;
-  const { passwordHash, ...safeUser } = user;
+  const { passwordHash, emailVerification, ...safeUser } = user;
   return {
     ...safeUser,
+    emailVerified: user.emailVerified !== false,
     trialActive: Date.now() < new Date(user.trialEndsAt).getTime(),
     planName: plans[user.plan]?.name || "未知套餐",
     planFeatures: plans[user.plan]?.features || plans.trial.features,
@@ -146,8 +170,9 @@ export function sanitizeUser(user) {
 export function registerUser({ name, storeName, email, password }) {
   const db = readDb();
   const normalizedEmail = email.trim().toLowerCase();
+  const existingUser = db.users.find((user) => user.email === normalizedEmail);
 
-  if (db.users.some((user) => user.email === normalizedEmail)) {
+  if (existingUser?.emailVerified !== false) {
     const error = new Error("该邮箱已经注册。");
     error.status = 409;
     throw error;
@@ -155,6 +180,15 @@ export function registerUser({ name, storeName, email, password }) {
 
   const now = new Date();
   const trialEndsAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3);
+  if (existingUser) {
+    existingUser.name = name || existingUser.name || "跨境卖家";
+    existingUser.storeName = storeName || existingUser.storeName || "";
+    existingUser.passwordHash = hashPassword(password);
+    const verificationCode = attachEmailVerification(existingUser, now);
+    writeDb(db);
+    return { user: existingUser, verificationCode };
+  }
+
   const user = {
     id: crypto.randomUUID(),
     name: name || "跨境卖家",
@@ -166,12 +200,14 @@ export function registerUser({ name, storeName, email, password }) {
     trialEndsAt: trialEndsAt.toISOString(),
     subscriptionEndsAt: null,
     usage: {},
+    emailVerified: false,
     createdAt: now.toISOString(),
   };
+  const verificationCode = attachEmailVerification(user, now);
 
   db.users.push(user);
   writeDb(db);
-  return user;
+  return { user, verificationCode };
 }
 
 export function loginUser({ email, password }) {
@@ -185,7 +221,87 @@ export function loginUser({ email, password }) {
     throw error;
   }
 
+  if (user.emailVerified === false) {
+    const error = new Error("请先完成邮箱验证后再登录。");
+    error.status = 403;
+    error.code = "EMAIL_NOT_VERIFIED";
+    throw error;
+  }
+
   return user;
+}
+
+export function verifyEmailCode({ email, code }) {
+  const db = readDb();
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedCode = String(code || "").trim();
+  const user = db.users.find((entry) => entry.email === normalizedEmail);
+
+  if (!user) {
+    const error = new Error("账号不存在，请重新注册。");
+    error.status = 404;
+    throw error;
+  }
+
+  if (user.emailVerified !== false) {
+    return user;
+  }
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    const error = new Error("请输入 6 位邮箱验证码。");
+    error.status = 400;
+    throw error;
+  }
+
+  const verification = user.emailVerification;
+  if (!verification?.codeHash || Date.now() > new Date(verification.expiresAt).getTime()) {
+    const error = new Error("验证码已过期，请重新发送。");
+    error.status = 410;
+    throw error;
+  }
+
+  verification.attempts = (verification.attempts || 0) + 1;
+  if (verification.attempts > 6) {
+    writeDb(db);
+    const error = new Error("验证码错误次数过多，请重新发送验证码。");
+    error.status = 429;
+    throw error;
+  }
+
+  if (verification.codeHash !== hashVerificationCode(normalizedEmail, normalizedCode)) {
+    writeDb(db);
+    const error = new Error("验证码不正确，请检查邮箱后重试。");
+    error.status = 400;
+    throw error;
+  }
+
+  user.emailVerified = true;
+  user.emailVerifiedAt = new Date().toISOString();
+  delete user.emailVerification;
+  writeDb(db);
+  return user;
+}
+
+export function resendEmailVerification(email) {
+  const db = readDb();
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = db.users.find((entry) => entry.email === normalizedEmail);
+
+  if (!user) {
+    const error = new Error("账号不存在，请先注册。");
+    error.status = 404;
+    throw error;
+  }
+
+  if (user.emailVerified !== false) {
+    const error = new Error("该邮箱已完成验证，请直接登录。");
+    error.status = 409;
+    throw error;
+  }
+
+  const verificationCode = attachEmailVerification(user);
+  writeDb(db);
+  return { user, verificationCode };
 }
 
 export function getUserById(userId) {

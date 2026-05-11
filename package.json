@@ -13,9 +13,10 @@
   "dependencies": {
     "dotenv": "latest",
     "express": "latest",
+    "lucide-react": "latest",
+    "nodemailer": "^8.0.7",
     "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest"
+    "react-dom": "latest"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "latest",

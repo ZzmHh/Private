@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
+import { sendVerificationEmail } from "./email.js";
 import {
   activatePlan,
   createToken,
@@ -14,8 +15,10 @@ import {
   listTasks,
   loginUser,
   registerUser,
+  resendEmailVerification,
   sanitizeUser,
   saveTask,
+  verifyEmailCode,
   verifyToken,
 } from "./db.js";
 
@@ -164,8 +167,22 @@ app.post("/api/auth/register", (req, res) => {
       return res.status(400).json({ error: "请填写邮箱和密码。" });
     }
 
-    const user = registerUser({ name, storeName, email, password });
-    res.json({ token: createToken(user), user: sanitizeUser(user) });
+    const { user, verificationCode } = registerUser({ name, storeName, email, password });
+    sendVerificationEmail({ to: user.email, code: verificationCode, name: user.name })
+      .then((emailResult) => {
+        res.json({
+          verificationRequired: true,
+          email: user.email,
+          emailDelivered: emailResult.delivered,
+          devCode: emailResult.devCode,
+          message: emailResult.delivered
+            ? "验证码已发送到邮箱，请完成验证。"
+            : "已生成验证码。当前未配置 SMTP，开发环境可直接使用页面提示的验证码。",
+        });
+      })
+      .catch((error) => {
+        res.status(500).json({ error: error.message || "验证码邮件发送失败，请稍后重试。" });
+      });
   } catch (error) {
     handleAuthError(res, error);
   }
@@ -181,6 +198,57 @@ app.post("/api/auth/login", (req, res) => {
 
     const user = loginUser({ email, password });
     res.json({ token: createToken(user), user: sanitizeUser(user) });
+  } catch (error) {
+    if (error.code === "EMAIL_NOT_VERIFIED") {
+      return res.status(error.status).json({
+        error: error.message,
+        verificationRequired: true,
+        email: req.body?.email,
+      });
+    }
+    return handleAuthError(res, error);
+  }
+});
+
+app.post("/api/auth/verify-email", (req, res) => {
+  try {
+    const { email, code } = req.body || {};
+
+    if (!email || !code) {
+      return res.status(400).json({ error: "请填写邮箱和验证码。" });
+    }
+
+    const user = verifyEmailCode({ email, code });
+    res.json({ token: createToken(user), user: sanitizeUser(user) });
+  } catch (error) {
+    handleAuthError(res, error);
+  }
+});
+
+app.post("/api/auth/resend-verification", (req, res) => {
+  try {
+    const { email } = req.body || {};
+
+    if (!email) {
+      return res.status(400).json({ error: "请填写邮箱。" });
+    }
+
+    const { user, verificationCode } = resendEmailVerification(email);
+    sendVerificationEmail({ to: user.email, code: verificationCode, name: user.name })
+      .then((emailResult) => {
+        res.json({
+          verificationRequired: true,
+          email: user.email,
+          emailDelivered: emailResult.delivered,
+          devCode: emailResult.devCode,
+          message: emailResult.delivered
+            ? "新的验证码已发送到邮箱。"
+            : "已重新生成验证码。当前未配置 SMTP，开发环境可直接使用页面提示的验证码。",
+        });
+      })
+      .catch((error) => {
+        res.status(500).json({ error: error.message || "验证码邮件发送失败，请稍后重试。" });
+      });
   } catch (error) {
     handleAuthError(res, error);
   }

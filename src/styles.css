@@ -1049,6 +1049,21 @@ footer a {
   font-weight: 800;
 }
 
+.auth-info {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #d9e4ff;
+  border-radius: 16px;
+  color: #155eef;
+  background: #f5f8ff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.auth-info strong {
+  letter-spacing: 4px;
+}
+
 .auth-card button:disabled {
   cursor: wait;
   opacity: 0.72;
