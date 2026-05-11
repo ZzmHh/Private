@@ -12,6 +12,7 @@ import {
   finalizeUsageLog,
   getAdminSummary,
   getStoreConnection,
+  getStoreConnectionSecret,
   getUserById,
   incrementUsage,
   listPlans,
@@ -31,6 +32,15 @@ import {
   verifyEmailCode,
   verifyToken,
 } from "./db.js";
+import {
+  fetchStoreSnapshot,
+  fetchAmazonStoreSnapshot,
+  fetchTikTokStoreSnapshot,
+  assertPlatformSecret,
+  snapshotRequiresSavedSecret,
+} from "./integrations/storeApi/index.js";
+import { handleTiktokBuyerMessageWebhook } from "./autoReply/tiktokInbound.js";
+import { parseTikTokShopCredentials } from "./integrations/storeApi/tiktok/tiktokShopConnector.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -135,6 +145,25 @@ async function callChatCompletions(payload) {
   return lastResult;
 }
 
+/** TikTok Partner Webhook：URL 校验 / 买家消息自动话术（需在控制台配置本服务 URL） */
+app.get("/webhooks/tiktok", (req, res) => {
+  const challenge = req.query.challenge ?? req.query["hub.challenge"];
+  if (challenge !== undefined && challenge !== null && String(challenge).length) {
+    return res.status(200).send(String(challenge));
+  }
+  res.status(200).json({ ok: true, hint: "凡梦 TikTok Webhook 接入点" });
+});
+
+app.post("/webhooks/tiktok", express.json({ limit: "512kb" }), async (req, res) => {
+  try {
+    const result = await handleTiktokBuyerMessageWebhook(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("[webhooks/tiktok]", error);
+    res.status(500).json({ ok: false, error: error.message || "webhook 处理失败" });
+  }
+});
+
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
@@ -170,6 +199,24 @@ function adminMiddleware(req, res, next) {
     return res.status(403).json({ error: "需要管理员权限。" });
   }
   next();
+}
+
+/** 合并已保存凭据与 body.testConfig（试连时可不先入库） */
+function resolveStoreSnapshotSecret(req) {
+  const tc = req.body?.testConfig;
+  const testTok = String(tc?.apiToken || "").trim();
+  const testMasked = testTok.includes("****");
+
+  let secret = getStoreConnectionSecret(req.user.id);
+  if (testTok && !testMasked) {
+    secret = {
+      platform: tc.platform || secret?.platform || "amazon",
+      storeName: tc.storeName ?? secret?.storeName ?? "",
+      apiEndpoint: tc.apiEndpoint ?? secret?.apiEndpoint ?? "",
+      apiToken: testTok,
+    };
+  }
+  return secret;
 }
 
 function handleAuthError(res, error) {
@@ -357,6 +404,109 @@ app.post("/api/store-connection", authMiddleware, (req, res) => {
     res.json({ storeConnection });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || "店铺 API 配置保存失败。" });
+  }
+});
+
+/** 聚合快照：按 platform 分发至 Amazon / TikTok / Shopify / Woo */
+app.post("/api/store/snapshot", authMiddleware, async (req, res) => {
+  try {
+    ensureFeatureAccess(req.user, "storeApiAgents");
+    const secret = resolveStoreSnapshotSecret(req);
+
+    if (!secret || !snapshotRequiresSavedSecret(secret)) {
+      const plat = String(secret?.platform || "").toLowerCase();
+      const errMsg =
+        plat === "amazon" || plat === "tiktok"
+          ? "请填写凭据：Amazon / TikTok 通常将 apiToken 存为 JSON（OAuth 完成后由服务端写入）；不必与 Shopify 一样填写 Endpoint。"
+          : "请填写 Endpoint 与完整密钥；试连时使用 testConfig 传入未脱敏 Token。";
+      return res.status(400).json({ ok: false, error: errMsg });
+    }
+
+    const snap = await fetchStoreSnapshot(secret);
+    res.json(snap);
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || "店铺快照拉取失败。" });
+  }
+});
+
+/** Amazon SP-API 专用快照（强制 platform=amazon） */
+app.post("/api/store/amazon/snapshot", authMiddleware, async (req, res) => {
+  try {
+    ensureFeatureAccess(req.user, "storeApiAgents");
+    const secret = resolveStoreSnapshotSecret(req);
+    const gate = assertPlatformSecret("amazon", secret);
+    if (!gate.ok) {
+      return res.status(400).json({ ok: false, error: gate.error });
+    }
+    if (!snapshotRequiresSavedSecret(secret)) {
+      return res.status(400).json({
+        ok: false,
+        error: "请提供 Amazon 侧凭据：apiToken 建议为 JSON，至少含 refreshToken、sellerId 等（以实现阶段文档为准）。",
+      });
+    }
+    const snap = await fetchAmazonStoreSnapshot(secret);
+    res.json(snap);
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || "Amazon 店铺快照失败。" });
+  }
+});
+
+/** TikTok Shop Open API 专用快照（强制 platform=tiktok） */
+app.post("/api/store/tiktok/snapshot", authMiddleware, async (req, res) => {
+  try {
+    ensureFeatureAccess(req.user, "storeApiAgents");
+    const secret = resolveStoreSnapshotSecret(req);
+    const gate = assertPlatformSecret("tiktok", secret);
+    if (!gate.ok) {
+      return res.status(400).json({ ok: false, error: gate.error });
+    }
+    if (!snapshotRequiresSavedSecret(secret)) {
+      return res.status(400).json({
+        ok: false,
+        error: "请提供 TikTok Shop 侧凭据：apiToken 建议为 JSON，含 accessToken、shopCipher 等（以实现阶段文档为准）。",
+      });
+    }
+    const snap = await fetchTikTokStoreSnapshot(secret);
+    res.json(snap);
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || "TikTok 店铺快照失败。" });
+  }
+});
+
+/**
+ * 模拟买家消息 → 生成自动话术；默认不发店（sendReal: true 且提供 conversationId 才尝试调 Partner 出站接口）
+ */
+app.post("/api/store/tiktok/auto-reply/simulate", authMiddleware, async (req, res) => {
+  try {
+    ensureFeatureAccess(req.user, "storeApiAgents");
+    const secretFull = getStoreConnectionSecret(req.user.id);
+    if (!secretFull || String(secretFull.platform).toLowerCase() !== "tiktok") {
+      return res.status(400).json({ error: "请先在店铺 API 中选择 TikTok 并保存凭据。" });
+    }
+    const parsed = parseTikTokShopCredentials(secretFull.apiToken || "");
+    if (!parsed?.shopCipher) {
+      return res.status(400).json({ error: "凭据 JSON 中缺少 shop_cipher。" });
+    }
+    const { buyerText, conversationId, sendReal } = req.body || {};
+    if (!buyerText || !String(buyerText).trim()) {
+      return res.status(400).json({ error: "请提供 buyerText。" });
+    }
+    const payload = {
+      type: "NEW_MESSAGE",
+      data: {
+        shop_cipher: parsed.shopCipher,
+        conversation_id: conversationId != null && conversationId !== "" ? String(conversationId) : "",
+        message_id: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        content: String(buyerText),
+      },
+    };
+    const result = await handleTiktokBuyerMessageWebhook(payload, {
+      force: true,
+      simulateDryRun: sendReal !== true,
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "模拟失败。" });
   }
 });
 
@@ -564,7 +714,7 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
   const startedAt = Date.now();
   let usage;
   try {
-    const { agentId, input, scrape } = req.body || {};
+    const { agentId, input, scrape, useStoreSnapshot } = req.body || {};
 
     if (!agentId || typeof input !== "string" || !input.trim()) {
       return res.status(400).json({ error: "请提供 agentId 和要执行的业务问题。" });
@@ -601,6 +751,29 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
         "Python/Playwright 公开页面参考数据（非官方实时、仅供交叉验证）：",
         JSON.stringify(scrapeResult, null, 2),
       ].join("\n");
+    }
+
+    if (useStoreSnapshot && ["growth", "service", "profit"].includes(agentId)) {
+      const secret = getStoreConnectionSecret(req.user.id);
+      const plat = String(secret?.platform || "").toLowerCase();
+      if (secret?.apiToken && snapshotRequiresSavedSecret(secret) && ["shopify", "woocommerce", "amazon", "tiktok"].includes(plat)) {
+        const snap = await fetchStoreSnapshot(secret);
+        if (snap.ok) {
+          enrichedInput = [
+            enrichedInput,
+            "",
+            "## 店铺 API 只读快照（服务端经官方/计划中的平台接口拉取，样本非全量）",
+            JSON.stringify(snap.data, null, 2),
+          ].join("\n");
+        } else {
+          enrichedInput = [
+            enrichedInput,
+            "",
+            "## 店铺 API 快照不可用或尚未实现",
+            [snap.error, snap.hint, snap.nextSteps ? snap.nextSteps.join("；") : ""].filter(Boolean).join("\n"),
+          ].join("\n");
+        }
+      }
     }
 
     const { response, data, endpoint } = await callChatCompletions({

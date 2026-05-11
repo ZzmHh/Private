@@ -2306,6 +2306,46 @@ footer a {
   grid-template-columns: 1fr;
 }
 
+.store-platform-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.store-platform-label select {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  font-size: 14px;
+  background: #fff;
+}
+
+.store-api-actions {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.store-api-actions small {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.55);
+  line-height: 1.4;
+}
+
+.tiktok-autoreply-toggle {
+  margin-top: 12px;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.tiktok-autoreply-toggle code {
+  font-size: 12px;
+}
+
 .status-ok,
 .status-warn {
   margin-top: 12px;

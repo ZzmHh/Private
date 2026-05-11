@@ -642,15 +642,34 @@ export function saveStoreConnection({ userId, config }) {
   if (!user) throw createError("用户不存在。", 401);
 
   const existing = db.storeConnections.find((entry) => entry.userId === userId);
+  const incomingToken = String(config.apiToken || "").trim();
+  const looksMasked = incomingToken.includes("****");
+  let apiTokenEncrypted = existing?.apiTokenEncrypted || "";
+  let apiTokenMasked = existing?.apiTokenMasked || "";
+  if (incomingToken && !looksMasked) {
+    apiTokenEncrypted = Buffer.from(incomingToken).toString("base64");
+    apiTokenMasked = maskToken(incomingToken);
+  }
+
+  const rawPlat = String(config.platform || "amazon").toLowerCase();
+  const platform = ["shopify", "woocommerce", "amazon", "tiktok"].includes(rawPlat) ? rawPlat : "amazon";
+
   const connection = {
     id: existing?.id || crypto.randomUUID(),
     userId,
-    platform: config.platform || "Amazon",
+    platform,
     storeName: config.storeName || "",
     apiEndpoint: config.apiEndpoint || "",
-    apiTokenEncrypted: config.apiToken ? Buffer.from(config.apiToken).toString("base64") : existing?.apiTokenEncrypted || "",
-    apiTokenMasked: config.apiToken ? maskToken(config.apiToken) : existing?.apiTokenMasked || "",
-    status: config.storeName && config.apiEndpoint && (config.apiToken || existing?.apiTokenEncrypted) ? "connected" : "draft",
+    apiTokenEncrypted,
+    apiTokenMasked,
+    autoBuyerReply:
+      config.autoBuyerReply !== undefined ? Boolean(config.autoBuyerReply) : Boolean(existing?.autoBuyerReply),
+    status:
+      config.storeName &&
+      apiTokenEncrypted &&
+      (platform === "amazon" || platform === "tiktok" || config.apiEndpoint)
+        ? "connected"
+        : "draft",
     updatedAt: new Date().toISOString(),
     createdAt: existing?.createdAt || new Date().toISOString(),
   };
@@ -669,6 +688,25 @@ export function getStoreConnection(userId) {
   const db = readDb();
   const connection = db.storeConnections.find((entry) => entry.userId === userId);
   return sanitizeStoreConnection(connection);
+}
+
+/** 仅供服务端调用：解密已保存的 Token（当前为 Base64，生产建议换 AES + DATA_ENCRYPTION_KEY） */
+export function getStoreConnectionSecret(userId) {
+  const db = readDb();
+  const connection = db.storeConnections.find((entry) => entry.userId === userId);
+  if (!connection?.apiTokenEncrypted) return null;
+  try {
+    const apiToken = Buffer.from(connection.apiTokenEncrypted, "base64").toString("utf8");
+    return {
+      platform: connection.platform,
+      storeName: connection.storeName,
+      apiEndpoint: connection.apiEndpoint,
+      apiToken,
+      autoBuyerReply: Boolean(connection.autoBuyerReply),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function sanitizeStoreConnection(connection) {

@@ -409,7 +409,59 @@ function readFileAsText(file) {
   });
 }
 
-function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected, onSave }) {
+function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected, onSave, showToast, authHeaders }) {
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+
+  const endpointHint =
+    storeConfig.platform === "shopify"
+      ? "例：https://your-store.myshopify.com（不要带末尾路径）"
+      : storeConfig.platform === "woocommerce"
+        ? "例：https://your-site.com（WordPress 站点根地址）"
+        : storeConfig.platform === "tiktok"
+          ? "可选：Open API 环境备注或区域；凭据主要在下方 JSON"
+          : "可选：区域提示（如 na/eu）或备注；SP-API 主凭据为下方 JSON";
+
+  const tokenHint =
+    storeConfig.platform === "shopify"
+      ? "Shopify 自定义应用的 Admin API access token"
+      : storeConfig.platform === "woocommerce"
+        ? "Woo REST Consumer Key:Secret，格式 ck_xxx:cs_xxx"
+        : storeConfig.platform === "tiktok"
+          ? "JSON：access_token、shop_cipher；app_key/secret 配在服务端 .env（TIKTOK_SHOP_APP_*）"
+          : "JSON：`{\"refreshToken\":\"...\",\"sellerId\":\"...\"}`（OAuth 后由服务端写入，以实现为准）";
+
+  async function testSnapshot() {
+    setSnapshotLoading(true);
+    try {
+      const path =
+        storeConfig.platform === "amazon"
+          ? "/api/store/amazon/snapshot"
+          : storeConfig.platform === "tiktok"
+            ? "/api/store/tiktok/snapshot"
+            : "/api/store/snapshot";
+      const response = await fetch(path, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ testConfig: storeConfig }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "请求失败");
+      }
+      if (data.ok) {
+        const oc = data.data?.orders_sample?.length ?? 0;
+        const pc = data.data?.products_sample?.length ?? 0;
+        showToast(`${data.platform} 测试成功：样本订单 ${oc} 条、商品 ${pc} 条（只读、非全量）。`);
+      } else {
+        showToast(data.error || data.hint || "拉取失败");
+      }
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <section className="store-api-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -425,14 +477,46 @@ function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected, o
             <PlugZap size={17} />
             强数据 Agent 必须配置
           </div>
-          <p>店铺业绩诊断、AI 客服与利润 Agent 默认按「诊断版」输出；保存 Endpoint/Token 表示你已准备好数据侧接入（凡梦后端暂不代替你调平台）。强数据场景请尽量粘贴导出表或指标摘要。</p>
+          <p>
+            模块按平台拆分：<strong>Amazon</strong> 仅走 SP-API 连接器（<code>amazonSpApiConnector.js</code>），<strong>TikTok Shop</strong> 仅走 Open/Partner 连接器（<code>tiktokShopConnector.js</code>），与 Shopify/Woo 的 Endpoint+Token 形态不同。当前 Amazon/TikTok 返回结构化「下一步接入指引」；实现具体 HTTP 时在对应文件中补充即可。
+          </p>
           <div className="store-api-form vertical">
-            <input value={storeConfig.storeName} onChange={(event) => setStoreConfig({ ...storeConfig, storeName: event.target.value })} placeholder="店铺名称" />
-            <input value={storeConfig.apiEndpoint} onChange={(event) => setStoreConfig({ ...storeConfig, apiEndpoint: event.target.value })} placeholder="店铺 API Endpoint" />
-            <input value={storeConfig.apiToken} onChange={(event) => setStoreConfig({ ...storeConfig, apiToken: event.target.value })} placeholder="API Token / Access Key" />
+            <label className="store-platform-label">
+              <span>平台</span>
+              <select
+                value={storeConfig.platform}
+                onChange={(event) => setStoreConfig({ ...storeConfig, platform: event.target.value })}
+              >
+                <option value="amazon">Amazon（SP-API 专用接口）</option>
+                <option value="tiktok">TikTok Shop（Open API 专用接口）</option>
+                <option value="shopify">Shopify（Admin API 只读）</option>
+                <option value="woocommerce">WooCommerce REST</option>
+              </select>
+            </label>
+            <input value={storeConfig.storeName} onChange={(event) => setStoreConfig({ ...storeConfig, storeName: event.target.value })} placeholder="店铺显示名（任意便于识别的名称）" />
+            <input value={storeConfig.apiEndpoint} onChange={(event) => setStoreConfig({ ...storeConfig, apiEndpoint: event.target.value })} placeholder={endpointHint} />
+            <input value={storeConfig.apiToken} onChange={(event) => setStoreConfig({ ...storeConfig, apiToken: event.target.value })} placeholder={tokenHint} />
+            {storeConfig.platform === "tiktok" && (
+              <label className="scrape-toggle tiktok-autoreply-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(storeConfig.autoBuyerReply)}
+                  onChange={(event) => setStoreConfig({ ...storeConfig, autoBuyerReply: event.target.checked })}
+                />
+                开启店铺内买家消息自动话术（Webhook：<code>/webhooks/tiktok</code>；详见服务端 .env 中 TIKTOK_* 说明）
+              </label>
+            )}
           </div>
           <div className={storeConnected ? "status-ok" : "status-warn"}>
-            {storeConnected ? "店铺 API 已配置" : "未配置店铺 API，相关 Agent 会持续提醒"}
+            {storeConnected
+              ? "店铺名与密钥已就绪（Amazon/TikTok 可不填 Endpoint；可点测试走专用接口）"
+              : "未完整配置时，相关 Agent 会按诊断版或提醒补充数据"}
+          </div>
+          <div className="store-api-actions">
+            <button type="button" className="header-ghost" disabled={snapshotLoading} onClick={testSnapshot}>
+              {snapshotLoading ? "测试中…" : "测试连接（只读快照）"}
+            </button>
+            <small>可先填密钥再测试，无需先保存；保存后从运行面板也可附带快照。</small>
           </div>
         </div>
         <button className="continue-checkout" type="button" onClick={onSave}>
@@ -903,11 +987,13 @@ function Workspace() {
     url: "",
   });
   const [storeConfig, setStoreConfig] = useState({
-    platform: "Amazon",
+    platform: "amazon",
     storeName: "",
     apiEndpoint: "",
     apiToken: "",
+    autoBuyerReply: false,
   });
+  const [attachStoreSnapshot, setAttachStoreSnapshot] = useState(false);
   const [attachments, setAttachments] = useState([]);
 
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === activeId), [activeId]);
@@ -915,7 +1001,11 @@ function Workspace() {
     () => tasks.filter((task) => task.type === activeId && `${task.title} ${task.input} ${task.answer}`.toLowerCase().includes(historyQuery.toLowerCase())),
     [tasks, activeId, historyQuery],
   );
-  const storeConnected = Boolean(storeConfig.storeName && storeConfig.apiEndpoint && storeConfig.apiToken);
+  const storeConnected = Boolean(
+    storeConfig.storeName &&
+      storeConfig.apiToken &&
+      (storeConfig.platform === "amazon" || storeConfig.platform === "tiktok" ? true : Boolean(storeConfig.apiEndpoint)),
+  );
   const accessActive = isBetaMode || user?.accessActive;
 
   useEffect(() => {
@@ -931,10 +1021,11 @@ function Workspace() {
         setTasks(data.tasks || []);
         if (data.storeConnection) {
           setStoreConfig({
-            platform: data.storeConnection.platform || "Amazon",
+            platform: data.storeConnection.platform || "amazon",
             storeName: data.storeConnection.storeName || "",
             apiEndpoint: data.storeConnection.apiEndpoint || "",
             apiToken: data.storeConnection.apiTokenMasked || "",
+            autoBuyerReply: Boolean(data.storeConnection.autoBuyerReply),
           });
         }
       })
@@ -1032,10 +1123,11 @@ function Workspace() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setStoreConfig({
-        platform: data.storeConnection.platform || "Amazon",
+        platform: data.storeConnection.platform || "amazon",
         storeName: data.storeConnection.storeName || "",
         apiEndpoint: data.storeConnection.apiEndpoint || "",
         apiToken: data.storeConnection.apiTokenMasked || storeConfig.apiToken,
+        autoBuyerReply: Boolean(data.storeConnection.autoBuyerReply),
       });
       showToast("店铺 API 配置已保存。");
       setShowStoreApiModal(false);
@@ -1238,6 +1330,10 @@ function Workspace() {
               : "",
           ].join(""),
           scrape: activeAgent.id === "trend" && scrapeConfig.enabled ? scrapeConfig : { enabled: false },
+          useStoreSnapshot:
+            attachStoreSnapshot &&
+            ["growth", "service", "profit"].includes(activeAgent.id) &&
+            ["shopify", "woocommerce", "amazon", "tiktok"].includes(storeConfig.platform),
         }),
       });
       const data = await response.json();
@@ -1301,6 +1397,8 @@ function Workspace() {
           setStoreConfig={setStoreConfig}
           storeConnected={storeConnected}
           onSave={saveStoreApiConfig}
+          showToast={showToast}
+          authHeaders={authHeaders}
         />
       )}
       <aside className="app-sidebar">
@@ -1469,6 +1567,20 @@ function Workspace() {
                 </div>
               )}
             </div>
+          )}
+          {activeAgent?.requiresStoreApi && activeId !== "autopilot" && (
+            <label className="scrape-toggle">
+              <input
+                type="checkbox"
+                checked={attachStoreSnapshot}
+                onChange={(event) => setAttachStoreSnapshot(event.target.checked)}
+                disabled={!storeConnected || !["shopify", "woocommerce", "amazon", "tiktok"].includes(storeConfig.platform)}
+              />
+              本次运行附带店铺只读快照（Shopify/Woo 已实现样本拉取；Amazon/TikTok 走独立连接器，未完成实现时会注入接入说明）
+              {storeConnected && !["shopify", "woocommerce", "amazon", "tiktok"].includes(storeConfig.platform) && (
+                <small>请选择已支持的平台。</small>
+              )}
+            </label>
           )}
           {attachments.length > 0 && (
             <div className="attachment-row">
