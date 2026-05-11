@@ -1315,10 +1315,61 @@ footer a {
 .work-header {
   padding: 18px 22px;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  border-radius: 26px;
+}
+
+.work-header-inner {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-radius: 26px;
+  flex-wrap: wrap;
+}
+
+.trial-end-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 16px;
+  color: #b54708;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.trial-end-banner button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: #101828;
+  font-weight: 900;
+}
+
+.trial-quota {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f5f8ff;
+  border: 1px solid #d9e4ff;
+}
+
+.trial-quota span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #344054;
+  line-height: 1.45;
 }
 
 .work-header p {

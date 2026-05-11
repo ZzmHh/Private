@@ -11,15 +11,21 @@ if (!tokenSecret) {
 const plans = {
   trial: {
     name: "3天免费试用",
-    dailyLimit: 30,
-    minuteLimit: 8,
-    maxTokens: 1200,
+    /** 试用期内单日总调用上限（含各类 Agent / 全自动 / 爬虫计次） */
+    dailyLimit: 48,
+    minuteLimit: 10,
+    maxTokens: 1600,
+    /** 试用全程总调用上限（防刷成本） */
+    trialTotalCallCap: 100,
+    /** 重能力单日上限：全自动含 Playwright 时仍会另计 scrape */
+    trialAutopilotPerDay: 4,
+    trialScrapePerDay: 6,
     features: {
-      agents: ["trend", "content", "listing"],
+      agents: ["trend", "content", "listing", "growth", "service", "profit"],
       autopilot: true,
-      scraper: false,
-      storeApiAgents: false,
-      historyLimit: 10,
+      scraper: true,
+      storeApiAgents: true,
+      historyLimit: 40,
     },
   },
   starter: {
@@ -199,6 +205,14 @@ export function sanitizeUser(user) {
   if (!user) return null;
   const { passwordHash, emailVerification, passwordReset, loginSecurity, ...safeUser } = user;
   const plan = getPlan(user);
+  const today = new Date().toISOString().slice(0, 10);
+  const trialPlan = plans.trial;
+  const usageToday = user.usage?.[today] || {};
+  const trialEndingSoon =
+    user.plan === "trial" &&
+    isTrialActive(user) &&
+    user.trialEndsAt &&
+    new Date(user.trialEndsAt).getTime() - Date.now() < 24 * 60 * 60 * 1000;
 
   return {
     ...safeUser,
@@ -212,6 +226,20 @@ export function sanitizeUser(user) {
     minuteLimit: plan.minuteLimit,
     maxTokens: plan.maxTokens,
     isAdmin: Boolean(user.isAdmin),
+    trialEndingSoon,
+    trialQuota:
+      user.plan === "trial" && isTrialActive(user)
+        ? {
+            lifetimeUsed: user.trialLifetimeTotal || 0,
+            lifetimeCap: trialPlan.trialTotalCallCap,
+            todayTotal: usageToday.total || 0,
+            todayDailyCap: trialPlan.dailyLimit,
+            autopilotToday: usageToday.autopilot || 0,
+            autopilotCap: trialPlan.trialAutopilotPerDay,
+            scrapeToday: usageToday.scrape || 0,
+            scrapeCap: trialPlan.trialScrapePerDay,
+          }
+        : null,
   };
 }
 
@@ -246,6 +274,7 @@ export function registerUser({ name, storeName, email, password }) {
     trialEndsAt: trialEndsAt.toISOString(),
     subscriptionEndsAt: null,
     usage: {},
+    trialLifetimeTotal: 0,
     loginSecurity: { failedCount: 0, lockedUntil: null },
     emailVerified: false,
     isAdmin: db.users.length === 0,
@@ -404,12 +433,41 @@ export function incrementUsage(userId, type) {
   }
 
   user.usage ||= {};
-  user.usage[today] ||= { total: 0 };
-  user.usage[today].total += 1;
+  const todayUsage = user.usage[today] || { total: 0 };
+
+  if (user.plan === "trial" && isTrialActive(user)) {
+    const t = plans.trial;
+    const lifeCap = t.trialTotalCallCap ?? 99999;
+    const lifeUsed = user.trialLifetimeTotal || 0;
+    if (lifeUsed >= lifeCap) {
+      throw createError(`试用期内总调用次数已达 ${lifeCap} 次，请订阅后继续。`, 429, "TRIAL_LIFETIME_CAP");
+    }
+    if (type === "autopilot" && (todayUsage.autopilot || 0) >= (t.trialAutopilotPerDay ?? 99)) {
+      throw createError(
+        `试用期内「6 Agent 全自动」每日最多 ${t.trialAutopilotPerDay} 次，请明日再试或订阅解锁更高额度。`,
+        429,
+        "TRIAL_AUTOPILOT_CAP",
+      );
+    }
+    if (type === "scrape" && (todayUsage.scrape || 0) >= (t.trialScrapePerDay ?? 99)) {
+      throw createError(
+        `试用期内「公开页参考抓取」每日最多 ${t.trialScrapePerDay} 次，请明日再试或订阅解锁更高额度。`,
+        429,
+        "TRIAL_SCRAPE_CAP",
+      );
+    }
+  }
+
+  user.usage[today] = todayUsage;
+  user.usage[today].total = (user.usage[today].total || 0) + 1;
   user.usage[today][type] = (user.usage[today][type] || 0) + 1;
 
   if (user.usage[today].total > plan.dailyLimit) {
     throw createError(`今日调用次数已达到 ${plan.name} 上限。`, 429);
+  }
+
+  if (user.plan === "trial" && isTrialActive(user)) {
+    user.trialLifetimeTotal = (user.trialLifetimeTotal || 0) + 1;
   }
 
   const usageLog = {

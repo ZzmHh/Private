@@ -262,7 +262,7 @@ function LoginScreen({ onLogin }) {
       <section className="auth-hero">
         <div className="auth-badge">
           <ShieldCheck size={16} />
-          登录后自动开启 3 天免费试用
+          登录后 3 天试用 · 全功能体验（全自动/抓取另计日限额）
         </div>
         <h1>跨境电商卖家的多 Agent AI 员工后台</h1>
         <p>
@@ -274,7 +274,7 @@ function LoginScreen({ onLogin }) {
             <Check size={16} /> 账号级订阅
           </span>
           <span>
-            <Check size={16} /> 3 天免费试用
+            <Check size={16} /> 试用全功能 · 日限额保护成本
           </span>
           <span>
             <Check size={16} /> 店铺 API 授权
@@ -892,7 +892,7 @@ function Workspace() {
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem("fanmeng_onboarding_done") !== "1");
   const [toast, setToast] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const [answer, setAnswer] = useState("登录后已开启 3 天免费试用。请选择左侧模块，输入要求后由 OpenClaw 生成结果。");
+  const [answer, setAnswer] = useState("登录后已开启 3 天免费试用（试用内可体验全部 Agent，全自动与抓取另计每日额度）。请选择左侧模块，输入要求后由 OpenClaw 生成结果。");
   const [input, setInput] = useState("");
   const [autoInput, setAutoInput] = useState("");
   const [scrapeConfig, setScrapeConfig] = useState({
@@ -944,6 +944,16 @@ function Workspace() {
         setUser(null);
       });
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !user?.trialEndingSoon || isBetaMode) return;
+    const key = "fanmeng_trial_last24_nudge";
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    setToast("试用剩余不足 24 小时，订阅可锁定更高调用额度与权益。");
+    window.setTimeout(() => setToast(""), 4200);
+    setShowSubscription(true);
+  }, [token, user?.trialEndingSoon, isBetaMode]);
 
   function handleLogin(data) {
     localStorage.setItem("fanmeng_token", data.token);
@@ -1175,6 +1185,7 @@ function Workspace() {
       if (!response.ok) throw new Error(data.error);
       setAnswer(data.answer);
       if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
+      void refreshMeProfile();
     } catch (error) {
       setAnswer(formatError(error));
     } finally {
@@ -1202,9 +1213,13 @@ function Workspace() {
     }
 
     if (!isBetaMode && activeAgent?.requiresStoreApi && !storeConnected) {
-      showToast("该 Agent 需要先配置店铺 API。");
-      setShowStoreApiModal(true);
-      return;
+      if (user?.plan === "trial" && user?.trialActive) {
+        showToast("试用已开放该 Agent：建议配置店铺 API 或在输入框粘贴数据，结果会更贴近真实经营。");
+      } else {
+        showToast("该 Agent 需要先配置店铺 API。");
+        setShowStoreApiModal(true);
+        return;
+      }
     }
 
     setIsRunning(true);
@@ -1229,10 +1244,22 @@ function Workspace() {
       if (!response.ok) throw new Error(data.error);
       setAnswer(data.answer);
       if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
+      void refreshMeProfile();
     } catch (error) {
       setAnswer(formatError(error));
     } finally {
       setIsRunning(false);
+    }
+  }
+
+  async function refreshMeProfile() {
+    if (!token) return;
+    try {
+      const response = await fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json();
+      if (response.ok) setUser(data.user);
+    } catch {
+      /* ignore */
     }
   }
 
@@ -1283,7 +1310,7 @@ function Workspace() {
           </span>
           <div>
             <strong>凡梦AI</strong>
-            <small>{isBetaMode ? "内测版 · 全功能开放" : user?.trialActive ? "3 天免费试用中" : user?.planName || "订阅状态"}</small>
+            <small>{isBetaMode ? "内测版 · 全功能开放" : user?.trialActive ? "试用中 · 全功能体验（额度和重能力限次）" : user?.planName || "订阅状态"}</small>
           </div>
         </div>
 
@@ -1291,8 +1318,14 @@ function Workspace() {
           <strong>{user?.storeName || user?.name || "跨境卖家"}</strong>
           <span>{user?.email}</span>
           {isBetaMode && <em>内测版已开放全部功能</em>}
+          {!isBetaMode && user?.trialActive && user?.trialQuota && (
+            <div className="trial-quota">
+              <span>试用额度 今日 {user.trialQuota.todayTotal}/{user.trialQuota.todayDailyCap} · 累计 {user.trialQuota.lifetimeUsed}/{user.trialQuota.lifetimeCap}</span>
+              <span>全自动 {user.trialQuota.autopilotToday}/{user.trialQuota.autopilotCap}/日 · 抓取 {user.trialQuota.scrapeToday}/{user.trialQuota.scrapeCap}/日</span>
+            </div>
+          )}
           {!isBetaMode && !user?.trialActive && user?.plan === "trial" && <em>试用期结束，请订阅后继续使用</em>}
-          {!isBetaMode && !storeConnected && <em>请配置店铺 API</em>}
+          {!isBetaMode && !storeConnected && !(user?.plan === "trial" && user?.trialActive) && <em>建议配置店铺 API 以便付费套餐深度接入</em>}
           <button type="button" onClick={() => setShowSubscription(true)}>查看/升级订阅</button>
           <button type="button" onClick={() => setShowStoreApiModal(true)}>店铺 API 配置</button>
           <button type="button" onClick={() => setIsBetaMode((value) => !value)}>{isBetaMode ? "退出内测版" : "进入内测版"}</button>
@@ -1347,23 +1380,31 @@ function Workspace() {
 
       <section className="work-area">
         <header className="work-header">
-          <div>
-            <p>OpenClaw Agent Console</p>
-            <h2>{activeId === "autopilot" ? "6 Agent 全自动运行" : activeAgent.name}</h2>
-          </div>
-          <div className="header-actions">
-            <div className={isBetaMode ? "trial-pill beta" : "trial-pill"}>
-              <Zap size={16} />
-              {isBetaMode ? "内测版全功能开放" : user?.trialActive ? "免费试用中" : user?.planName || "订阅状态"}
+          {!isBetaMode && user?.trialEndingSoon && user?.trialActive && (
+            <div className="trial-end-banner" role="status">
+              <span>试用将在 24 小时内结束，订阅可继续享受当前额度以上的调用与权益。</span>
+              <button type="button" onClick={() => setShowSubscription(true)}>去订阅</button>
             </div>
-            {isBetaMode && (
-              <button className="header-ghost" type="button" onClick={() => setShowFeedbackModal(true)}>
-                提交反馈
+          )}
+          <div className="work-header-inner">
+            <div>
+              <p>OpenClaw Agent Console</p>
+              <h2>{activeId === "autopilot" ? "6 Agent 全自动运行" : activeAgent.name}</h2>
+            </div>
+            <div className="header-actions">
+              <div className={isBetaMode ? "trial-pill beta" : "trial-pill"}>
+                <Zap size={16} />
+                {isBetaMode ? "内测版全功能开放" : user?.trialActive ? "免费试用中" : user?.planName || "订阅状态"}
+              </div>
+              {isBetaMode && (
+                <button className="header-ghost" type="button" onClick={() => setShowFeedbackModal(true)}>
+                  提交反馈
+                </button>
+              )}
+              <button className="header-subscribe" type="button" onClick={() => setShowSubscription(true)}>
+                订阅套餐
               </button>
-            )}
-            <button className="header-subscribe" type="button" onClick={() => setShowSubscription(true)}>
-              订阅套餐
-            </button>
+            </div>
           </div>
         </header>
 
