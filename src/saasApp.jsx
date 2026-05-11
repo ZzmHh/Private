@@ -35,8 +35,8 @@ const pricingPlans = [
     price: "299",
     desc: "适合已有店铺、希望稳定提效的卖家。",
     recommended: true,
-    features: ["每日 500 次 Agent 调用", "店铺 API 配置", "业绩诊断与利润分析", "AI 客服售后模板", "实时抓取数据源", "优先支持"],
-    access: "开放全部 6 个 Agent、全自动运行、实时抓取和店铺 API 强数据 Agent。",
+    features: ["每日 500 次 Agent 调用", "店铺 API 配置", "业绩诊断与利润分析", "AI 客服售后模板", "公开页参考抓取（Playwright）", "优先支持"],
+    access: "开放全部 6 个 Agent、全自动运行；含公开页参考抓取（非官方实时）与店铺 API 配置相关 Agent。",
   },
   {
     id: "managed",
@@ -61,8 +61,8 @@ const agents = [
     id: "trend",
     name: "爆款选品监控",
     icon: PackageSearch,
-    desc: "监控热卖趋势、竞品、价格带和机会评分。",
-    prompt: "帮我监控 TikTok Shop 美国市场家居收纳类目，找适合小卖家的潜力爆品。",
+    desc: "趋势与机会评估；可选公开页参考抓取（非官方实时）。",
+    prompt: "帮我评估 TikTok Shop 美国市场家居收纳类目的机会方向，并说明需要补充哪些验证数据。",
   },
   {
     id: "content",
@@ -82,24 +82,24 @@ const agents = [
     id: "growth",
     name: "店铺业绩诊断",
     icon: BarChart3,
-    desc: "需要店铺 API 数据，分析 GMV、广告 ROI、退款和库存。",
-    prompt: "分析我上周店铺 GMV 下滑的可能原因，并给出诊断框架。",
+    desc: "诊断版：框架与指标建议；连接版：可基于你粘贴或 API 导出的真实数据深读。",
+    prompt: "我暂未粘贴后台数据，请用诊断版给出应监控的指标、常见下滑原因假设和下一步该导出的报表字段。",
     requiresStoreApi: true,
   },
   {
     id: "service",
     name: "AI 客服售后",
     icon: Headphones,
-    desc: "售前咨询、订单查询、退款退货、差评挽回和多语言消息自动处理。",
-    prompt: "客户咨询库存、物流时效并要求优惠，请识别意图、查询应调接口、给出处理动作和英文回复。",
+    desc: "话术与处理清单；不代客执行后台操作；高风险项需人工或已接入系统确认。",
+    prompt: "客户咨询物流延迟并要求补偿，请给中文策略、英文回复草稿、内部 Checklist 及须人工确认项。",
     requiresStoreApi: true,
   },
   {
     id: "profit",
     name: "广告库存利润",
     icon: LineChart,
-    desc: "联动广告、库存、采购成本和平台费用给出利润策略。",
-    prompt: "帮我判断 20 个 SKU 哪些应该补货、清仓或暂停广告。",
+    desc: "利润与库存决策框架；有成本/广告数据时更可量化，无数据时列明待导入字段。",
+    prompt: "我只有大致售价区间，没有完整成本表，请按无数据与有数据两种情况给 SKU 分层与广告/库存原则。",
     requiresStoreApi: true,
   },
 ];
@@ -425,7 +425,7 @@ function StoreApiModal({ onClose, storeConfig, setStoreConfig, storeConnected, o
             <PlugZap size={17} />
             强数据 Agent 必须配置
           </div>
-          <p>店铺业绩诊断、AI 客服售后、广告库存利润需要读取店铺、广告、库存或客服数据。配置后，OpenClaw 才能基于真实数据诊断。</p>
+          <p>店铺业绩诊断、AI 客服与利润 Agent 默认按「诊断版」输出；保存 Endpoint/Token 表示你已准备好数据侧接入（凡梦后端暂不代替你调平台）。强数据场景请尽量粘贴导出表或指标摘要。</p>
           <div className="store-api-form vertical">
             <input value={storeConfig.storeName} onChange={(event) => setStoreConfig({ ...storeConfig, storeName: event.target.value })} placeholder="店铺名称" />
             <input value={storeConfig.apiEndpoint} onChange={(event) => setStoreConfig({ ...storeConfig, apiEndpoint: event.target.value })} placeholder="店铺 API Endpoint" />
@@ -650,40 +650,40 @@ function StructuredAgentPreview({ agentId }) {
     return (
       <div className="structured-preview">
         <div className="preview-heading">
-          <strong>经营诊断看板</strong>
-          <span>适合接入店铺 API 后自动生成</span>
+          <strong>店铺业绩 · 诊断版 / 连接版</strong>
+          <span>诊断版不假设已读后台；连接版基于你粘贴或导出的数据</span>
         </div>
         <div className="metric-cards">
           <div>
-            <span>GMV</span>
-            <strong>待分析</strong>
-            <em>环比 / 同比</em>
+            <span>模式</span>
+            <strong>默认诊断</strong>
+            <em>指标框架 + 缺口清单</em>
           </div>
           <div>
-            <span>转化率</span>
-            <strong>待分析</strong>
-            <em>流量到订单</em>
+            <span>GMV</span>
+            <strong>待你提供</strong>
+            <em>或粘贴区间</em>
           </div>
           <div>
             <span>广告 ROI</span>
-            <strong>待分析</strong>
-            <em>投产效率</em>
+            <strong>待你提供</strong>
+            <em>或导出报表</em>
           </div>
           <div>
-            <span>库存周转</span>
-            <strong>待分析</strong>
-            <em>断货/积压</em>
+            <span>库存</span>
+            <strong>待你提供</strong>
+            <em>周转假设可写</em>
           </div>
         </div>
         <div className="diagnosis-layout">
           <section>
-            <h4>异常诊断</h4>
-            <p>P0：销售下滑原因、亏损广告组、断货风险。</p>
-            <p>P1：转化率、评价、主图、价格带优化。</p>
+            <h4>诊断版</h4>
+            <p>输出应监控指标、常见异常假设、P0/P1 动作；不写「实时后台已确认」。</p>
+            <p>连接版：仅在你提供数据后做归因与优先级排序。</p>
           </section>
           <section>
             <h4>行动清单</h4>
-            <p>暂停亏损广告、补货高利润 SKU、优化低转化 Listing。</p>
+            <p>补数据 → 验证假设 → 调整广告/Listing/库存，按周复盘。</p>
           </section>
         </div>
       </div>
@@ -694,57 +694,55 @@ function StructuredAgentPreview({ agentId }) {
     return (
       <div className="structured-preview service-preview">
         <div className="preview-heading">
-          <strong>AI 客服售后中枢</strong>
-          <span>售前识别、API 执行、22 种语言回复、售后闭环</span>
+          <strong>AI 客服 · 策略与话术</strong>
+          <span>不代客执行后台；高风险须人工或系统确认</span>
         </div>
         <div className="service-flow">
           <div>意图识别</div>
           <span>→</span>
-          <div>知识库检索</div>
+          <div>话术与 Checklist</div>
           <span>→</span>
-          <div>平台 API 执行</div>
+          <div>若接 API 可规划查询</div>
           <span>→</span>
-          <div>生成回复</div>
+          <div>人工/系统执行</div>
         </div>
         <div className="service-matrix">
           <section>
-            <h4>售前能力</h4>
-            <p>产品咨询：库存、规格、材质、适配场景。</p>
-            <p>物流时效：调用平台/仓库 API 查询预计送达。</p>
-            <p>价格优惠：识别折扣诉求，推荐优惠券或组合购。</p>
-            <p>对比推荐：根据需求推荐合适商品。</p>
-            <p>催单/改单：确认规则后调用店铺 API 修改订单。</p>
+            <h4>售前策略</h4>
+            <p>规格/库存/时效：无实时数据时用核对模板索取信息。</p>
+            <p>价格优惠：避免未经授权的底价承诺。</p>
+            <p>推荐与对比：基于需求给方向，注明需核实库存。</p>
+            <p>催单改单：只给内部步骤，执行标「待确认」。</p>
           </section>
           <section>
-            <h4>售后能力</h4>
-            <p>订单状态：实时查订单、物流、履约节点。</p>
-            <p>退款退货：按政策判断并触发退款/退货流程。</p>
-            <p>物流投诉：生成安抚话术并创建投诉记录。</p>
-            <p>差评挽回：识别高风险情绪并给补偿建议。</p>
-            <p>换货补发：核对订单后创建补发或换货任务。</p>
+            <h4>售后策略</h4>
+            <p>订单物流：话术 + 建议向官方渠道核实的方式。</p>
+            <p>退款退货：政策对齐话术，不声称「已操作完成」。</p>
+            <p>投诉/差评：安抚与补偿梯度，标注审批与记录。</p>
+            <p>换货补发：Checklist + 待仓库/人工执行。</p>
           </section>
         </div>
         <div className="service-system">
           <div>
-            <span>店铺接入层</span>
-            <strong>Shopify / Amazon / WooCommerce API</strong>
+            <span>后续接入</span>
+            <strong>Shopify / Amazon / WooCommerce API 规划项</strong>
           </div>
           <div>
             <span>消息通道</span>
-            <strong>接收客户消息 / 发送回复</strong>
+            <strong>草稿回复供人工发送</strong>
           </div>
           <div>
             <span>语言层</span>
-            <strong>22 种语言自动切换</strong>
+            <strong>多语言草稿（按需）</strong>
           </div>
           <div>
             <span>知识库</span>
-            <strong>商品信息 / 售后政策 / 回复历史</strong>
+            <strong>政策 + Q&A 沉淀</strong>
           </div>
         </div>
         <div className="reply-box">
-          <h4>推荐输出格式</h4>
-          <p>意图：物流时效 + 优惠咨询；动作：查询库存和仓库时效，匹配优惠策略；回复：自动生成客户语言版本并等待人工确认或自动发送。</p>
+          <h4>输出约定</h4>
+          <p>统一输出含：意图、风险等级、话术、须确认项；禁止「已替您在后台操作」类表述。</p>
         </div>
       </div>
     );
@@ -754,27 +752,27 @@ function StructuredAgentPreview({ agentId }) {
     return (
       <div className="structured-preview">
         <div className="preview-heading">
-          <strong>广告库存利润决策表</strong>
-          <span>适合接入广告、库存、采购成本和订单数据后自动决策</span>
+          <strong>广告 · 库存 · 利润</strong>
+          <span>无完整成本时给框架；有数据再算 SKU 级结论</span>
         </div>
         <div className="sku-table">
           <div className="sku-row header">
-            <span>SKU</span>
-            <span>利润状态</span>
-            <span>库存风险</span>
-            <span>建议动作</span>
+            <span>数据完备度</span>
+            <span>输出类型</span>
+            <span>主要动作</span>
+            <span>下一步</span>
           </div>
           <div className="sku-row">
-            <span>SKU-A</span>
-            <span className="good">高利润</span>
-            <span>可售 28 天</span>
-            <span>加预算 / 补货</span>
+            <span>缺成本/广告明细</span>
+            <span className="good">原则 + 字段清单</span>
+            <span>分层逻辑/假设区间</span>
+            <span>导出报表后重跑</span>
           </div>
           <div className="sku-row">
-            <span>SKU-B</span>
-            <span className="bad">实际亏损</span>
-            <span>积压风险</span>
-            <span>停投 / 清仓</span>
+            <span>已粘贴关键数</span>
+            <span className="bad">可算倾向</span>
+            <span>停投/补货/清仓</span>
+            <span>敏感性说明</span>
           </div>
         </div>
       </div>
@@ -1163,7 +1161,7 @@ function Workspace() {
     }
 
     setIsRunning(true);
-    setAnswer("OpenClaw 正在调度 6 个 Agent 自动生成完整方案...");
+    setAnswer("OpenClaw 正在按 6 个业务模块生成结构化方案（单轮输出，各模块自洽）...");
     try {
       const response = await fetch("/api/autopilot/run", {
         method: "POST",
@@ -1397,7 +1395,7 @@ function Workspace() {
               </div>
               <div>
                 <h3>{activeId === "autopilot" ? "自动生成结果" : `${activeAgent.name} 输出`}</h3>
-                <p>{activeId === "autopilot" ? "OpenClaw 会按 6 个 Agent 的顺序自动生成跨境运营方案。" : activeAgent.desc}</p>
+                <p>{activeId === "autopilot" ? "单次回复内按选品、内容、Listing、业绩、客服、利润六段结构化输出；非独立多 Agent 实时调度。" : activeAgent.desc}</p>
               </div>
               <div className="output-actions">
                 <button type="button" onClick={copyAnswer}>复制</button>
@@ -1419,7 +1417,7 @@ function Workspace() {
                   checked={scrapeConfig.enabled}
                   onChange={(event) => setScrapeConfig({ ...scrapeConfig, enabled: event.target.checked })}
                 />
-                启用 Python/Playwright 实时抓取数据源
+                启用 Python/Playwright 公开页面参考数据（非官方实时，易失败或被反爬，仅供参考）
               </label>
               {scrapeConfig.enabled && (
                 <div className="scrape-fields">
