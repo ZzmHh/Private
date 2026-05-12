@@ -1,21 +1,26 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  ArrowRight,
+  BadgeCheck,
   BarChart3,
   Bot,
   Check,
+  Globe2,
   Headphones,
   LineChart,
   LockKeyhole,
   PackageSearch,
   PenLine,
-  PlugZap,
+  Quote,
   Rocket,
   Send,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   UserPlus,
   UploadCloud,
+  Users,
   Zap,
 } from "lucide-react";
 import "./styles.css";
@@ -104,7 +109,468 @@ const agents = [
   },
 ];
 
-function LoginScreen({ onLogin }) {
+/** 场景案例（内容为产品说明用途的虚构合成案例，非特定客户背书） */
+const caseStudies = [
+  {
+    slug: "home-tiktok-us",
+    title: "家居品类 · 美区短视频渠道",
+    heroSubtitle: "小型团队 · TikTok Shop 为主 · 兼做独立站测款",
+    quote: "把选品讨论和内容初稿从「每周耗两天」压到更短，团队能集中精力盯供应链和投放。",
+    tags: ["爆款选品监控", "爆款内容生成"],
+    kpi: "周更频次提升 · 素材方向更统一",
+    readTime: "约 4 分钟阅读",
+    challenge:
+      "团队在美区打家居细分类目，依赖短视频拉新，但人均兼顾上架、拍剪、客服，选品会开很久却难有统一结论；内容侧经常出现「脚本风格飘、钩子不贴合当期主推 SKU」的问题。缺乏专职数据同学，只能靠经验拍板，复盘时很难对齐指标。",
+    approachBullets: [
+      "用选品监控 Agent 每周固定输出「机会清单 + 风险备注」，例会只讨论表内前 10 条，减少开放式闲聊。",
+      "用内容 Agent 按「同一批 SKU」生成多版脚本与分镜备注，强制统一本季主卖点与人群口径。",
+      "将 Agent 输出沉淀为内部一页纸 Brief，外包剪辑只负责执行，降低反复改稿。",
+    ],
+    agentMix: ["爆款选品监控 Agent", "爆款内容生成 Agent"],
+    timeline: [
+      "第 1 周：校准类目、价格带与竞品关注列表，形成固定周报结构。",
+      "第 2–4 周：内容与选品周报合并对照，淘汰低效选题，保留可复用钩子模版。",
+    ],
+    outcomes: [
+      { headline: "协同方式", detail: "示意：周会从「发散讨论」改为「对照清单决策」，执行拆分到运营/剪辑。（合成描述）" },
+      { headline: "产出节奏", detail: "示意：同一 SKU 批次的脚本产出由分散变为可排期列表，减少临时加塞。（合成描述）" },
+      { headline: "风险提示", detail: "实际转化与播放仍受素材质量、履约与投放影响；本案例不表示效果承诺。" },
+    ],
+  },
+  {
+    slug: "amazon-multi-listing",
+    title: "多站点亚马逊卖家",
+    heroSubtitle: "美/欧双站点 · 多子品牌线 · 定期翻新 Listing",
+    quote: "Listing 翻新和关键词扩展可以批量产出，再配合业绩诊断 Agent 拉出优先改动清单。",
+    tags: ["Listing 优化", "业绩诊断"],
+    kpi: "改版周期缩短 · 策略讨论有据可依",
+    readTime: "约 5 分钟阅读",
+    challenge:
+      "SKU 多、站点多，A+ 与五点描述更新常积压；不同运营写法不一致，导致品牌语调漂移。业绩下滑时，团队能感到「哪张 ASIN 该优先改」，但缺乏统一框架把广告、转化与评价数据串起来，例会容易陷入互相甩锅。",
+    approachBullets: [
+      "用 Listing Agent 批量产出「主卖版本 + 备选短标题 + FAQ 草稿」，再由运营按站点法规模行终审。",
+      "用语义相近词组扩展搜索入口，把「该埋词是否已经覆盖」做成检查表，减少遗漏。",
+      "用语绩诊断 Agent 先做「假设树」：是曝光、点击、转化还是退款结构异常，对应改动优先级表。",
+    ],
+    agentMix: ["Listing 转化优化 Agent", "店铺业绩诊断 Agent"],
+    timeline: [
+      "第 1 阶段：选 20 条长尾 ASIN 试跑，建立可复用的关键词与版式规范。",
+      "第 2 阶段：将成功版式推广到同类目，诊断周报与改版工单绑定。",
+    ],
+    outcomes: [
+      { headline: "改版条理", detail: "示意：翻新从「凭感觉大改」改为「先诊断再动刀」，减少无效重写。（合成描述）" },
+      { headline: "团队对齐", detail: "示意：诊断输出带「优先级标签」，运营与广告同学共享同一页结论。（合成描述）" },
+      { headline: "风险提示", detail: "平台政策与类目竞争变动快；输出需人工合规复核，Agent 不替代后台操作。" },
+    ],
+  },
+  {
+    slug: "cs-heavy-store",
+    title: "客服密集型店铺",
+    heroSubtitle: "订单波动大 · 多时区咨询 · 重复问题占比高",
+    quote: "常见物流与退换货问题用模板化话术先顶一轮，高风险单再人工介入，减少夜班压力。",
+    tags: ["AI 客服售后", "知识库沉淀"],
+    kpi: "响应更一致 · 重复劳动减少",
+    readTime: "约 4 分钟阅读",
+    challenge:
+      "大促后物流与退款咨询暴涨，夜班同事常靠个人经验临场发挥，同样问题答案版本不一，易引发二次纠纷。想把 FAQ 沉淀成文档，但没人有力气持续更新；主管担心纯自动回复踩政策红线。",
+    approachBullets: [
+      "用客服 Agent 先生成「分级话术」：标准安抚版、需人工兜底版、需主管审批版，执行前由负责人勾选启用范围。",
+      "对 TOP20 高频问题强制走模版回复；长尾问题保留人工，但要求事后把结论补进知识库一条。",
+      "对退款、索赔、差评威胁类关键词做敏感路由，默认转人工或升级，不自动承诺赔付。",
+    ],
+    agentMix: ["AI 客服售后 Agent"],
+    timeline: [
+      "第 1–2 周：跑通英法中三语基础模版与禁用词表，小流量灰度。",
+      "第 3 周起：按周回顾工单，压缩重复劳动时间，把省下的工时转去做评价与库存协同。",
+    ],
+    outcomes: [
+      { headline: "一致性", detail: "示意：同类物流延迟问题的首响话术统一，降低「说法前后矛盾」投诉。（合成描述）" },
+      { headline: "人机分工", detail: "示意：夜班先处理 60–70% 可模版化咨询，余量转白昼复核。（区间示意，非承诺）" },
+      { headline: "风险提示", detail: "各平台客服政策不同；高风险订单必须由人工确认，本案例不排除任何法律与合规责任。" },
+    ],
+  },
+];
+
+function readCaseSlugFromHash() {
+  const raw = window.location.hash.replace(/^#/, "").trim();
+  if (!raw.startsWith("case/")) return null;
+  const slug = raw.slice(5).split(/[/?]/)[0];
+  return slug || null;
+}
+
+function CaseStudyDetail({ study, onBack, onHome, onLoginClick, onRegisterClick }) {
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `${study.title} · 客户场景案例 | 凡梦AI`;
+    return () => {
+      document.title = prev;
+    };
+  }, [study.title]);
+
+  return (
+    <div className="case-detail-page">
+      <header className="pub-nav" role="banner">
+        <button type="button" className="pub-brand pub-brand-btn" onClick={onHome}>
+          <span className="brand-mark">
+            <Sparkles size={18} />
+          </span>
+          凡梦AI
+        </button>
+        <nav className="pub-nav-links" aria-label="案例内导航">
+          <button type="button" className="pub-nav-link" onClick={onBack}>
+            ← 返回场景案例列表
+          </button>
+        </nav>
+        <div className="pub-nav-actions">
+          <button type="button" className="pub-btn pub-btn-ghost" onClick={onLoginClick}>登录</button>
+          <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>
+            免费注册 <ArrowRight size={16} aria-hidden />
+          </button>
+        </div>
+      </header>
+
+      <article className="case-detail-article">
+        <p className="case-detail-meta">
+          <span className="case-detail-read">{study.readTime}</span>
+          <span className="case-detail-badge">合成案例 · 用于说明工作流</span>
+        </p>
+        <h1>{study.title}</h1>
+        <p className="case-detail-sub">{study.heroSubtitle}</p>
+        <blockquote className="case-detail-quote">
+          <Quote size={20} aria-hidden />
+          {study.quote}
+        </blockquote>
+        <div className="case-detail-tags">
+          {study.tags.map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </div>
+
+        <section className="case-detail-section" aria-labelledby="cd-challenge">
+          <h2 id="cd-challenge">背景与挑战</h2>
+          <p className="case-detail-prose">{study.challenge}</p>
+        </section>
+
+        <section className="case-detail-section" aria-labelledby="cd-approach">
+          <h2 id="cd-approach">方案与 Agent 用法</h2>
+          <ul className="case-detail-list">
+            {study.approachBullets.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className="case-detail-aside">
+            <strong>主要使用的模块：</strong>
+            {study.agentMix.join("、")}
+          </p>
+        </section>
+
+        <section className="case-detail-section" aria-labelledby="cd-timeline">
+          <h2 id="cd-timeline">推进节奏（示意）</h2>
+          <ol className="case-detail-steps">
+            {study.timeline.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="case-detail-section" aria-labelledby="cd-outcome">
+          <h2 id="cd-outcome">观察与复盘</h2>
+          <div className="case-outcome-cards">
+            {study.outcomes.map((row) => (
+              <div key={row.headline} className="case-outcome-card">
+                <strong>{row.headline}</strong>
+                <p>{row.detail}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <footer className="case-detail-footer">
+          <p>
+            本文为便于理解的<strong>虚构合成案例</strong>，与任何单一真实客户无关；数据与区间为描述性示意，
+            不构成效果承诺。注册并验证邮箱后可自行试用产品判断是否适合您的团队。
+          </p>
+          <div className="case-detail-cta-row">
+            <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>免费注册试用</button>
+            <button type="button" className="pub-btn pub-btn-secondary" onClick={onBack}>查看更多场景</button>
+          </div>
+        </footer>
+      </article>
+    </div>
+  );
+}
+
+function CaseStudyNotFound({ onHome, onLoginClick, onRegisterClick }) {
+  return (
+    <div className="case-detail-page">
+      <header className="pub-nav" role="banner">
+        <button type="button" className="pub-brand pub-brand-btn" onClick={onHome}>
+          <span className="brand-mark">
+            <Sparkles size={18} />
+          </span>
+          凡梦AI
+        </button>
+        <div className="pub-nav-actions" style={{ marginLeft: "auto" }}>
+          <button type="button" className="pub-btn pub-btn-ghost" onClick={onLoginClick}>登录</button>
+          <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>免费注册</button>
+        </div>
+      </header>
+      <div className="case-not-found">
+        <h1>未找到该案例</h1>
+        <p>链接可能已更新，请从首页「场景案例」进入。</p>
+        <button type="button" className="pub-btn pub-btn-primary" onClick={onHome}>回首页</button>
+      </div>
+    </div>
+  );
+}
+
+function PublicLanding({ onLoginClick, onRegisterClick }) {
+  function go(href) {
+    const id = href.replace("#", "");
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  return (
+    <div className="public-landing">
+      <header className="pub-nav" role="banner">
+        <a className="pub-brand" href="#top" onClick={(e) => { e.preventDefault(); go("#top"); }}>
+          <span className="brand-mark">
+            <Sparkles size={18} />
+          </span>
+          凡梦AI
+        </a>
+        <nav className="pub-nav-links" aria-label="页面导航">
+          <button type="button" className="pub-nav-link" onClick={() => go("#capabilities")}>产品能力</button>
+          <button type="button" className="pub-nav-link" onClick={() => go("#cases")}>场景案例</button>
+          <button type="button" className="pub-nav-link" onClick={() => go("#trust")}>信任与安全</button>
+          <button type="button" className="pub-nav-link" onClick={() => go("#pricing-preview")}>定价</button>
+          <button type="button" className="pub-nav-link" onClick={() => go("#trial-explainer")}>试用说明</button>
+        </nav>
+        <div className="pub-nav-actions">
+          <button type="button" className="pub-btn pub-btn-ghost" onClick={onLoginClick}>登录</button>
+          <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>
+            免费注册 <ArrowRight size={16} aria-hidden />
+          </button>
+        </div>
+      </header>
+
+      <section id="top" className="pub-hero">
+        <div className="pub-hero-copy">
+          <p className="pub-eyebrow">
+            <Globe2 size={17} aria-hidden /> 跨境电商 · 多 Agent 工作台
+          </p>
+          <h1>把选品、内容、Listing、诊断、客服和利润决策，收敛到一个登录后台。</h1>
+          <p className="pub-lead">
+            凡梦AI 面向 <strong>TikTok Shop / Amazon / Shopify</strong> 等卖家，将大模型能力封装成 6 个可点选的专业 Agent，
+            您无需拼提示词也能跑完日常运营链路。浏览本页 <strong>无需登录</strong>；验证邮箱注册后可领取 3 天全功能试用。
+          </p>
+          <div className="pub-hero-cta">
+            <button type="button" className="pub-btn pub-btn-primary pub-btn-lg" onClick={onRegisterClick}>
+              免费注册并开启试用
+            </button>
+            <button type="button" className="pub-btn pub-btn-secondary pub-btn-lg" onClick={() => go("#capabilities")}>
+              先了解能做什么
+            </button>
+          </div>
+          <p className="pub-footnote">
+            <BadgeCheck size={14} aria-hidden /> 数据与 API 连接遵循最小权限；下方「效果指标」为典型场景综合描述，非效果承诺。
+          </p>
+        </div>
+        <div className="pub-hero-panel" aria-label="产品能力概览">
+          <div className="pub-hero-card">
+            <div className="pub-hero-card-head">
+              <Bot size={20} />
+              <span>6 个专业 Agent</span>
+            </div>
+            <ul className="pub-mini-list">
+              <li>选品与内容生产</li>
+              <li>Listing 与转化文案</li>
+              <li>业绩诊断与利润框架</li>
+              <li>AI 客服话术与清单</li>
+            </ul>
+          </div>
+          <div className="pub-hero-stats">
+            <div>
+              <strong>一站式</strong>
+              <span>账号内切换模块</span>
+            </div>
+            <div>
+              <strong>可订阅</strong>
+              <span>按调用量与套餐扩展</span>
+            </div>
+            <div>
+              <strong>可接店铺</strong>
+              <span>API / 手工粘贴均可</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="pub-strip" aria-label="支持的业务场景">
+        <span className="pub-strip-label">支持对接与协作</span>
+        <span>Amazon</span>
+        <span>TikTok Shop</span>
+        <span>Shopify</span>
+        <span>自建站 / ERP 导出</span>
+      </section>
+
+      <section id="capabilities" className="pub-section" aria-labelledby="cap-h">
+        <div className="pub-section-head">
+          <h2 id="cap-h">产品能力：6 个 Agent 覆盖主线运营</h2>
+          <p>每个模块对应独立工作流与输出结构，避免「一个对话框装下所有业务」的混乱体验。</p>
+        </div>
+        <div className="pub-agent-grid">
+          {agents.map((agent) => {
+            const Icon = agent.icon;
+            return (
+              <article key={agent.id} className="pub-agent-card">
+                <div className="pub-agent-icon">
+                  <Icon size={22} aria-hidden />
+                </div>
+                <h3>{agent.name}</h3>
+                <p>{agent.desc}</p>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section id="cases" className="pub-section pub-section-alt" aria-labelledby="cases-h">
+        <div className="pub-section-head">
+          <h2 id="cases-h">客户场景（综合整理）</h2>
+          <p>以下为常见跨境团队结构下的使用方式归纳，便于您评估是否匹配自身阶段；非单一客户背书。</p>
+        </div>
+        <div className="pub-case-grid">
+          {caseStudies.map((item) => (
+            <a key={item.slug} className="pub-case-card pub-case-card-link" href={`#case/${item.slug}`}>
+              <Quote className="pub-quote-icon" size={22} aria-hidden />
+              <p className="pub-case-quote">「{item.quote}」</p>
+              <div className="pub-case-tags">
+                {item.tags.map((t) => (
+                  <span key={t}>{t}</span>
+                ))}
+              </div>
+              <p className="pub-case-kpi">{item.kpi}</p>
+              <p className="pub-case-title">{item.title}</p>
+              <span className="pub-case-readmore">查看案例详情 →</span>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section id="trust" className="pub-section" aria-labelledby="trust-h">
+        <div className="pub-section-head">
+          <h2 id="trust-h">信任与安全</h2>
+          <p>我们理解跨境数据敏感，产品在架构上默认按最小可用原则接入，并向您明示边界。</p>
+        </div>
+        <div className="pub-trust-grid">
+          <div className="pub-trust-card">
+            <Users size={22} aria-hidden />
+            <h3>团队背景</h3>
+            <p>产品由具备 <strong>跨境运营</strong> 与 <strong>AI 工程</strong> 经验的团队协作迭代，聚焦「能进工作流」而非演示级对话。</p>
+          </div>
+          <div className="pub-trust-card">
+            <ShieldCheck size={22} aria-hidden />
+            <h3>数据与权限</h3>
+            <p>店铺 API 密钥服务器侧加密存储；Agent 输出包含须人工确认项时会明确提示，不冒充已代您操作后台。</p>
+          </div>
+          <div className="pub-trust-card">
+            <LockKeyhole size={22} aria-hidden />
+            <h3>账号与试用</h3>
+            <p>新用户验证邮箱后可获得 <strong>3 天全功能试用</strong>（全自动与爬虫等重能力另有日限额）。试用结束再选择订阅套餐。</p>
+          </div>
+          <div className="pub-trust-card">
+            <TrendingUp size={22} aria-hidden />
+            <h3>可验证的增长路径</h3>
+            <p>支持从手动粘贴数据起步，再逐步接入 API；您可以按模块小步试跑，降低一次性改造风险。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="trial-explainer" className="pub-section pub-section-accent" aria-labelledby="trial-h">
+        <div className="pub-section-head">
+          <h2 id="trial-h">试用机制：先逛页面，再登录体验</h2>
+        </div>
+        <div className="pub-trial-grid">
+          <div>
+            <h3>访客（无需登录）</h3>
+            <p>您正在阅读的就是完整产品介绍与定价预览，适合决策前评估是否值得花时间注册。</p>
+          </div>
+          <div>
+            <h3>注册并验证邮箱</h3>
+            <p>通过邮件验证码激活账号后，进入工作台即可开启 <strong>3 天全功能试用</strong>，体验真实调用与任务历史。</p>
+          </div>
+          <div>
+            <h3>订阅与店铺深度能力</h3>
+            <p>标准版及以上开放店铺 API、诊断与利润等强数据 Agent；套餐内含调用额度与抓取日限额，详见下方价格。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing-preview" className="pub-section" aria-labelledby="price-h">
+        <div className="pub-section-head">
+          <h2 id="price-h">订阅套餐预览</h2>
+          <p>以下为前台标价与权益摘要，实际结算以登录后订购页与协议为准。</p>
+        </div>
+        <div className="pub-pricing-grid">
+          {pricingPlans.map((plan) => (
+            <article key={plan.id} className={plan.recommended ? "pub-price-card is-recommended" : "pub-price-card"}>
+              {plan.recommended ? <span className="pub-rec-badge">推荐</span> : null}
+              <h3>{plan.name}</h3>
+              <p className="pub-price-line">
+                {plan.price === "联系定价" ? (
+                  <strong className="pub-price-custom">联系定价</strong>
+                ) : (
+                  <>
+                    <span className="pub-price-currency">¥</span>
+                    <strong className="pub-price-num">{plan.price}</strong>
+                    <span className="pub-price-unit">/ 月起</span>
+                  </>
+                )}
+              </p>
+              <p className="pub-price-desc">{plan.desc}</p>
+              <ul className="pub-price-features">
+                {plan.features.slice(0, 5).map((f) => (
+                  <li key={f}>
+                    <Check size={15} aria-hidden /> {f}
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className={plan.recommended ? "pub-btn pub-btn-primary pub-btn-block" : "pub-btn pub-btn-secondary pub-btn-block"} onClick={onRegisterClick}>
+                选择此档并注册
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="pub-section pub-cta-final" aria-labelledby="final-cta-h">
+        <div className="pub-cta-inner">
+          <h2 id="final-cta-h">准备好让 Agent 接手重复劳动了吗？</h2>
+          <p>向下滚动至 <strong>登录 / 注册</strong> 区域，验证邮箱后即可进入工作台。</p>
+          <button type="button" className="pub-btn pub-btn-primary pub-btn-lg" onClick={onRegisterClick}>
+            立即免费注册
+          </button>
+        </div>
+      </section>
+
+      <footer className="pub-footer" role="contentinfo">
+        <div className="pub-footer-inner">
+          <div className="pub-footer-brand">
+            <Sparkles size={18} aria-hidden />
+            <span>凡梦AI — 跨境电商多智能体工作台</span>
+          </div>
+          <p>本页内容用于产品介绍与 SEO；产品持续迭代，以登录后控制台为准。</p>
+          <button type="button" className="pub-footer-top" onClick={() => go("#top")}>
+            回到顶部
+          </button>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", preferredAuthKey = 0 }) {
   const [authMode, setAuthMode] = useState("login");
   const [resetStep, setResetStep] = useState("request");
   const [registerStep, setRegisterStep] = useState("email");
@@ -127,6 +593,18 @@ function LoginScreen({ onLogin }) {
   const [authLoading, setAuthLoading] = useState(false);
   const isRegister = authMode === "register";
   const isReset = authMode === "reset";
+
+  useEffect(() => {
+    setAuthMode(preferredAuthMode);
+    setRegisterStep("email");
+    setRegisterSendInfo(null);
+    setVerificationCode("");
+    setResendCooldownUntil(0);
+    setPendingVerification(null);
+    setPasswordReset(null);
+    setResetStep("request");
+    setAuthError("");
+  }, [preferredAuthMode, preferredAuthKey]);
 
   useEffect(() => {
     if (!resendCooldownUntil || Date.now() >= resendCooldownUntil) {
@@ -357,8 +835,9 @@ function LoginScreen({ onLogin }) {
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-hero">
+    <main id="account" className={layout === "stacked" ? "auth-page auth-page--stacked" : "auth-page"}>
+      {layout !== "stacked" ? (
+      <section className="auth-hero" aria-label="产品摘要">
         <div className="auth-badge">
           <ShieldCheck size={16} />
           登录后 3 天试用 · 全功能体验（全自动/抓取另计日限额）
@@ -380,6 +859,14 @@ function LoginScreen({ onLogin }) {
           </span>
         </div>
       </section>
+      ) : (
+        <section className="auth-stack-intro" aria-label="账户入口">
+          <h2 className="auth-stack-heading">登录或注册账号</h2>
+          <p className="auth-stack-sub">
+            验证邮箱后即可开启 3 天全功能试用。全自动运行与网页抓取另计每日额度，可在工作台查看。
+          </p>
+        </section>
+      )}
 
       <form className="auth-card" onSubmit={handleFormSubmit}>
         <div className="login-icon">
@@ -1248,6 +1735,9 @@ function Workspace() {
   const [snapshotPlatform, setSnapshotPlatform] = useState("auto");
   const [attachStoreSnapshot, setAttachStoreSnapshot] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [landingAuthMode, setLandingAuthMode] = useState("login");
+  const [landingAuthKey, setLandingAuthKey] = useState(0);
+  const [caseSlug, setCaseSlug] = useState(() => readCaseSlugFromHash());
 
   const activeAgent = useMemo(() => agents.find((agent) => agent.id === activeId), [activeId]);
   const visibleTasks = useMemo(
@@ -1291,6 +1781,17 @@ function Workspace() {
     setShowSubscription(true);
   }, [token, user?.trialEndingSoon, isBetaMode]);
 
+  useEffect(() => {
+    const handler = () => setCaseSlug(readCaseSlugFromHash());
+    window.addEventListener("hashchange", handler);
+    return () => window.removeEventListener("hashchange", handler);
+  }, []);
+
+  useEffect(() => {
+    if (token || !caseSlug) return;
+    window.scrollTo(0, 0);
+  }, [token, caseSlug]);
+
   function handleLogin(data) {
     localStorage.setItem("fanmeng_token", data.token);
     setToken(data.token);
@@ -1326,8 +1827,81 @@ function Workspace() {
     setUser(nextUser);
   }
 
+  function scrollAccountIntoView() {
+    window.requestAnimationFrame(() => {
+      document.getElementById("account")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function goPublicLogin() {
+    setLandingAuthMode("login");
+    setLandingAuthKey((k) => k + 1);
+    scrollAccountIntoView();
+  }
+
+  function goPublicRegister() {
+    setLandingAuthMode("register");
+    setLandingAuthKey((k) => k + 1);
+    scrollAccountIntoView();
+  }
+
+  function goMarketingHome() {
+    window.location.hash = "";
+    window.scrollTo(0, 0);
+  }
+
+  function goMarketingCases() {
+    window.location.hash = "#cases";
+    window.requestAnimationFrame(() => {
+      document.getElementById("cases")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  useEffect(() => {
+    if (token) return;
+    const raw = window.location.hash.replace(/^#/, "");
+    if (raw === "register" || raw === "login") {
+      setLandingAuthMode(raw === "register" ? "register" : "login");
+      setLandingAuthKey((k) => k + 1);
+      window.requestAnimationFrame(() => {
+        document.getElementById("account")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [token]);
+
   if (!token) {
-    return <LoginScreen onLogin={handleLogin} />;
+    if (caseSlug) {
+      const study = caseStudies.find((c) => c.slug === caseSlug);
+      if (!study) {
+        return (
+          <CaseStudyNotFound
+            onHome={goMarketingHome}
+            onLoginClick={goPublicLogin}
+            onRegisterClick={goPublicRegister}
+          />
+        );
+      }
+      return (
+        <CaseStudyDetail
+          study={study}
+          onBack={goMarketingCases}
+          onHome={goMarketingHome}
+          onLoginClick={goPublicLogin}
+          onRegisterClick={goPublicRegister}
+        />
+      );
+    }
+    return (
+      <>
+        <PublicLanding onLoginClick={goPublicLogin} onRegisterClick={goPublicRegister} />
+        <LoginScreen
+          onLogin={handleLogin}
+          layout="stacked"
+          preferredAuthMode={landingAuthMode}
+          preferredAuthKey={landingAuthKey}
+        />
+      </>
+    );
   }
 
   function hasFeature(feature, detail) {
