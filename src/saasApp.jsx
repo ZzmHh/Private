@@ -1277,8 +1277,40 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
   const [checkoutPlan, setCheckoutPlan] = useState(null);
   const [checkoutOrder, setCheckoutOrder] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState(null);
+  const [payerNote, setPayerNote] = useState("");
   const [contactForm, setContactForm] = useState({ name: "", phone: "", wechat: "", email: "", note: "" });
   const selectedPlan = pricingPlans.find((plan) => plan.id === selectedPlanId);
+
+  function orderStatusLabel(status) {
+    if (status === "paid") return "已支付 · 套餐已开通";
+    if (status === "awaiting_confirm") return "待核实到账（已提交付款提醒）";
+    if (status === "pending") return "待付款";
+    return status || "未知";
+  }
+
+  useEffect(() => {
+    if (!checkoutPlan || checkoutPlan.id === "enterprise") {
+      setPaymentConfig(null);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/billing/payment-config")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setPaymentConfig(data);
+      })
+      .catch(() => {
+        if (!cancelled) setPaymentConfig(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutPlan]);
+
+  useEffect(() => {
+    setPayerNote("");
+  }, [checkoutOrder?.id]);
 
   function updateContactForm(field, value) {
     setContactForm({ ...contactForm, [field]: value });
@@ -1303,18 +1335,38 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
     }
   }
 
-  async function createCheckoutOrder(plan, paymentMethod) {
+  async function createCheckoutOrder(plan) {
     setCheckoutLoading(true);
     try {
       const response = await fetch("/api/billing/orders", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ planId: plan.id, paymentMethod }),
+        body: JSON.stringify({ planId: plan.id, paymentMethod: "personal_manual" }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setCheckoutOrder(data.order);
-      showToast("订单已创建，正式支付通道接入后会展示二维码。");
+      showToast("订单已创建，请按下方金额扫码付款，并备注订单号。");
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
+
+  async function claimPaid() {
+    if (!checkoutOrder) return;
+    setCheckoutLoading(true);
+    try {
+      const response = await fetch(`/api/billing/orders/${checkoutOrder.id}/claim-paid`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ payerNote }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setCheckoutOrder(data.order);
+      showToast("已提交付款提醒，核实到账后将为你开通套餐。");
     } catch (error) {
       showToast(formatError(error));
     } finally {
@@ -1387,23 +1439,113 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
             </div>
           ) : (
             <div className="payment-box">
-              <h3>付款方式</h3>
-              <p>当前为支付占位页。申请微信支付/支付宝商户后，这里会创建订单、展示支付二维码，并在支付回调成功后自动开通套餐。</p>
+              <h3>扫码支付（个人收款）</h3>
+              {!paymentConfig && <p className="payment-loading">正在加载收款配置…</p>}
+              {paymentConfig?.provider === "personal_qr" ? (
+                <>
+                  <p className="payment-legal">{paymentConfig.personalQr.legalNote}</p>
+                  {paymentConfig.personalQr.contactHint ? (
+                    <p className="payment-contact">{paymentConfig.personalQr.contactHint}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p>当前未配置个人收款展示；请联系站长或在服务器环境变量中设置 PAYMENT_PROVIDER=personal_qr。</p>
+              )}
+
               <div className="order-placeholder">
                 <span>订单状态</span>
-                <strong>{checkoutOrder ? `订单 ${checkoutOrder.orderNo} · ${checkoutOrder.status}` : "等待创建订单"}</strong>
-                <p>预计流程：创建订单 → 返回二维码 → 用户扫码 → 支付回调 → 开通套餐。</p>
+                <strong>
+                  {checkoutOrder
+                    ? `${checkoutOrder.orderNo} · ${orderStatusLabel(checkoutOrder.status)}`
+                    : "尚未创建订单"}
+                </strong>
+                {!checkoutOrder && (
+                  <p>点击「创建订单」后显示应付金额与个人收款码；转账后点「我已付款」通知核实。</p>
+                )}
+                {checkoutOrder?.status === "awaiting_confirm" && checkoutOrder?.payerNote ? (
+                  <p className="order-user-note">用户备注：{checkoutOrder.payerNote}</p>
+                ) : null}
               </div>
-              <div className="pay-options">
-                <button type="button" disabled={checkoutLoading} onClick={() => createCheckoutOrder(checkoutPlan, "wechat")}>微信支付 · 创建订单</button>
-                <button type="button" disabled={checkoutLoading} onClick={() => createCheckoutOrder(checkoutPlan, "alipay")}>支付宝 · 创建订单</button>
-              </div>
-              {checkoutOrder && (
-                <button type="button" disabled={checkoutLoading} onClick={simulatePayment}>开发/内测模拟支付成功</button>
+
+              {!checkoutOrder && (
+                <div className="pay-options">
+                  <button type="button" disabled={checkoutLoading} onClick={() => createCheckoutOrder(checkoutPlan)}>
+                    创建订单
+                  </button>
+                </div>
+              )}
+
+              {checkoutOrder && paymentConfig?.provider === "personal_qr" && checkoutOrder.status !== "paid" && (
+                <>
+                  <div className="personal-pay-amount">
+                    <span>应付金额</span>
+                    <strong>¥{checkoutOrder.amount}</strong>
+                  </div>
+                  <p className="pay-transfer-hint">{paymentConfig.personalQr.transferNoteHint}</p>
+                  <button
+                    type="button"
+                    className="copy-order-btn"
+                    onClick={() => {
+                      navigator.clipboard.writeText(checkoutOrder.orderNo);
+                      showToast("订单号已复制。");
+                    }}
+                  >
+                    复制订单号 {checkoutOrder.orderNo}
+                  </button>
+
+                  <div className="payment-qr-grid">
+                    <div className="payment-qr-card">
+                      <span>微信收款</span>
+                      <img src={paymentConfig.personalQr.wechatQrUrl} alt="微信收款码" width={200} height={200} />
+                    </div>
+                    <div className="payment-qr-card">
+                      <span>支付宝收款</span>
+                      <img src={paymentConfig.personalQr.alipayQrUrl} alt="支付宝收款码" width={200} height={200} />
+                    </div>
+                  </div>
+
+                  {checkoutOrder.status === "pending" && (
+                    <>
+                      <label className="payer-note-label">
+                        付款备注（选填）
+                        <input
+                          value={payerNote}
+                          onChange={(e) => setPayerNote(e.target.value)}
+                          placeholder="例如：付款微信昵称 / 转账时间"
+                        />
+                      </label>
+                      <button type="button" className="claim-paid-btn" disabled={checkoutLoading} onClick={claimPaid}>
+                        我已完成转账，请核实
+                      </button>
+                    </>
+                  )}
+
+                  {checkoutOrder.status === "awaiting_confirm" && (
+                    <p className="awaiting-note">我们核实到账后会为你开通对应套餐，通常可在当日完成。</p>
+                  )}
+
+                  {checkoutOrder.status === "paid" && (
+                    <p className="order-paid-msg">该订单已支付。若左侧权益未更新，请关闭本窗口刷新页面。</p>
+                  )}
+                </>
+              )}
+
+              {checkoutOrder && paymentConfig?.simulateEnabled && (
+                <button type="button" disabled={checkoutLoading} onClick={simulatePayment} className="simulate-pay-btn">
+                  开发/内测：模拟支付成功
+                </button>
               )}
             </div>
           )}
-          <button className="back-to-plans" type="button" onClick={() => { setCheckoutPlan(null); setCheckoutOrder(null); }}>
+          <button
+            className="back-to-plans"
+            type="button"
+            onClick={() => {
+              setCheckoutPlan(null);
+              setCheckoutOrder(null);
+              setPayerNote("");
+            }}
+          >
             返回选择套餐
           </button>
         </section>
@@ -1654,8 +1796,28 @@ function FeedbackForm({ onSubmit }) {
   );
 }
 
-function AdminModal({ summary, onClose }) {
+function AdminModal({ summary, onClose, authHeaders, onReloadSummary, showToast }) {
+  const [busyOrderId, setBusyOrderId] = useState(null);
+
   if (!summary) return null;
+
+  async function confirmPayment(orderId) {
+    setBusyOrderId(orderId);
+    try {
+      const response = await fetch(`/api/admin/orders/${orderId}/confirm-payment`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast("已确认收款，用户套餐已开通。");
+      await onReloadSummary();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusyOrderId(null);
+    }
+  }
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
@@ -1682,10 +1844,26 @@ function AdminModal({ summary, onClose }) {
               <p key={item.id}>{item.email} · {item.planName} · {item.accessActive ? "可用" : "已过期"}</p>
             ))}
           </section>
-          <section>
-            <h3>最近订单</h3>
-            {(summary.orders || []).slice(0, 8).map((item) => (
-              <p key={item.id}>{item.orderNo} · {item.planName} · ¥{item.amount} · {item.status}</p>
+          <section className="admin-orders-section">
+            <h3>订单与收款</h3>
+            {(summary.orders || []).slice(0, 30).map((item) => (
+              <div key={item.id} className="admin-order-row">
+                <div>
+                  <strong>{item.orderNo}</strong>
+                  <span>{item.userEmail} · {item.planName} · ¥{item.amount} · {item.status}</span>
+                  {item.payerNote ? <small className="admin-payer-note">备注：{item.payerNote}</small> : null}
+                </div>
+                {(item.status === "pending" || item.status === "awaiting_confirm") && (
+                  <button
+                    type="button"
+                    className="admin-confirm-pay"
+                    disabled={busyOrderId === item.id}
+                    onClick={() => confirmPayment(item.id)}
+                  >
+                    {busyOrderId === item.id ? "处理中…" : "确认到账并开通"}
+                  </button>
+                )}
+              </div>
             ))}
           </section>
           <section>
@@ -2215,7 +2393,13 @@ function Workspace() {
         </div>
       )}
       {showAdmin && (
-        <AdminModal summary={adminSummary} onClose={() => setShowAdmin(false)} />
+        <AdminModal
+          summary={adminSummary}
+          onClose={() => setShowAdmin(false)}
+          authHeaders={authHeaders}
+          onReloadSummary={loadAdminSummary}
+          showToast={showToast}
+        />
       )}
       {showStoreApiModal && (
         <StoreApiModal

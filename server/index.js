@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email.js";
 import {
+  adminConfirmOrderPayment,
+  claimOrderPaymentSubmitted,
   completeRegistrationWithCode,
   createToken,
   createOrder,
@@ -41,6 +43,7 @@ import {
   assertPlatformSecret,
   snapshotRequiresSavedSecret,
 } from "./integrations/storeApi/index.js";
+import { buildPaymentPublicConfig } from "./paymentConfig.js";
 import { handleTiktokBuyerMessageWebhook } from "./autoReply/tiktokInbound.js";
 import { parseTikTokShopCredentials } from "./integrations/storeApi/tiktok/tiktokShopConnector.js";
 
@@ -167,6 +170,7 @@ app.post("/webhooks/tiktok", express.json({ limit: "512kb" }), async (req, res) 
 });
 
 app.use(express.json({ limit: "1mb" }));
+app.use("/payment", express.static(path.join(__dirname, "../public/payment")));
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -447,6 +451,10 @@ app.get("/api/me", authMiddleware, (req, res) => {
   });
 });
 
+app.get("/api/billing/payment-config", (req, res) => {
+  res.json(buildPaymentPublicConfig(req));
+});
+
 app.post("/api/billing/orders", authMiddleware, (req, res) => {
   try {
     const { planId, paymentMethod } = req.body || {};
@@ -454,6 +462,20 @@ app.post("/api/billing/orders", authMiddleware, (req, res) => {
     res.json({ order });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || "订单创建失败。" });
+  }
+});
+
+app.post("/api/billing/orders/:orderId/claim-paid", authMiddleware, (req, res) => {
+  try {
+    const { payerNote } = req.body || {};
+    const order = claimOrderPaymentSubmitted({
+      userId: req.user.id,
+      orderId: req.params.orderId,
+      payerNote,
+    });
+    res.json({ order });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "提交失败。" });
   }
 });
 
@@ -611,6 +633,15 @@ app.post("/api/feedback", authMiddleware, (req, res) => {
 
 app.get("/api/admin/summary", authMiddleware, adminMiddleware, (_req, res) => {
   res.json(getAdminSummary());
+});
+
+app.post("/api/admin/orders/:orderId/confirm-payment", authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const { order, user } = adminConfirmOrderPayment({ orderId: req.params.orderId });
+    res.json({ order, user: sanitizeUser(user) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "确认失败。" });
+  }
 });
 
 app.get("/api/agents", (_req, res) => {

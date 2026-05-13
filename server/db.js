@@ -659,24 +659,63 @@ export function simulatePayOrder({ userId, orderId }) {
   const db = readDb();
   const order = db.orders.find((entry) => entry.id === orderId && entry.userId === userId);
   if (!order) throw createError("订单不存在。", 404);
-  if (order.status === "paid") return { order, user: db.users.find((entry) => entry.id === userId) };
+  if (order.status === "paid") {
+    return { order, user: db.users.find((entry) => entry.id === userId) };
+  }
 
-  const user = db.users.find((entry) => entry.id === userId);
+  applyPaidOrderToUser(db, order, `DEV-${order.orderNo}`);
+  writeDb(db);
+  return { order, user: db.users.find((entry) => entry.id === userId) };
+}
+
+export function claimOrderPaymentSubmitted({ userId, orderId, payerNote = "" }) {
+  const db = readDb();
+  const order = db.orders.find((entry) => entry.id === orderId && entry.userId === userId);
+  if (!order) throw createError("订单不存在。", 404);
+  if (order.status === "paid") throw createError("订单已支付，无需重复提交。", 409);
+  if (order.status === "awaiting_confirm") throw createError("已收到您的付款提醒，请等待核实。", 409);
+  if (order.status !== "pending") throw createError("当前订单不可提交付款提醒。", 400);
+
+  order.status = "awaiting_confirm";
+  order.claimedAt = new Date().toISOString();
+  order.payerNote = String(payerNote || "").trim().slice(0, 500);
+  writeDb(db);
+  return order;
+}
+
+export function adminConfirmOrderPayment({ orderId }) {
+  const db = readDb();
+  const order = db.orders.find((entry) => entry.id === orderId);
+  if (!order) throw createError("订单不存在。", 404);
+  if (order.status === "paid") {
+    return { order, user: db.users.find((entry) => entry.id === order.userId) };
+  }
+  if (order.status !== "pending" && order.status !== "awaiting_confirm") {
+    throw createError("该订单状态不可确认收款。", 400);
+  }
+
+  const tradeNo = `MANUAL-${order.orderNo}`;
+  applyPaidOrderToUser(db, order, tradeNo);
+  writeDb(db);
+  return { order, user: db.users.find((entry) => entry.id === order.userId) };
+}
+
+function applyPaidOrderToUser(db, order, paymentTradeNo) {
+  const user = db.users.find((entry) => entry.id === order.userId);
   if (!user) throw createError("用户不存在。", 401);
 
   const now = new Date();
   const subscriptionEndsAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 30);
   order.status = "paid";
   order.paidAt = now.toISOString();
-  order.paymentTradeNo = `DEV-${order.orderNo}`;
+  order.paymentTradeNo = paymentTradeNo;
 
   user.plan = order.planId;
   user.subscriptionStartedAt = now.toISOString();
   user.subscriptionEndsAt = subscriptionEndsAt.toISOString();
   user.lastPaidOrderId = order.id;
 
-  writeDb(db);
-  return { order, user };
+  return user;
 }
 
 export function submitEnterpriseLead({ userId, contact }) {
@@ -863,6 +902,7 @@ export function getAdminSummary() {
       paidUsers: paidUsers.length,
       orders: db.orders.length,
       pendingOrders: db.orders.filter((order) => order.status === "pending").length,
+      awaitingConfirmOrders: db.orders.filter((order) => order.status === "awaiting_confirm").length,
       callsToday: todaysLogs.length,
       failedCallsToday: todaysLogs.filter((log) => log.status === "failed").length,
       feedback: db.feedback.length,
