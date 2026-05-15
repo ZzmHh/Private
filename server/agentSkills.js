@@ -36,7 +36,7 @@ function buildDataBoundary(agentId) {
     "【数据与能力边界】",
     "- 不得伪造订单号、库存件数、物流轨迹、店铺后台截图或未提供的指标数值。",
     "- 若用户粘贴了报表/指标，在「依据与假设」中标明来源；推断结论必须写清前提。",
-    "- Playwright/公开网页抓取仅为参考样本，不是平台官方实时行情；引用时写「仅供参考，需交叉验证」。",
+    "- Playwright/公开网页抓取仅为抽样样本，不是平台官方实时行情；引用时说明来源并建议交叉验证。",
   ];
   if (["growth", "service", "profit"].includes(agentId)) {
     lines.push(

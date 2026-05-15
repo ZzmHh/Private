@@ -283,7 +283,7 @@ function App() {
 
       <section id="agents" className="section">
         <div className="section-heading">
-          <span className="eyebrow">6 Agents</span>
+          <span className="eyebrow">6 大能力 · 5 模块运营</span>
           <h2>按跨境卖家的真实痛点设计，而不是让用户学习复杂提示词。</h2>
           <p>每个 Agent 都对应一个清晰界面和工作目标，用户只需要选择任务、输入商品或店铺数据，就能得到结果。</p>
         </div>

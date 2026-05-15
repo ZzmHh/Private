@@ -124,6 +124,29 @@ function createError(message, status = 400, code = "") {
   return error;
 }
 
+/** 在 .env 中配置 ADMIN_EMAILS=a@x.com,b@y.com 即可将对应账号标为运营后台管理员 */
+function isConfiguredAdminEmail(email) {
+  const raw = String(process.env.ADMIN_EMAILS || "").trim();
+  if (!raw) return false;
+  const list = raw
+    .split(/[,;]+/g)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(String(email || "").trim().toLowerCase());
+}
+
+/** 对外：管理员 = 库内标记 .env 白名单 任一满足（无需仅依赖启动时同步） */
+export function effectiveIsAdmin(user) {
+  if (!user) return false;
+  return Boolean(user.isAdmin || isConfiguredAdminEmail(user.email));
+}
+
+function promoteAdminIfConfigured(user) {
+  if (!user || !isConfiguredAdminEmail(user.email) || user.isAdmin) return false;
+  user.isAdmin = true;
+  return true;
+}
+
 function attachEmailVerification(user, now = new Date()) {
   const code = createVerificationCode();
   const expiresAt = new Date(now.getTime() + 1000 * 60 * 10);
@@ -225,7 +248,7 @@ export function sanitizeUser(user) {
     dailyLimit: plan.dailyLimit,
     minuteLimit: plan.minuteLimit,
     maxTokens: plan.maxTokens,
-    isAdmin: Boolean(user.isAdmin),
+    isAdmin: effectiveIsAdmin(user),
     trialEndingSoon,
     trialQuota:
       user.plan === "trial" && isTrialActive(user)
@@ -279,7 +302,7 @@ export function startRegistrationEmail(email) {
     trialLifetimeTotal: 0,
     loginSecurity: { failedCount: 0, lockedUntil: null },
     emailVerified: false,
-    isAdmin: db.users.length === 0,
+    isAdmin: db.users.length === 0 || isConfiguredAdminEmail(normalizedEmail),
     createdAt: now.toISOString(),
   };
   const verificationCode = attachEmailVerification(user, now);
@@ -329,6 +352,7 @@ export function completeRegistrationWithCode({ email, code, password, name, stor
   user.emailVerifiedAt = new Date().toISOString();
   delete user.emailVerification;
   if (user.registrationPending) delete user.registrationPending;
+  promoteAdminIfConfigured(user);
   writeDb(db);
   return user;
 }
@@ -368,7 +392,7 @@ export function registerUser({ name, storeName, email, password }) {
     trialLifetimeTotal: 0,
     loginSecurity: { failedCount: 0, lockedUntil: null },
     emailVerified: false,
-    isAdmin: db.users.length === 0,
+    isAdmin: db.users.length === 0 || isConfiguredAdminEmail(normalizedEmail),
     createdAt: now.toISOString(),
   };
   const verificationCode = attachEmailVerification(user, now);
@@ -413,6 +437,9 @@ export function loginUser({ email, password }) {
     throw createError("请先完成邮箱验证后再登录。", 403, "EMAIL_NOT_VERIFIED");
   }
 
+  promoteAdminIfConfigured(user);
+  writeDb(db);
+
   return user;
 }
 
@@ -448,6 +475,7 @@ export function verifyEmailCode({ email, code }) {
   user.emailVerified = true;
   user.emailVerifiedAt = new Date().toISOString();
   delete user.emailVerification;
+  promoteAdminIfConfigured(user);
   writeDb(db);
   return user;
 }
@@ -542,7 +570,7 @@ export function incrementUsage(userId, type) {
     }
     if (type === "autopilot" && (todayUsage.autopilot || 0) >= (t.trialAutopilotPerDay ?? 99)) {
       throw createError(
-        `试用期内「6 Agent 全自动」每日最多 ${t.trialAutopilotPerDay} 次，请明日再试或订阅解锁更高额度。`,
+        `试用期内「5 Agent 运营」每日最多 ${t.trialAutopilotPerDay} 次，请明日再试或订阅解锁更高额度。`,
         429,
         "TRIAL_AUTOPILOT_CAP",
       );
@@ -612,7 +640,7 @@ export function ensureFeatureAccess(user, feature, detail) {
   }
 
   if (feature === "autopilot" && !features.autopilot) {
-    throw createError("当前套餐不支持 6 Agent 全自动运行，请升级到标准版或更高套餐。", 403);
+    throw createError("当前套餐不支持 5 Agent 运营一键生成，请升级到标准版或更高套餐。", 403);
   }
 
   if (feature === "scraper" && !features.scraper) {
@@ -890,6 +918,43 @@ export function saveFeedback({ userId, payload }) {
   return feedback;
 }
 
+/**
+ * 启动时同步：.env ADMIN_EMAILS 中的邮箱一律 isAdmin=true（便于你只控制自己的账号）。
+ */
+export function syncAdminFlagsFromEnv() {
+  const db = readDb();
+  let touched = false;
+  for (const user of db.users) {
+    if (isConfiguredAdminEmail(user.email) && !user.isAdmin) {
+      user.isAdmin = true;
+      touched = true;
+    }
+  }
+  if (touched) writeDb(db);
+}
+
+export function adminGrantUserSubscription({ adminUser, targetUserId, planId, days = 30 }) {
+  if (!effectiveIsAdmin(adminUser)) throw createError("需要管理员权限。", 403);
+  if (!plans[planId] || planId === "trial") throw createError("请选择有效套餐（starter / standard / managed / enterprise）。", 400);
+
+  const n = Number(days);
+  const grantDays = Number.isFinite(n) ? Math.min(730, Math.max(1, Math.floor(n))) : 30;
+
+  const db = readDb();
+  const user = db.users.find((entry) => entry.id === targetUserId);
+  if (!user) throw createError("用户不存在。", 404);
+
+  const now = new Date();
+  user.plan = planId;
+  user.subscriptionStartedAt = now.toISOString();
+  user.subscriptionEndsAt = new Date(now.getTime() + grantDays * 86400000).toISOString();
+  user.adminLastGrantedAt = now.toISOString();
+  user.adminLastGrantedBy = adminUser.id;
+  writeDb(db);
+
+  return sanitizeUser(user);
+}
+
 export function getAdminSummary() {
   const db = readDb();
   const today = new Date().toISOString().slice(0, 10);
@@ -907,7 +972,7 @@ export function getAdminSummary() {
       failedCallsToday: todaysLogs.filter((log) => log.status === "failed").length,
       feedback: db.feedback.length,
     },
-    users: db.users.slice(0, 50).map(sanitizeUser),
+    users: db.users.slice(0, 120).map(sanitizeUser),
     orders: db.orders.slice(0, 50),
     usageLogs: db.usageLogs.slice(0, 80),
     feedback: db.feedback.slice(0, 50),

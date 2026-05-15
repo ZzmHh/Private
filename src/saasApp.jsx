@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowRight,
@@ -6,8 +6,10 @@ import {
   BarChart3,
   Bot,
   Check,
+  File,
   Globe2,
   Headphones,
+  Image,
   LineChart,
   LockKeyhole,
   PackageSearch,
@@ -21,6 +23,7 @@ import {
   UserPlus,
   UploadCloud,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import "./styles.css";
@@ -31,8 +34,14 @@ const pricingPlans = [
     name: "尝鲜版",
     price: "99",
     desc: "适合个人卖家试用 AI 工作流。",
-    features: ["每日 100 次 Agent 调用", "6 个 Agent 基础使用", "本地文件导入", "任务历史 30 条", "社区/邮件支持"],
-    access: "开放选品、内容、Listing 三个基础 Agent；不含实时抓取和店铺 API 强数据 Agent。",
+    features: [
+      "每日 100 次 Agent 调用",
+      "选品 / 内容 / Listing 三个 Agent（6 模块中的基础三件套）",
+      "本地文件导入",
+      "任务历史 30 条",
+      "社区/邮件支持",
+    ],
+    access: "开放选品、内容、Listing 三个基础 Agent；不含一键运营串联、实时抓取和店铺 API 强数据类 Agent。",
   },
   {
     id: "standard",
@@ -41,14 +50,14 @@ const pricingPlans = [
     desc: "适合已有店铺、希望稳定提效的卖家。",
     recommended: true,
     features: ["每日 500 次 Agent 调用", "店铺 API 配置", "业绩诊断与利润分析", "AI 客服售后模板", "公开页参考抓取（Playwright）", "优先支持"],
-    access: "开放全部 6 个 Agent、全自动运行；含公开页参考抓取（非官方实时）与店铺 API 配置相关 Agent。",
+    access: "开放全部 6 个独立 Agent +「5 Agent 运营一键生成」（一键不含客服自动应答）；含公开页参考抓取（非官方实时）与店铺相关 Agent。",
   },
   {
     id: "managed",
     name: "全托版",
     price: "899",
     desc: "适合希望让 Agent 接管日常运营的团队。",
-    features: ["每日 2,000 次 Agent 调用", "6 Agent 全自动运行增强", "多店铺/多站点管理", "自动化运营周报", "专属配置协助", "1 对 1 运营建议"],
+    features: ["每日 2,000 次 Agent 调用", "5 模块运营一键生成", "多店铺/多站点管理", "自动化运营周报", "专属配置协助", "1 对 1 运营建议"],
     access: "开放全部能力，增加多店铺、自动化周报和高频调用额度。",
   },
   {
@@ -60,6 +69,8 @@ const pricingPlans = [
     access: "按企业需求定制调用量、权限、数据集成和私有化部署。",
   },
 ];
+
+const PAID_PLAN_IDS = new Set(["starter", "standard", "managed", "enterprise"]);
 
 const agents = [
   {
@@ -191,8 +202,11 @@ const caseStudies = [
   },
 ];
 
-function readCaseSlugFromHash() {
-  const raw = window.location.hash.replace(/^#/, "").trim();
+function readRouteHash() {
+  return window.location.hash.replace(/^#/, "").trim();
+}
+
+function parseCaseSlugFromHash(raw) {
   if (!raw.startsWith("case/")) return null;
   const slug = raw.slice(5).split(/[/?]/)[0];
   return slug || null;
@@ -324,7 +338,15 @@ function CaseStudyNotFound({ onHome, onLoginClick, onRegisterClick }) {
   );
 }
 
-function PublicLanding({ onLoginClick, onRegisterClick }) {
+function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
+  useEffect(() => {
+    if (!scrollSectionId) return;
+    const id = scrollSectionId === "top" ? "top" : scrollSectionId;
+    window.requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [scrollSectionId]);
+
   function go(href) {
     const id = href.replace("#", "");
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -340,6 +362,7 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
           凡梦AI
         </a>
         <nav className="pub-nav-links" aria-label="页面导航">
+          <button type="button" className="pub-nav-link" onClick={() => go("#flow")}>使用路径</button>
           <button type="button" className="pub-nav-link" onClick={() => go("#capabilities")}>产品能力</button>
           <button type="button" className="pub-nav-link" onClick={() => go("#cases")}>场景案例</button>
           <button type="button" className="pub-nav-link" onClick={() => go("#trust")}>信任与安全</button>
@@ -347,7 +370,9 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
           <button type="button" className="pub-nav-link" onClick={() => go("#trial-explainer")}>试用说明</button>
         </nav>
         <div className="pub-nav-actions">
-          <button type="button" className="pub-btn pub-btn-ghost" onClick={onLoginClick}>登录</button>
+          <button type="button" className="pub-btn pub-btn-ghost" onClick={onLoginClick}>
+            登录
+          </button>
           <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>
             免费注册 <ArrowRight size={16} aria-hidden />
           </button>
@@ -357,19 +382,24 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
       <section id="top" className="pub-hero">
         <div className="pub-hero-copy">
           <p className="pub-eyebrow">
-            <Globe2 size={17} aria-hidden /> 跨境电商 · 多 Agent 工作台
+            <Globe2 size={17} aria-hidden /> 跨境电商 · 6 大模块工作台 · 5 Agent 运营一键生成
           </p>
-          <h1>把选品、内容、Listing、诊断、客服和利润决策，收敛到一个登录后台。</h1>
+          <h1>跨境电商多 Agent 工作台：先了解，再上手。</h1>
           <p className="pub-lead">
-            凡梦AI 面向 <strong>TikTok Shop / Amazon / Shopify</strong> 等卖家，将大模型能力封装成 6 个可点选的专业 Agent，
-            您无需拼提示词也能跑完日常运营链路。浏览本页 <strong>无需登录</strong>；验证邮箱注册后可领取 3 天全功能试用。
+            凡梦AI 将大模型封装成 <strong>6 个可切换的专业模块</strong>（选品、内容、Listing、业绩诊断、AI 客服话术、广告库存利润），另提供
+            <strong>「5 Agent 运营一键生成」</strong>：单轮输出选品—内容—Listing—业绩—利润串联方案（<strong>不含客服自动应答</strong>；客服请在「AI 客服售后」里<strong>对话式</strong>生成话术）。
+            本页为<strong>产品介绍站</strong>；需要执行 Agent 时，请通过顶部「登录 / 注册」进入<strong>独立登录页</strong>，验证成功后将进入<strong>工作台</strong>。
           </p>
           <div className="pub-hero-cta">
             <button type="button" className="pub-btn pub-btn-primary pub-btn-lg" onClick={onRegisterClick}>
               免费注册并开启试用
             </button>
-            <button type="button" className="pub-btn pub-btn-secondary pub-btn-lg" onClick={() => go("#capabilities")}>
-              先了解能做什么
+            <button
+              type="button"
+              className="pub-btn pub-btn-secondary pub-btn-lg"
+              onClick={onLoginClick}
+            >
+              已有账号 · 登录
             </button>
           </div>
           <p className="pub-footnote">
@@ -380,13 +410,13 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
           <div className="pub-hero-card">
             <div className="pub-hero-card-head">
               <Bot size={20} />
-              <span>6 个专业 Agent</span>
+              <span>6 大模块 + 5 Agent 运营</span>
             </div>
             <ul className="pub-mini-list">
-              <li>选品与内容生产</li>
-              <li>Listing 与转化文案</li>
-              <li>业绩诊断与利润框架</li>
-              <li>AI 客服话术与清单</li>
+              <li>单模块：选品 / 内容 / Listing</li>
+              <li>单模块：业绩 · 客服话术 · 利润</li>
+              <li>一键串联：5 段运营方案（无客服自动跑）</li>
+              <li>工作台：配置店铺 API、附件与任务历史</li>
             </ul>
           </div>
           <div className="pub-hero-stats">
@@ -414,10 +444,45 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
         <span>自建站 / ERP 导出</span>
       </section>
 
+      <section id="flow" className="pub-section pub-section-alt" aria-labelledby="flow-h">
+        <div className="pub-section-head">
+          <h2 id="flow-h">从了解到使用：浏览、登录、再进工作台</h2>
+          <p>先在本页完成信息收集与决策；稍后在登录页验证账号，即可在控制台中运行全部能力。</p>
+        </div>
+        <div className="pub-flow-steps" role="list">
+          <article className="pub-flow-card" role="listitem">
+            <span className="pub-flow-num" aria-hidden>1</span>
+            <h3>产品介绍站</h3>
+            <p>了解 6 大模块、5 Agent 运营一键生成、定价与试用规则，无需账号即可通读。</p>
+          </article>
+          <article className="pub-flow-card" role="listitem">
+            <span className="pub-flow-num" aria-hidden>2</span>
+            <h3>登录或注册</h3>
+            <p>通过顶部按钮进入独立登录页，验证邮箱后即可启用账号。</p>
+          </article>
+          <article className="pub-flow-card" role="listitem">
+            <span className="pub-flow-num" aria-hidden>3</span>
+            <h3>工作台</h3>
+            <p>运行各 Agent、一键 5 模块方案、配置店铺 API、查看任务历史与订阅额度。</p>
+          </article>
+        </div>
+        <div className="pub-flow-cta">
+          <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>
+            前往注册
+          </button>
+          <button type="button" className="pub-btn pub-btn-secondary" onClick={onLoginClick}>
+            前往登录
+          </button>
+        </div>
+      </section>
+
       <section id="capabilities" className="pub-section" aria-labelledby="cap-h">
         <div className="pub-section-head">
-          <h2 id="cap-h">产品能力：6 个 Agent 覆盖主线运营</h2>
-          <p>每个模块对应独立工作流与输出结构，避免「一个对话框装下所有业务」的混乱体验。</p>
+          <h2 id="cap-h">产品能力：6 大模块，各司其职</h2>
+          <p>
+            下方为<strong>六个独立模块</strong>，在工作台内可单独调用；也可使用<strong>「5 Agent 运营一键生成」</strong>将选品、内容、Listing、业绩诊断、广告库存利润
+            <strong>单轮串联</strong>输出。「AI 客服售后」建议<strong>单独打开、对话式</strong>生成话术与清单，不参与一键自动跑。
+          </p>
         </div>
         <div className="pub-agent-grid">
           {agents.map((agent) => {
@@ -477,7 +542,7 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
           <div className="pub-trust-card">
             <LockKeyhole size={22} aria-hidden />
             <h3>账号与试用</h3>
-            <p>新用户验证邮箱后可获得 <strong>3 天全功能试用</strong>（全自动与爬虫等重能力另有日限额）。试用结束再选择订阅套餐。</p>
+            <p>新用户验证邮箱后可获得 <strong>3 天全功能试用</strong>（5 Agent 运营与爬虫等重能力另有日限额）。试用结束再选择订阅套餐。</p>
           </div>
           <div className="pub-trust-card">
             <TrendingUp size={22} aria-hidden />
@@ -489,20 +554,21 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
 
       <section id="trial-explainer" className="pub-section pub-section-accent" aria-labelledby="trial-h">
         <div className="pub-section-head">
-          <h2 id="trial-h">试用机制：先逛页面，再登录体验</h2>
+          <h2 id="trial-h">试用与上手</h2>
+          <p>验证邮箱的新用户可开启 3 天试用；5 Agent 运营与爬虫等能力另计日限额，计费与额度以控制台订阅页为准。</p>
         </div>
         <div className="pub-trial-grid">
           <div>
-            <h3>访客（无需登录）</h3>
-            <p>您正在阅读的就是完整产品介绍与定价预览，适合决策前评估是否值得花时间注册。</p>
+            <h3>访客 · 浏览介绍</h3>
+            <p>任意阅读本页模块与价格信息；准备好后再去登录页创建或进入账号。</p>
           </div>
           <div>
-            <h3>注册并验证邮箱</h3>
-            <p>通过邮件验证码激活账号后，进入工作台即可开启 <strong>3 天全功能试用</strong>，体验真实调用与任务历史。</p>
+            <h3>登录页 · 验证身份</h3>
+            <p>在独立页面完成登录或注册；成功后自动进入工作台，开始使用全部模块。</p>
           </div>
           <div>
-            <h3>订阅与店铺深度能力</h3>
-            <p>标准版及以上开放店铺 API、诊断与利润等强数据 Agent；套餐内含调用额度与抓取日限额，详见下方价格。</p>
+            <h3>工作台 · 执行任务</h3>
+            <p>在控制台内运行各模块、5 Agent 运营一键生成、配置店铺 API 与本地附件。</p>
           </div>
         </div>
       </section>
@@ -546,11 +612,20 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
 
       <section className="pub-section pub-cta-final" aria-labelledby="final-cta-h">
         <div className="pub-cta-inner">
-          <h2 id="final-cta-h">准备好让 Agent 接手重复劳动了吗？</h2>
-          <p>向下滚动至 <strong>登录 / 注册</strong> 区域，验证邮箱后即可进入工作台。</p>
-          <button type="button" className="pub-btn pub-btn-primary pub-btn-lg" onClick={onRegisterClick}>
-            立即免费注册
-          </button>
+          <h2 id="final-cta-h">准备好就开通账号</h2>
+          <p>若已了解产品与套餐，可通过下方按钮进入<strong>注册</strong>或<strong>登录</strong>页；验证成功后即可使用工作台。</p>
+          <div className="pub-cta-buttons">
+            <button type="button" className="pub-btn pub-btn-primary pub-btn-lg" onClick={onRegisterClick}>
+              免费注册
+            </button>
+            <button
+              type="button"
+              className="pub-btn pub-btn-secondary pub-btn-lg"
+              onClick={onLoginClick}
+            >
+              已有账号 · 登录
+            </button>
+          </div>
         </div>
       </section>
 
@@ -570,7 +645,7 @@ function PublicLanding({ onLoginClick, onRegisterClick }) {
   );
 }
 
-function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", preferredAuthKey = 0 }) {
+function LoginScreen({ onLogin, authRouteHash = "login" }) {
   const [authMode, setAuthMode] = useState("login");
   const [resetStep, setResetStep] = useState("request");
   const [registerStep, setRegisterStep] = useState("email");
@@ -595,7 +670,7 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
   const isReset = authMode === "reset";
 
   useEffect(() => {
-    setAuthMode(preferredAuthMode);
+    setAuthMode(authRouteHash === "register" ? "register" : "login");
     setRegisterStep("email");
     setRegisterSendInfo(null);
     setVerificationCode("");
@@ -604,7 +679,7 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
     setPasswordReset(null);
     setResetStep("request");
     setAuthError("");
-  }, [preferredAuthMode, preferredAuthKey]);
+  }, [authRouteHash]);
 
   useEffect(() => {
     if (!resendCooldownUntil || Date.now() >= resendCooldownUntil) {
@@ -835,17 +910,15 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
   }
 
   return (
-    <main id="account" className={layout === "stacked" ? "auth-page auth-page--stacked" : "auth-page"}>
-      {layout !== "stacked" ? (
+    <main id="account" className="auth-page">
       <section className="auth-hero" aria-label="产品摘要">
         <div className="auth-badge">
           <ShieldCheck size={16} />
-          登录后 3 天试用 · 全功能体验（全自动/抓取另计日限额）
+          登录后 3 天试用 · 全功能体验（5 Agent 运营/抓取另计日限额）
         </div>
         <h1>跨境电商卖家的多 Agent AI 员工后台</h1>
         <p>
-          一个客户一个账号，登录后进入订阅制工作台。OpenClaw 会统一接管选品、内容、
-          Listing、业绩诊断、客服售后和利润优化 6 个 Agent。
+          一个账号进入<strong>工作台</strong>。包含 6 大专业模块，以及「5 Agent 运营一键生成」串联选品—内容—Listing—业绩—利润（客服为单独对话模块，不参与一键自动跑）。
         </p>
         <div className="auth-points">
           <span>
@@ -859,14 +932,6 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
           </span>
         </div>
       </section>
-      ) : (
-        <section className="auth-stack-intro" aria-label="账户入口">
-          <h2 className="auth-stack-heading">登录或注册账号</h2>
-          <p className="auth-stack-sub">
-            验证邮箱后即可开启 3 天全功能试用。全自动运行与网页抓取另计每日额度，可在工作台查看。
-          </p>
-        </section>
-      )}
 
       <form className="auth-card" onSubmit={handleFormSubmit}>
         <div className="login-icon">
@@ -948,7 +1013,7 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
         ) : isRegister && registerStep === "email" ? (
           <>
             <h2>注册账号</h2>
-            <p>第一步：输入注册邮箱并发送验证码；第二步：查收邮件后填写验证码与密码完成注册。</p>
+            <p>输入注册邮箱收取验证码，随后在邮件中填写验证码并完成密码与店铺信息。</p>
             <label>
               邮箱
               <input type="email" value={authForm.email} onChange={(event) => updateAuthForm("email", event.target.value)} placeholder="seller@example.com" required />
@@ -985,13 +1050,34 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
         {isReset ? (
           <>
             <small>验证码 10 分钟内有效。重置后会自动登录。</small>
-            <button type="button" className="register-link" onClick={() => { setAuthMode("login"); setResetStep("request"); setPasswordReset(null); }}>返回登录</button>
+            <button
+              type="button"
+              className="register-link"
+              onClick={() => {
+                setAuthMode("login");
+                setResetStep("request");
+                setPasswordReset(null);
+                window.location.hash = "login";
+              }}
+            >
+              返回登录
+            </button>
           </>
         ) : pendingVerification ? (
           <>
             <small>验证码 10 分钟内有效。没有收到邮件时，请检查垃圾邮箱或重新发送。</small>
             <button type="button" className="register-link" onClick={resendVerification} disabled={authLoading}>重新发送验证码</button>
-            <button type="button" className="register-link" onClick={() => { setPendingVerification(null); setVerificationCode(""); }}>返回登录/注册</button>
+            <button
+              type="button"
+              className="register-link"
+              onClick={() => {
+                setPendingVerification(null);
+                setVerificationCode("");
+                window.location.hash = "login";
+              }}
+            >
+              返回登录/注册
+            </button>
           </>
         ) : isRegister && registerStep === "complete" ? (
           <>
@@ -1020,8 +1106,8 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
               type="button"
               className="register-link"
               onClick={() => {
-                setAuthMode("login");
                 resetRegisterFlow();
+                window.location.hash = "login";
               }}
             >
               已有账号？返回登录
@@ -1035,12 +1121,12 @@ function LoginScreen({ onLogin, layout = "split", preferredAuthMode = "login", p
               className="register-link"
               onClick={() => {
                 if (isRegister) {
-                  setAuthMode("login");
                   resetRegisterFlow();
+                  window.location.hash = "login";
                 } else {
-                  setAuthMode("register");
                   resetRegisterFlow();
                   setAuthForm((f) => ({ ...f, password: "", confirmPassword: "" }));
+                  window.location.hash = "register";
                 }
               }}
             >
@@ -1069,6 +1155,87 @@ function readFileAsText(file) {
     reader.onerror = () => resolve("");
     reader.readAsText(file);
   });
+}
+
+const WORKSPACE_AUTOPILOT_ID = "autopilot";
+
+function workspaceEmptyPanel() {
+  return {
+    input: "",
+    answer: "",
+    attachments: [],
+    snapshotPlatform: "auto",
+    attachStoreSnapshot: false,
+    scrape: { enabled: false, platform: "", market: "", category: "", url: "" },
+  };
+}
+
+function workspaceBuildInitialPanels() {
+  const p = {};
+  p[WORKSPACE_AUTOPILOT_ID] = {
+    ...workspaceEmptyPanel(),
+    answer:
+      "登录后已开启 3 天免费试用（试用内可体验全部 Agent，5 Agent 运营与抓取另计每日额度）。请在本模块输入要求后由 OpenClaw 生成结果。",
+  };
+  for (const a of agents) {
+    p[a.id] = workspaceEmptyPanel();
+  }
+  return p;
+}
+
+function workspacePanelLabel(panelId) {
+  if (panelId === WORKSPACE_AUTOPILOT_ID) return "5 Agent 运营 · 一键生成";
+  return agents.find((x) => x.id === panelId)?.name || panelId;
+}
+
+function buildAttachmentContextFromList(attachments) {
+  if (!attachments?.length) return "";
+  return [
+    "",
+    "用户本地导入的附件：",
+    ...attachments.map((file, index) => {
+      const basic = `${index + 1}. ${file.name}（${file.type}，${Math.ceil(file.size / 1024)}KB）`;
+      if (file.content) {
+        return `${basic}\n文件文本内容摘录：\n${file.content}`;
+      }
+      if (file.isImage) {
+        return `${basic}\n（图片附件：请在对话中简要描述截图内容；当前模型以文本为主，未自动 OCR 图片像素。）`;
+      }
+      return `${basic}\n当前文件类型暂不自动解析内容，已作为附件信息提供。`;
+    }),
+  ].join("\n");
+}
+
+function NavigateInterruptModal({ runningLabel, targetLabel, onCancel, onConfirm }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onCancel}>
+      <section className="store-api-modal nav-confirm-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p>切换确认</p>
+            <h2>正在生成中</h2>
+          </div>
+          <button type="button" onClick={onCancel}>
+            关闭
+          </button>
+        </div>
+        <div className="store-guide-body">
+          <p>
+            「<strong>{runningLabel}</strong>」的请求尚未结束。若切换到「<strong>{targetLabel}</strong>」，将中断本次生成，未完成的输出将丢失。
+          </p>
+          <p>请确认不是误触。</p>
+          <div className="store-nudge-actions">
+            <button type="button" className="header-ghost" onClick={onCancel}>
+              留在当前
+            </button>
+            <button type="button" className="continue-checkout slim" onClick={onConfirm}>
+              仍要切换
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 const STORE_PLATFORM_ORDER = ["tiktok", "amazon", "shopify", "woocommerce"];
@@ -1131,6 +1298,7 @@ function isPlatformBlockReady(platform, block) {
 function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform, showToast, authHeaders }) {
   const [snapshotLoading, setSnapshotLoading] = useState(null);
   const [activePlatform, setActivePlatform] = useState("tiktok");
+  const [showGuide, setShowGuide] = useState(false);
 
   async function testSnapshot(platform) {
     const cfg = { platform, ...storeBlocks[platform] };
@@ -1180,7 +1348,12 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
             <p>Store API</p>
             <h2>配置店铺 API</h2>
           </div>
-          <button type="button" onClick={onClose}>关闭</button>
+          <div className="modal-head-actions">
+            <button type="button" className="header-ghost slim" onClick={() => setShowGuide(true)}>
+              申请指南（官方入口）
+            </button>
+            <button type="button" onClick={onClose}>关闭</button>
+          </div>
         </div>
         <div className="store-api-callout" role="note">
           <strong>强数据 Agent 建议配置</strong>
@@ -1267,13 +1440,16 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
             );
           })()}
         </div>
+        {showGuide ? <StoreApiGuideModal onClose={() => setShowGuide(false)} /> : null}
       </section>
     </div>
   );
 }
 
-function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
-  const [selectedPlanId, setSelectedPlanId] = useState("standard");
+function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user }) {
+  const [selectedPlanId, setSelectedPlanId] = useState(() =>
+    user?.plan && PAID_PLAN_IDS.has(user.plan) ? user.plan : "standard",
+  );
   const [checkoutPlan, setCheckoutPlan] = useState(null);
   const [checkoutOrder, setCheckoutOrder] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -1288,6 +1464,12 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
     if (status === "pending") return "待付款";
     return status || "未知";
   }
+
+  useEffect(() => {
+    if (user?.plan && PAID_PLAN_IDS.has(user.plan)) {
+      setSelectedPlanId(user.plan);
+    }
+  }, [user?.plan]);
 
   useEffect(() => {
     if (!checkoutPlan || checkoutPlan.id === "enterprise") {
@@ -1417,10 +1599,14 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
             </div>
             <div>
               <span>开通后权益</span>
-              <p>{checkoutPlan.features.join("、")}</p>
+              <ul className="checkout-feature-list">
+                {checkoutPlan.features.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
             </div>
             <div>
-              <span>功能权限</span>
+              <span>功能权限说明</span>
               <p>{checkoutPlan.access}</p>
             </div>
           </div>
@@ -1560,6 +1746,14 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
           <div>
             <p>Subscription</p>
             <h2>选择适合你的凡梦AI套餐</h2>
+            {user?.plan === "trial" && user?.trialActive ? (
+              <p className="subscription-status-line">当前为试用账号 · 订阅后按所选套餐保留调用额度与能力边界。</p>
+            ) : null}
+            {user?.plan && PAID_PLAN_IDS.has(user.plan) && user?.planName ? (
+              <p className="subscription-status-line">
+                已订阅：<strong>{user.planName}</strong> · 可选择更高档位升级或续订同档。
+              </p>
+            ) : null}
           </div>
           <button type="button" onClick={onClose}>关闭</button>
         </div>
@@ -1573,11 +1767,19 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
                 "sub-plan",
                 plan.recommended ? "recommended" : "",
                 selectedPlanId === plan.id ? "selected" : "",
-              ].filter(Boolean).join(" ")}
+                user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") ? "is-current-plan" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               key={plan.id}
               onClick={() => setSelectedPlanId(plan.id)}
             >
-              {plan.recommended && <span className="sub-badge">推荐</span>}
+              <div className="sub-plan-badges">
+                {plan.recommended ? <span className="sub-badge">推荐</span> : null}
+                {user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") ? (
+                  <span className="sub-badge sub-badge-current">当前套餐</span>
+                ) : null}
+              </div>
               {selectedPlanId === plan.id && <span className="selected-badge">已选中</span>}
               <h3>{plan.name}</h3>
               <p>{plan.desc}</p>
@@ -1600,18 +1802,253 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate }) {
                   </li>
                 ))}
               </ul>
-              <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedPlanId(plan.id); setCheckoutPlan(plan); }}>
-                {plan.id === "enterprise" ? "联系我们" : "选择套餐"}
+              <button
+                type="button"
+                disabled={
+                  plan.id !== "enterprise" &&
+                  user?.plan === plan.id &&
+                  PAID_PLAN_IDS.has(user.plan || "") &&
+                  user?.accessActive
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSelectedPlanId(plan.id);
+                  setCheckoutPlan(plan);
+                }}
+              >
+                {plan.id === "enterprise"
+                  ? "联系我们"
+                  : user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") && user?.accessActive
+                    ? "当前使用中"
+                    : "选择套餐"}
               </button>
             </article>
           ))}
         </div>
         {selectedPlan && (
-          <button className="continue-checkout" type="button" onClick={() => setCheckoutPlan(selectedPlan)}>
-            继续开通 {selectedPlan.name}
+          <button
+            className="continue-checkout"
+            type="button"
+            disabled={
+              selectedPlan.id !== "enterprise" &&
+              user?.plan === selectedPlan.id &&
+              PAID_PLAN_IDS.has(user.plan || "") &&
+              user?.accessActive
+            }
+            onClick={() => setCheckoutPlan(selectedPlan)}
+          >
+            {user?.plan === selectedPlan.id &&
+            PAID_PLAN_IDS.has(user.plan || "") &&
+            user?.accessActive
+              ? `已开通 ${selectedPlan.name}（去选择其他档位可升级）`
+              : `继续开通 ${selectedPlan.name}`}
           </button>
         )}
       </section>
+    </div>
+  );
+}
+
+function isMarkdownTableRow(line) {
+  const t = String(line || "").trim();
+  if (!t || !t.includes("|")) return false;
+  const cells = t.split("|");
+  return cells.length >= 3;
+}
+
+function parseMarkdownTableLines(lines) {
+  const rows = [];
+  for (const raw of lines) {
+    const line = String(raw || "").trim();
+    if (!isMarkdownTableRow(line)) continue;
+    if (/^\|?\s*:?-{3,}/.test(line.replace(/\|/g, "").trim())) continue;
+    const cells = line
+      .replace(/^\|/, "")
+      .replace(/\|$/, "")
+      .split("|")
+      .map((c) => c.trim());
+    if (cells.length) rows.push(cells);
+  }
+  return rows;
+}
+
+function StoreApiGuideModal({ onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="store-api-modal store-api-modal-guide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p>官方入口（请自行核对最新规则）</p>
+            <h2>店铺 Open API / 密钥申请指引</h2>
+          </div>
+          <button type="button" onClick={onClose}>关闭</button>
+        </div>
+        <div className="store-guide-body">
+          <p className="store-guide-disclaimer">
+            以下内容根据各平台<strong>公开文档</strong>整理，用于帮助卖家找到正确入口；<strong>资质、审核周期与收费以平台当时页面为准</strong>，本工具不代申、不承诺审核结果。
+          </p>
+
+          <article className="store-guide-card">
+            <h3>TikTok Shop（跨境电商开放平台）</h3>
+            <ol>
+              <li>使用 <a href="https://partner.tiktokshop.com/" target="_blank" rel="noreferrer">TikTok Shop Partner Center</a> 注册合作伙伴账号并完成入驻资料。</li>
+              <li>在开发者中心创建应用（公开应用或定制应用视你的业务模式而定），获取 <code>app key</code> 等凭证；卖家侧通常需在卖家中心完成<strong>授权</strong>以换取店铺级 <code>access_token</code>、<code>shop_cipher</code>。</li>
+              <li>接口与字段说明以 Open API 文档为准（Partner Center 内「文档」栏目）。</li>
+            </ol>
+            <p className="store-guide-li">
+              文档入口：<a href="https://partner.tiktokshop.com/doc" target="_blank" rel="noreferrer">partner.tiktokshop.com/doc</a>
+            </p>
+          </article>
+
+          <article className="store-guide-card">
+            <h3>Amazon（Selling Partner API, SP-API）</h3>
+            <ol>
+              <li>在卖家后台关联「开发者」身份，并按亚马逊流程<strong>注册应用</strong>；常见入口参见官方说明 <a href="https://developer-docs.amazon.com/sp-api/docs/registering-your-application" target="_blank" rel="noreferrer">Registering your application</a>。</li>
+              <li>新建开发者资料（Developer profile）并选择<strong>公开开发者或私有开发者</strong>路径；完成 LWA 安全客户端与 IAM 角色等配置。</li>
+              <li>卖家需通过授权流程颁发 <strong>refresh token</strong>，再配合 <code>sellerId</code>、站点 <code>marketplaceIds</code> 等调用 API。</li>
+            </ol>
+            <p className="store-guide-li">
+              总览：<a href="https://developer-docs.amazon.com/sp-api/docs/onboarding-overview" target="_blank" rel="noreferrer">SP-API 入驻总览</a>
+            </p>
+          </article>
+
+          <article className="store-guide-card">
+            <h3>Shopify（Admin API）</h3>
+            <ol>
+              <li>由店铺管理员在 Shopify 后台创建<strong>自定义应用（Custom app）</strong>并分配所需权限范围（scopes），见 <a href="https://help.shopify.com/en/manual/apps/app-types/custom-apps" target="_blank" rel="noreferrer">Shopify 帮助：自定义应用</a>。</li>
+              <li>安装应用后生成 <strong>Admin API access token</strong>；请求时在 Header 携带 <code>X-Shopify-Access-Token</code>（参见 <a href="https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/generate-app-access-tokens-admin" target="_blank" rel="noreferrer">生成 Admin 令牌</a>）。</li>
+              <li>店铺地址格式通常为 <code>https://你的店.myshopify.com</code>。</li>
+            </ol>
+            <p className="store-guide-note">Shopify 正逐步迁移至 Dev Dashboard；新建应用请以 Shopify 后台/文档当前指引为准。</p>
+          </article>
+
+          <article className="store-guide-card">
+            <h3>WooCommerce（REST API）</h3>
+            <ol>
+              <li>进入 WordPress 后台 <strong>WooCommerce → 设置 → 高级 → REST API</strong>（官方说明见 <a href="https://developer.woocommerce.com/docs/getting-started-with-the-woocommerce-rest-api/" target="_blank" rel="noreferrer">WooCommerce REST API 入门</a>）。</li>
+              <li>点击「添加密钥」，选择用户与权限（<strong>只读 / 读写</strong>），生成 <strong>Consumer Key</strong> 与 <strong>Consumer Secret</strong>（Secret 仅显示一次）。</li>
+              <li>在本产品中可将密钥以 <code>ck_xxx:cs_xxx</code> 形式填入 Token 字段；站点根地址填 WordPress 根 URL。</li>
+            </ol>
+            <p className="store-guide-li">
+              鉴权说明：<a href="https://developer.woocommerce.com/docs/apis/rest-api/authentication/" target="_blank" rel="noreferrer">REST API Authentication</a>
+            </p>
+          </article>
+
+          <p className="store-guide-foot">
+            若你的团队无开发能力，可由熟悉各平台后台的同事按上述入口申请；连接完成后在本工作台「配置店铺 API」中保存即可拉取只读快照（受平台与本工具实现范围限制）。
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const STORE_DATA_AGENT_IDS = ["growth", "service", "profit"];
+
+function StoreDataNudgeModal({ agentId, onClose, onOpenStoreApi }) {
+  const label =
+    agentId === "growth"
+      ? "店铺业绩诊断"
+      : agentId === "service"
+        ? "AI 客服售后"
+        : "广告库存利润";
+
+  function dismiss() {
+    try {
+      localStorage.setItem(`fanmeng_store_data_intro_v2_${agentId}`, "1");
+    } catch {
+      /* ignore */
+    }
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={dismiss}>
+      <section className="store-api-modal store-data-nudge" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <p>数据接入说明</p>
+            <h2>{label}</h2>
+          </div>
+          <button type="button" onClick={dismiss}>关闭</button>
+        </div>
+        <div className="store-guide-body">
+          <p>
+            该模块若对接<strong>店铺 Open API</strong>，可由服务端拉取订单/商品等<strong>只读样本</strong>辅助分析（视平台与你配置的权限而定）。
+          </p>
+          <p>
+            <strong>若不配置店铺 API</strong>，系统无法替你自动从后台实时抓数；请你通过<strong>后台截图</strong>、<strong>导出报表</strong>（CSV/Excel）等，在下方使用<strong>「本地导入」</strong>上传，或在输入框中粘贴关键数据，否则模型只能给出通用框架，难以贴合你店内的真实指标。
+          </p>
+          <div className="store-nudge-actions">
+            <button
+              type="button"
+              className="continue-checkout slim"
+              onClick={() => {
+                onOpenStoreApi();
+                dismiss();
+              }}
+            >
+              去配置店铺 API
+            </button>
+            <button type="button" className="header-ghost" onClick={dismiss}>
+              我知道了，稍后上传文件
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AdminGrantRow({ user, authHeaders, onReloadSummary, showToast }) {
+  const [planId, setPlanId] = useState(() => (user.plan && user.plan !== "trial" ? user.plan : "standard"));
+  const [days, setDays] = useState(30);
+  const [busy, setBusy] = useState(false);
+
+  async function grant() {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}/grant-subscription`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ planId, days: Number(days) || 30 }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast(`已为 ${user.email} 开通套餐 ${planId}（${days} 天）。`);
+      await onReloadSummary();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="admin-grant-row">
+      <div className="admin-grant-meta">
+        <strong>{user.email}</strong>
+        <span>{user.planName} · {user.accessActive ? "当前可访问" : "未订阅或已过期"}</span>
+      </div>
+      <select className="admin-grant-select" value={planId} onChange={(e) => setPlanId(e.target.value)} aria-label="套餐">
+        <option value="starter">尝鲜版 starter</option>
+        <option value="standard">标准版 standard</option>
+        <option value="managed">全托版 managed</option>
+        <option value="enterprise">企业版 enterprise</option>
+      </select>
+      <label className="admin-grant-days">
+        天数
+        <input
+          type="number"
+          min={1}
+          max={730}
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value))}
+        />
+      </label>
+      <button type="button" className="admin-grant-btn" disabled={busy} onClick={grant}>
+        {busy ? "…" : "授权开通"}
+      </button>
     </div>
   );
 }
@@ -1753,31 +2190,108 @@ function StructuredAgentPreview({ agentId }) {
   return null;
 }
 
-function ResultDocument({ content }) {
+function renderDocumentLines(lines) {
+  return lines.map((line, index) => {
+    const trimmed = String(line || "").trim();
+    if (!trimmed) return null;
+
+    const normalized = trimmed.replace(/^#{1,6}\s*/, "");
+
+    if (/^#{1,6}\s+/.test(trimmed) || /^[一二三四五六七八九十]+[、.]/.test(trimmed)) {
+      return <h3 key={`h-${index}`}>{normalized}</h3>;
+    }
+
+    if (/^[-*]\s+/.test(trimmed) || /^\d+[.)、]\s*/.test(trimmed)) {
+      return (
+        <p className="doc-list-item" key={`li-${index}`}>
+          {trimmed.replace(/^[-*]\s+/, "").replace(/^\d+[.)、]\s*/, "")}
+        </p>
+      );
+    }
+
+    if (/[:：]$/.test(trimmed) && trimmed.length < 32) {
+      return <h4 key={`h4-${index}`}>{trimmed}</h4>;
+    }
+
+    return <p key={`p-${index}`}>{trimmed}</p>;
+  });
+}
+
+function ResultDocument({ content, streaming }) {
+  if (streaming && (!content || !String(content).trim())) {
+    return (
+      <article className="result-document is-generating" aria-busy="true">
+        <p className="generating-hint">正在生成，请稍候…</p>
+      </article>
+    );
+  }
+
   if (!content) {
     return <div className="result-empty">等待输入要求...</div>;
   }
 
-  const lines = content.split("\n").map((line) => line.trim()).filter(Boolean);
+  const text = String(content);
+  const rawLines = text.split("\n");
+  const segments = [];
+  let i = 0;
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+    if (isMarkdownTableRow(line)) {
+      const tableLines = [];
+      while (i < rawLines.length && isMarkdownTableRow(rawLines[i])) tableLines.push(rawLines[i++]);
+      segments.push({ type: "table", lines: tableLines });
+    } else {
+      const chunk = [];
+      while (i < rawLines.length && !isMarkdownTableRow(rawLines[i])) chunk.push(rawLines[i++]);
+      if (chunk.length) segments.push({ type: "text", lines: chunk });
+    }
+  }
 
   return (
-    <article className="result-document">
-      {lines.map((line, index) => {
-        const normalized = line.replace(/^#{1,6}\s*/, "");
-
-        if (/^#{1,6}\s+/.test(line) || /^[一二三四五六七八九十]+[、.]/.test(line)) {
-          return <h3 key={`${line}-${index}`}>{normalized}</h3>;
+    <article className={`result-document ${streaming ? "is-generating" : ""}`} aria-busy={streaming ? "true" : undefined}>
+      {segments.map((seg, idx) => {
+        if (seg.type === "table") {
+          const rows = parseMarkdownTableLines(seg.lines);
+          if (rows.length < 2) {
+            return (
+              <div key={`tbl-fallback-${idx}`} className="result-table-fallback">
+                {seg.lines.map((l, j) => (
+                  <p key={j}>{l}</p>
+                ))}
+              </div>
+            );
+          }
+          const [header, ...body] = rows;
+          const colCount = header.length;
+          const normalizedBody = body.map((row) => {
+            const padded = [...row];
+            while (padded.length < colCount) padded.push("");
+            return padded.slice(0, colCount);
+          });
+          return (
+            <div key={`tbl-${idx}`} className="result-table-wrap">
+              <table className="result-md-table">
+                <thead>
+                  <tr>
+                    {header.map((cell, c) => (
+                      <th key={c}>{cell}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {normalizedBody.map((row, r) => (
+                    <tr key={r}>
+                      {row.map((cell, c) => (
+                        <td key={c}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
         }
-
-        if (/^[-*]\s+/.test(line) || /^\d+[.)、]\s*/.test(line)) {
-          return <p className="doc-list-item" key={`${line}-${index}`}>{line.replace(/^[-*]\s+/, "").replace(/^\d+[.)、]\s*/, "")}</p>;
-        }
-
-        if (/[:：]$/.test(line) && line.length < 32) {
-          return <h4 key={`${line}-${index}`}>{line}</h4>;
-        }
-
-        return <p key={`${line}-${index}`}>{line}</p>;
+        return <div key={`txt-${idx}`}>{renderDocumentLines(seg.lines)}</div>;
       })}
     </article>
   );
@@ -1838,11 +2352,14 @@ function AdminModal({ summary, onClose, authHeaders, onReloadSummary, showToast 
           ))}
         </div>
         <div className="admin-sections">
-          <section>
-            <h3>最近用户</h3>
-            {(summary.users || []).slice(0, 8).map((item) => (
-              <p key={item.id}>{item.email} · {item.planName} · {item.accessActive ? "可用" : "已过期"}</p>
-            ))}
+          <section className="admin-grant-section">
+            <h3>手动授权套餐（线下收款 / 对公确认后）</h3>
+            <p className="admin-hint">选择用户、套餐与订阅天数后点击「授权开通」。若需仅你自己能进后台，在服务端 .env 配置 <code>ADMIN_EMAILS=你的邮箱</code> 并重启服务。</p>
+            <div className="admin-grant-list">
+              {(summary.users || []).map((u) => (
+                <AdminGrantRow key={u.id} user={u} authHeaders={authHeaders} onReloadSummary={onReloadSummary} showToast={showToast} />
+              ))}
+            </div>
           </section>
           <section className="admin-orders-section">
             <h3>订单与收款</h3>
@@ -1884,8 +2401,27 @@ function AdminModal({ summary, onClose, authHeaders, onReloadSummary, showToast 
   );
 }
 
+function AuthEntryShell({ onBackHome, children }) {
+  return (
+    <div className="auth-standalone-shell">
+      <header className="auth-standalone-top" role="banner">
+        <button type="button" className="auth-standalone-brand" onClick={onBackHome}>
+          <span className="brand-mark">
+            <Sparkles size={18} />
+          </span>
+          凡梦AI
+        </button>
+        <button type="button" className="pub-btn pub-btn-ghost" onClick={onBackHome}>
+          返回官网
+        </button>
+      </header>
+      {children}
+    </div>
+  );
+}
+
 function Workspace() {
-  const [activeId, setActiveId] = useState("autopilot");
+  const [activeId, setActiveId] = useState(WORKSPACE_AUTOPILOT_ID);
   const [isBetaMode, setIsBetaMode] = useState(() => new URLSearchParams(window.location.search).get("beta") === "1");
   const [token, setToken] = useState(() => localStorage.getItem("fanmeng_token") || "");
   const [user, setUser] = useState(null);
@@ -1898,32 +2434,67 @@ function Workspace() {
   const [historyQuery, setHistoryQuery] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem("fanmeng_onboarding_done") !== "1");
   const [toast, setToast] = useState("");
+  const [panels, setPanels] = useState(workspaceBuildInitialPanels);
   const [isRunning, setIsRunning] = useState(false);
-  const [answer, setAnswer] = useState("登录后已开启 3 天免费试用（试用内可体验全部 Agent，全自动与抓取另计每日额度）。请选择左侧模块，输入要求后由 OpenClaw 生成结果。");
-  const [input, setInput] = useState("");
-  const [autoInput, setAutoInput] = useState("");
-  const [scrapeConfig, setScrapeConfig] = useState({
-    enabled: false,
-    platform: "",
-    market: "",
-    category: "",
-    url: "",
-  });
+  const [runningPanelId, setRunningPanelId] = useState(null);
+  const [navConfirm, setNavConfirm] = useState(null);
+  const fetchAbortRef = useRef(null);
+  const suppressNextAbortPanelPatchRef = useRef(false);
+  const panelsRef = useRef(panels);
   const [storeBlocks, setStoreBlocks] = useState(defaultStoreBlocks);
-  const [snapshotPlatform, setSnapshotPlatform] = useState("auto");
-  const [attachStoreSnapshot, setAttachStoreSnapshot] = useState(false);
-  const [attachments, setAttachments] = useState([]);
-  const [landingAuthMode, setLandingAuthMode] = useState("login");
-  const [landingAuthKey, setLandingAuthKey] = useState(0);
-  const [caseSlug, setCaseSlug] = useState(() => readCaseSlugFromHash());
+  const [routeHash, setRouteHash] = useState(readRouteHash);
+  const [storeDataNudge, setStoreDataNudge] = useState(null);
 
-  const activeAgent = useMemo(() => agents.find((agent) => agent.id === activeId), [activeId]);
+  const caseSlug = useMemo(() => parseCaseSlugFromHash(routeHash), [routeHash]);
+  const authEntryMode = useMemo(() => {
+    if (routeHash === "register") return "register";
+    if (routeHash === "login") return "login";
+    return null;
+  }, [routeHash]);
+  const landingScrollId = useMemo(() => {
+    if (authEntryMode || caseSlug) return null;
+    if (!routeHash) return null;
+    const ids = new Set(["flow", "capabilities", "cases", "trust", "pricing-preview", "trial-explainer", "top"]);
+    return ids.has(routeHash) ? routeHash : null;
+  }, [routeHash, authEntryMode, caseSlug]);
+
+  const activeAgent = useMemo(() => (activeId === WORKSPACE_AUTOPILOT_ID ? null : agents.find((agent) => agent.id === activeId)), [activeId]);
+  const panel = panels[activeId] || workspaceEmptyPanel();
   const visibleTasks = useMemo(
     () => tasks.filter((task) => task.type === activeId && `${task.title} ${task.input} ${task.answer}`.toLowerCase().includes(historyQuery.toLowerCase())),
     [tasks, activeId, historyQuery],
   );
   const storeConnected = STORE_PLATFORM_ORDER.some((p) => isPlatformBlockReady(p, storeBlocks[p]));
   const accessActive = isBetaMode || user?.accessActive;
+
+  useEffect(() => {
+    panelsRef.current = panels;
+  }, [panels]);
+
+  const wasRunningRef = useRef(false);
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && navConfirm) {
+      setNavConfirm(null);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, navConfirm]);
+
+  useEffect(() => {
+    if (activeId === WORKSPACE_AUTOPILOT_ID || !STORE_DATA_AGENT_IDS.includes(activeId)) {
+      setStoreDataNudge(null);
+      return;
+    }
+    const key = `fanmeng_store_data_intro_v2_${activeId}`;
+    try {
+      if (localStorage.getItem(key)) {
+        setStoreDataNudge(null);
+        return;
+      }
+    } catch {
+      /* continue */
+    }
+    setStoreDataNudge(activeId);
+  }, [activeId]);
 
   useEffect(() => {
     if (!token) return;
@@ -1960,7 +2531,7 @@ function Workspace() {
   }, [token, user?.trialEndingSoon, isBetaMode]);
 
   useEffect(() => {
-    const handler = () => setCaseSlug(readCaseSlugFromHash());
+    const handler = () => setRouteHash(readRouteHash());
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
   }, []);
@@ -1975,6 +2546,8 @@ function Workspace() {
     setToken(data.token);
     setUser(data.user);
     setTasks(data.tasks || []);
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    setRouteHash(readRouteHash());
   }
 
   function logout() {
@@ -1982,6 +2555,8 @@ function Workspace() {
     setToken("");
     setUser(null);
     setTasks([]);
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    setRouteHash(readRouteHash());
   }
 
   function authHeaders() {
@@ -2005,22 +2580,14 @@ function Workspace() {
     setUser(nextUser);
   }
 
-  function scrollAccountIntoView() {
-    window.requestAnimationFrame(() => {
-      document.getElementById("account")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
   function goPublicLogin() {
-    setLandingAuthMode("login");
-    setLandingAuthKey((k) => k + 1);
-    scrollAccountIntoView();
+    window.location.hash = "login";
+    window.scrollTo(0, 0);
   }
 
   function goPublicRegister() {
-    setLandingAuthMode("register");
-    setLandingAuthKey((k) => k + 1);
-    scrollAccountIntoView();
+    window.location.hash = "register";
+    window.scrollTo(0, 0);
   }
 
   function goMarketingHome() {
@@ -2029,23 +2596,8 @@ function Workspace() {
   }
 
   function goMarketingCases() {
-    window.location.hash = "#cases";
-    window.requestAnimationFrame(() => {
-      document.getElementById("cases")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    window.location.hash = "cases";
   }
-
-  useEffect(() => {
-    if (token) return;
-    const raw = window.location.hash.replace(/^#/, "");
-    if (raw === "register" || raw === "login") {
-      setLandingAuthMode(raw === "register" ? "register" : "login");
-      setLandingAuthKey((k) => k + 1);
-      window.requestAnimationFrame(() => {
-        document.getElementById("account")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  }, [token]);
 
   if (!token) {
     if (caseSlug) {
@@ -2069,16 +2621,19 @@ function Workspace() {
         />
       );
     }
+    if (authEntryMode) {
+      return (
+        <AuthEntryShell onBackHome={goMarketingHome}>
+          <LoginScreen onLogin={handleLogin} authRouteHash={authEntryMode} />
+        </AuthEntryShell>
+      );
+    }
     return (
-      <>
-        <PublicLanding onLoginClick={goPublicLogin} onRegisterClick={goPublicRegister} />
-        <LoginScreen
-          onLogin={handleLogin}
-          layout="stacked"
-          preferredAuthMode={landingAuthMode}
-          preferredAuthKey={landingAuthKey}
-        />
-      </>
+      <PublicLanding
+        onLoginClick={goPublicLogin}
+        onRegisterClick={goPublicRegister}
+        scrollSectionId={landingScrollId}
+      />
     );
   }
 
@@ -2092,22 +2647,79 @@ function Workspace() {
     return Boolean(features[feature]);
   }
 
+  function patchPanel(panelId, updater) {
+    setPanels((prev) => {
+      const cur = prev[panelId] || workspaceEmptyPanel();
+      const next = typeof updater === "function" ? updater(cur) : { ...cur, ...updater };
+      return { ...prev, [panelId]: next };
+    });
+  }
+
+  function applyTaskToPanel(task) {
+    setActiveId(task.type);
+    setPanels((prev) => ({
+      ...prev,
+      [task.type]: {
+        ...(prev[task.type] || workspaceEmptyPanel()),
+        answer: task.answer,
+        input: task.input ?? (prev[task.type]?.input ?? ""),
+      },
+    }));
+  }
+
+  function requestNavigateTo(targetId, task = null) {
+    if (task) {
+      if (!isRunning) {
+        applyTaskToPanel(task);
+        return;
+      }
+      setNavConfirm({ targetId: task.type, task });
+      return;
+    }
+    if (targetId === activeId) return;
+    if (!isRunning) {
+      setActiveId(targetId);
+      return;
+    }
+    setNavConfirm({ targetId, task: null });
+  }
+
+  function confirmInterruptNavigation() {
+    suppressNextAbortPanelPatchRef.current = true;
+    fetchAbortRef.current?.abort();
+    fetchAbortRef.current = null;
+    setIsRunning(false);
+    setRunningPanelId(null);
+    const pending = navConfirm;
+    setNavConfirm(null);
+    if (!pending) return;
+    if (pending.task) {
+      applyTaskToPanel(pending.task);
+    } else {
+      setActiveId(pending.targetId);
+    }
+  }
+
+  function cancelInterruptNavigation() {
+    setNavConfirm(null);
+  }
+
   function selectAgent(id) {
     if (!hasFeature("agent", id)) {
-      showToast("当前套餐不支持该 Agent，请升级到标准版或更高套餐。");
+      const name = agents.find((a) => a.id === id)?.name || "该模块";
+      showToast(
+        user?.plan === "starter"
+          ? `「${name}」需标准版及以上。尝鲜版包含选品、内容、Listing 三个模块。`
+          : `「${name}」未包含在当前套餐中，请升级以解锁。`,
+      );
       setShowSubscription(true);
       return;
     }
-
-    setActiveId(id);
-    setAnswer("");
-    setInput("");
+    requestNavigateTo(id);
   }
 
   function openTaskHistory(task) {
-    setActiveId(task.type);
-    setAnswer(task.answer);
-    setInput("");
+    requestNavigateTo(task.type, task);
   }
 
   async function saveStorePlatform(platform) {
@@ -2149,15 +2761,16 @@ function Workspace() {
   }
 
   function copyAnswer() {
-    navigator.clipboard.writeText(answer || "");
+    navigator.clipboard.writeText(panel.answer || "");
     showToast("结果已复制。");
   }
 
   function downloadAnswer(format) {
     const extension = format === "html" ? "html" : "md";
+    const body = panel.answer || "";
     const content = format === "html"
-      ? `<!doctype html><meta charset="utf-8"><title>凡梦AI结果</title><article>${(answer || "").split("\n").map((line) => `<p>${line}</p>`).join("")}</article>`
-      : `# 凡梦AI生成结果\n\n${answer || ""}`;
+      ? `<!doctype html><meta charset="utf-8"><title>凡梦AI结果</title><article>${body.split("\n").map((line) => `<p>${line}</p>`).join("")}</article>`
+      : `# 凡梦AI生成结果\n\n${body}`;
     const blob = new Blob([content], { type: format === "html" ? "text/html;charset=utf-8" : "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -2199,45 +2812,39 @@ function Workspace() {
     const files = Array.from(event.target.files || []);
     const nextAttachments = await Promise.all(
       files.map(async (file) => {
+        const id = crypto.randomUUID();
         const isReadableText =
           file.type.startsWith("text/") ||
           /\.(csv|json|md|txt|log|html|xml)$/i.test(file.name);
         const content = isReadableText ? (await readFileAsText(file)).slice(0, 12000) : "";
+        let previewUrl = "";
+        if (file.type.startsWith("image/")) {
+          previewUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(file);
+          });
+        }
 
         return {
+          id,
           name: file.name,
           type: file.type || "未知类型",
           size: file.size,
           content,
           isImage: file.type.startsWith("image/"),
+          previewUrl,
         };
       }),
     );
 
-    setAttachments(nextAttachments);
+    patchPanel(activeId, (prev) => ({ ...prev, attachments: [...prev.attachments, ...nextAttachments] }));
     event.target.value = "";
   }
 
-  function buildAttachmentContext() {
-    if (!attachments.length) return "";
-
-    return [
-      "",
-      "用户本地导入的附件：",
-      ...attachments.map((file, index) => {
-        const basic = `${index + 1}. ${file.name}（${file.type}，${Math.ceil(file.size / 1024)}KB）`;
-
-        if (file.content) {
-          return `${basic}\n文件文本内容摘录：\n${file.content}`;
-        }
-
-        if (file.isImage) {
-          return `${basic}\n这是图片附件。当前版本先记录图片信息；后续接入视觉模型后可自动识别图片内容。`;
-        }
-
-        return `${basic}\n当前文件类型暂不自动解析内容，已作为附件信息提供。`;
-      }),
-    ].join("\n");
+  function removeAttachment(id) {
+    patchPanel(activeId, (prev) => ({ ...prev, attachments: prev.attachments.filter((f) => f.id !== id) }));
   }
 
   async function runAutopilot() {
@@ -2248,37 +2855,59 @@ function Workspace() {
     }
 
     if (!hasFeature("autopilot")) {
-      showToast("当前套餐不支持 6 Agent 全自动运行，请升级套餐。");
+      showToast("「5 Agent 运营一键生成」需标准版及以上；尝鲜版不包含。");
       setShowSubscription(true);
       return;
     }
 
-    if (scrapeConfig.enabled && !hasFeature("scraper")) {
-      showToast("当前套餐不支持实时抓取数据源，请升级到标准版或更高套餐。");
+    const p = panelsRef.current[WORKSPACE_AUTOPILOT_ID] || workspaceEmptyPanel();
+    if (p.scrape.enabled && !hasFeature("scraper")) {
+      showToast("公开页参考抓取（Playwright）需标准版及以上套餐。");
       setShowSubscription(true);
       return;
     }
 
+    const ac = new AbortController();
+    fetchAbortRef.current?.abort();
+    fetchAbortRef.current = ac;
+    const panelId = WORKSPACE_AUTOPILOT_ID;
     setIsRunning(true);
-    setAnswer("OpenClaw 正在按 6 个业务模块生成结构化方案（单轮输出，各模块自洽）...");
+    setRunningPanelId(panelId);
+    patchPanel(panelId, {
+      answer: "OpenClaw 正在按 5 个运营模块生成结构化方案（单轮输出；不含客服自动应答）...",
+    });
     try {
       const response = await fetch("/api/autopilot/run", {
         method: "POST",
         headers: authHeaders(),
+        signal: ac.signal,
         body: JSON.stringify({
-          input: `${autoInput || "用户未填写具体要求，请先提示用户补充平台、市场、类目和目标。"}${buildAttachmentContext()}`,
-          scrape: scrapeConfig.enabled ? scrapeConfig : { enabled: false },
+          input: `${p.input || "用户未填写具体要求，请先提示用户补充平台、市场、类目和目标。"}${buildAttachmentContextFromList(p.attachments)}`,
+          scrape: p.scrape.enabled ? p.scrape : { enabled: false },
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setAnswer(data.answer);
+      patchPanel(panelId, { answer: data.answer });
       if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
       void refreshMeProfile();
     } catch (error) {
-      setAnswer(formatError(error));
+      if (error?.name === "AbortError") {
+        if (!suppressNextAbortPanelPatchRef.current) {
+          patchPanel(panelId, (cur) => ({
+            ...cur,
+            answer: cur.answer.includes("正在按 5 个运营模块") ? "已取消生成。" : cur.answer,
+          }));
+        } else {
+          suppressNextAbortPanelPatchRef.current = false;
+        }
+      } else {
+        patchPanel(panelId, { answer: formatError(error) });
+      }
     } finally {
+      if (fetchAbortRef.current === ac) fetchAbortRef.current = null;
       setIsRunning(false);
+      setRunningPanelId(null);
     }
   }
 
@@ -2290,55 +2919,70 @@ function Workspace() {
     }
 
     if (!hasFeature("agent", activeAgent.id)) {
-      showToast("当前套餐不支持该 Agent，请升级套餐。");
+      const name = activeAgent.name;
+      showToast(
+        user?.plan === "starter"
+          ? `「${name}」需标准版及以上。尝鲜版包含选品、内容、Listing 三个模块。`
+          : `「${name}」未包含在当前套餐中，请升级以解锁。`,
+      );
       setShowSubscription(true);
       return;
     }
 
-    if (scrapeConfig.enabled && !hasFeature("scraper")) {
-      showToast("当前套餐不支持实时抓取数据源，请升级到标准版或更高套餐。");
+    const panelId = activeAgent.id;
+    const p = panelsRef.current[panelId] || workspaceEmptyPanel();
+    if (p.scrape.enabled && !hasFeature("scraper")) {
+      showToast("公开页参考抓取（Playwright）需标准版及以上套餐。");
       setShowSubscription(true);
       return;
     }
 
-    if (!isBetaMode && activeAgent?.requiresStoreApi && !storeConnected) {
-      if (user?.plan === "trial" && user?.trialActive) {
-        showToast("试用已开放该 Agent：建议配置店铺 API 或在输入框粘贴数据，结果会更贴近真实经营。");
-      } else {
-        showToast("该 Agent 需要先配置店铺 API。");
-        setShowStoreApiModal(true);
-        return;
-      }
-    }
-
+    const ac = new AbortController();
+    fetchAbortRef.current?.abort();
+    fetchAbortRef.current = ac;
     setIsRunning(true);
-    setAnswer(`${activeAgent.name} 正在由 OpenClaw 接管执行...`);
+    setRunningPanelId(panelId);
+    patchPanel(panelId, { answer: `${activeAgent.name} 正在由 OpenClaw 接管执行...` });
     try {
       const response = await fetch("/api/agents/run", {
         method: "POST",
         headers: authHeaders(),
+        signal: ac.signal,
         body: JSON.stringify({
           agentId: activeAgent.id,
           input: [
-            input,
-            buildAttachmentContext(),
+            p.input,
+            buildAttachmentContextFromList(p.attachments),
             storeConnected ? `\n店铺 API 已分平台配置：${storeApiSummary}。` : "",
           ].join(""),
-          scrape: activeAgent.id === "trend" && scrapeConfig.enabled ? scrapeConfig : { enabled: false },
+          scrape: activeAgent.id === "trend" && p.scrape.enabled ? p.scrape : { enabled: false },
           useStoreSnapshot:
-            attachStoreSnapshot && ["growth", "service", "profit"].includes(activeAgent.id) && storeConnected,
-          storeSnapshotPlatform: snapshotPlatform === "auto" ? undefined : snapshotPlatform,
+            p.attachStoreSnapshot && ["growth", "service", "profit"].includes(activeAgent.id) && storeConnected,
+          storeSnapshotPlatform: p.snapshotPlatform === "auto" ? undefined : p.snapshotPlatform,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setAnswer(data.answer);
+      patchPanel(panelId, { answer: data.answer });
       if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
       void refreshMeProfile();
     } catch (error) {
-      setAnswer(formatError(error));
+      if (error?.name === "AbortError") {
+        if (!suppressNextAbortPanelPatchRef.current) {
+          patchPanel(panelId, (cur) => ({
+            ...cur,
+            answer: cur.answer.includes("正在由 OpenClaw 接管执行") ? "已取消生成。" : cur.answer,
+          }));
+        } else {
+          suppressNextAbortPanelPatchRef.current = false;
+        }
+      } else {
+        patchPanel(panelId, { answer: formatError(error) });
+      }
     } finally {
+      if (fetchAbortRef.current === ac) fetchAbortRef.current = null;
       setIsRunning(false);
+      setRunningPanelId(null);
     }
   }
 
@@ -2359,7 +3003,7 @@ function Workspace() {
   }
 
   const ActiveIcon = activeAgent?.icon || Rocket;
-  const canUseScraper = activeId === "autopilot" || activeAgent?.id === "trend";
+  const canUseScraper = activeId === WORKSPACE_AUTOPILOT_ID || activeAgent?.id === "trend";
 
   const storeApiSummary = storeConnected
     ? STORE_PLATFORM_ORDER.filter((p) => isPlatformBlockReady(p, storeBlocks[p]))
@@ -2370,8 +3014,17 @@ function Workspace() {
   return (
     <main className="app-shell">
       {toast && <div className="toast-message">{toast}</div>}
+      {navConfirm ? (
+        <NavigateInterruptModal
+          runningLabel={workspacePanelLabel(runningPanelId || activeId)}
+          targetLabel={workspacePanelLabel(navConfirm.task ? navConfirm.task.type : navConfirm.targetId)}
+          onCancel={cancelInterruptNavigation}
+          onConfirm={confirmInterruptNavigation}
+        />
+      ) : null}
       {showSubscription && (
         <SubscriptionModal
+          user={user}
           onClose={() => setShowSubscription(false)}
           showToast={showToast}
           authHeaders={authHeaders}
@@ -2411,6 +3064,13 @@ function Workspace() {
           authHeaders={authHeaders}
         />
       )}
+      {storeDataNudge && (
+        <StoreDataNudgeModal
+          agentId={storeDataNudge}
+          onClose={() => setStoreDataNudge(null)}
+          onOpenStoreApi={() => setShowStoreApiModal(true)}
+        />
+      )}
       <aside className="app-sidebar">
         <div className="app-brand">
           <span className="brand-mark">
@@ -2429,7 +3089,7 @@ function Workspace() {
           {!isBetaMode && user?.trialActive && user?.trialQuota && (
             <div className="trial-quota">
               <span>试用额度 今日 {user.trialQuota.todayTotal}/{user.trialQuota.todayDailyCap} · 累计 {user.trialQuota.lifetimeUsed}/{user.trialQuota.lifetimeCap}</span>
-              <span>全自动 {user.trialQuota.autopilotToday}/{user.trialQuota.autopilotCap}/日 · 抓取 {user.trialQuota.scrapeToday}/{user.trialQuota.scrapeCap}/日</span>
+              <span>5 Agent 运营 {user.trialQuota.autopilotToday}/{user.trialQuota.autopilotCap}/日 · 抓取 {user.trialQuota.scrapeToday}/{user.trialQuota.scrapeCap}/日</span>
             </div>
           )}
           {!isBetaMode && !user?.trialActive && user?.plan === "trial" && <em>试用期结束，请订阅后继续使用</em>}
@@ -2441,12 +3101,15 @@ function Workspace() {
           <button type="button" onClick={logout}>退出登录</button>
         </div>
 
-        <button className={activeId === "autopilot" ? "side-item active" : "side-item"} onClick={() => setActiveId("autopilot")}>
+        <button
+          className={activeId === WORKSPACE_AUTOPILOT_ID ? "side-item active" : "side-item"}
+          onClick={() => requestNavigateTo(WORKSPACE_AUTOPILOT_ID)}
+        >
           <span>
             <Rocket size={19} />
           </span>
           <div>
-            <strong>6 Agent 全自动运行</strong>
+            <strong>5 Agent 运营 · 一键生成</strong>
             <small>输入平台/市场/类目，一键生成完整方案</small>
           </div>
         </button>
@@ -2467,7 +3130,7 @@ function Workspace() {
           );
         })}
 
-        <div className="side-label">{activeId === "autopilot" ? "全自动运行历史" : `${activeAgent?.name}历史`}</div>
+        <div className="side-label">{activeId === WORKSPACE_AUTOPILOT_ID ? "5 Agent 运营历史" : `${activeAgent?.name}历史`}</div>
         <input className="history-search" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder="搜索历史任务" />
         <div className="history-list">
           {visibleTasks.length ? (
@@ -2497,7 +3160,7 @@ function Workspace() {
           <div className="work-header-inner">
             <div>
               <p>OpenClaw Agent Console</p>
-              <h2>{activeId === "autopilot" ? "6 Agent 全自动运行" : activeAgent.name}</h2>
+              <h2>{activeId === WORKSPACE_AUTOPILOT_ID ? "5 Agent 运营 · 一键生成" : activeAgent.name}</h2>
             </div>
             <div className="header-actions">
               <div className={isBetaMode ? "trial-pill beta" : "trial-pill"}>
@@ -2543,8 +3206,8 @@ function Workspace() {
                 <ActiveIcon size={24} />
               </div>
               <div>
-                <h3>{activeId === "autopilot" ? "自动生成结果" : `${activeAgent.name} 输出`}</h3>
-                <p>{activeId === "autopilot" ? "单次回复内按选品、内容、Listing、业绩、客服、利润六段结构化输出；非独立多 Agent 实时调度。" : activeAgent.desc}</p>
+                <h3>{activeId === WORKSPACE_AUTOPILOT_ID ? "自动生成结果" : `${activeAgent.name} 输出`}</h3>
+                <p>{activeId === WORKSPACE_AUTOPILOT_ID ? "单轮回复内依次输出：选品、内容、Listing、业绩诊断、广告库存利润；不含「AI 客服自动应答」（请在左侧单独使用客服 Agent 生成话术）。适合需要表格时请模型输出 Markdown 表格。" : activeAgent.desc}</p>
               </div>
               <div className="output-actions">
                 <button type="button" onClick={copyAnswer}>复制</button>
@@ -2553,7 +3216,7 @@ function Workspace() {
               </div>
             </div>
             <StructuredAgentPreview agentId={activeAgent?.id} />
-            <ResultDocument content={answer} />
+            <ResultDocument content={panel.answer} streaming={isRunning && runningPanelId === activeId} />
           </section>
         </div>
 
@@ -2563,26 +3226,70 @@ function Workspace() {
               <label className="scrape-toggle">
                 <input
                   type="checkbox"
-                  checked={scrapeConfig.enabled}
-                  onChange={(event) => setScrapeConfig({ ...scrapeConfig, enabled: event.target.checked })}
+                  checked={panel.scrape.enabled}
+                  onChange={(event) =>
+                    patchPanel(activeId, (prev) => ({
+                      ...prev,
+                      scrape: { ...prev.scrape, enabled: event.target.checked },
+                    }))
+                  }
                 />
-                启用 Python/Playwright 公开页面参考数据（非官方实时，易失败或被反爬，仅供参考）
+                启用 Python/Playwright 公开页面参考数据（非官方实时，可能失败或受站点反爬影响）
               </label>
-              {scrapeConfig.enabled && (
+              {panel.scrape.enabled && (
                 <div className="scrape-fields">
-                  <input value={scrapeConfig.platform} onChange={(event) => setScrapeConfig({ ...scrapeConfig, platform: event.target.value })} placeholder="例：TikTok Shop" />
-                  <input value={scrapeConfig.market} onChange={(event) => setScrapeConfig({ ...scrapeConfig, market: event.target.value })} placeholder="例：美国" />
-                  <input value={scrapeConfig.category} onChange={(event) => setScrapeConfig({ ...scrapeConfig, category: event.target.value })} placeholder="例：宠物用品" />
-                  <input value={scrapeConfig.url} onChange={(event) => setScrapeConfig({ ...scrapeConfig, url: event.target.value })} placeholder="例：https://www.tiktokshuju.com/goods/hot-sale" />
+                  <input
+                    value={panel.scrape.platform}
+                    onChange={(event) =>
+                      patchPanel(activeId, (prev) => ({
+                        ...prev,
+                        scrape: { ...prev.scrape, platform: event.target.value },
+                      }))
+                    }
+                    placeholder="例：TikTok Shop"
+                  />
+                  <input
+                    value={panel.scrape.market}
+                    onChange={(event) =>
+                      patchPanel(activeId, (prev) => ({
+                        ...prev,
+                        scrape: { ...prev.scrape, market: event.target.value },
+                      }))
+                    }
+                    placeholder="例：美国"
+                  />
+                  <input
+                    value={panel.scrape.category}
+                    onChange={(event) =>
+                      patchPanel(activeId, (prev) => ({
+                        ...prev,
+                        scrape: { ...prev.scrape, category: event.target.value },
+                      }))
+                    }
+                    placeholder="例：宠物用品"
+                  />
+                  <input
+                    value={panel.scrape.url}
+                    onChange={(event) =>
+                      patchPanel(activeId, (prev) => ({
+                        ...prev,
+                        scrape: { ...prev.scrape, url: event.target.value },
+                      }))
+                    }
+                    placeholder="例：https://www.tiktokshuju.com/goods/hot-sale"
+                  />
                 </div>
               )}
             </div>
           )}
-          {activeAgent?.requiresStoreApi && activeId !== "autopilot" && (
+          {activeAgent?.requiresStoreApi && activeId !== WORKSPACE_AUTOPILOT_ID && (
             <div className="store-snapshot-row">
               <label className="store-snapshot-label">
                 <span>快照来源</span>
-                <select value={snapshotPlatform} onChange={(e) => setSnapshotPlatform(e.target.value)}>
+                <select
+                  value={panel.snapshotPlatform}
+                  onChange={(e) => patchPanel(activeId, { snapshotPlatform: e.target.value })}
+                >
                   <option value="auto">自动（TikTok→Shopify→Woo→Amazon）</option>
                   <option value="tiktok">TikTok Shop</option>
                   <option value="amazon">Amazon</option>
@@ -2593,44 +3300,107 @@ function Workspace() {
               <label className="scrape-toggle">
                 <input
                   type="checkbox"
-                  checked={attachStoreSnapshot}
-                  onChange={(event) => setAttachStoreSnapshot(event.target.checked)}
+                  checked={panel.attachStoreSnapshot}
+                  onChange={(event) => patchPanel(activeId, { attachStoreSnapshot: event.target.checked })}
                   disabled={!storeConnected}
                 />
                 本次运行附带所选店铺的只读快照
               </label>
             </div>
           )}
-          {attachments.length > 0 && (
-            <div className="attachment-row">
-              {attachments.map((file) => (
-                <span key={`${file.name}-${file.size}`}>{file.isImage ? "图片" : "文件"}：{file.name}</span>
-              ))}
+          {panel.attachments.length > 0 && (
+            <div className="attachment-row attachment-gallery">
+              {panel.attachments.map((file) =>
+                file.isImage && file.previewUrl ? (
+                  <div key={file.id} className="attachment-chip attachment-chip--photo">
+                    <div className="attachment-chip-photo-frame">
+                      <img src={file.previewUrl} alt="" className="attachment-chip-photo-img" />
+                      <button
+                        type="button"
+                        className="attachment-chip-close"
+                        aria-label={`移除 ${file.name}`}
+                        onClick={() => removeAttachment(file.id)}
+                      >
+                        <X size={8} strokeWidth={2.5} aria-hidden />
+                      </button>
+                    </div>
+                    <span className="attachment-chip-caption" title={file.name}>
+                      {file.name}
+                    </span>
+                  </div>
+                ) : (
+                  <div key={file.id} className="attachment-chip attachment-chip--file">
+                    <div className="attachment-chip-file-glyph" aria-hidden>
+                      {file.isImage ? <Image size={18} strokeWidth={1.75} /> : <File size={18} strokeWidth={1.75} />}
+                    </div>
+                    <div className="attachment-chip-file-meta">
+                      <span className="attachment-chip-caption" title={file.name}>
+                        {file.name}
+                      </span>
+                      <span className="attachment-chip-size">
+                        {file.isImage ? "图片" : "文件"} · {Math.max(1, Math.ceil(file.size / 1024))} KB
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="attachment-chip-close attachment-chip-close--bare"
+                      aria-label={`移除 ${file.name}`}
+                      onClick={() => removeAttachment(file.id)}
+                    >
+                      <X size={14} strokeWidth={2} aria-hidden />
+                    </button>
+                  </div>
+                ),
+              )}
             </div>
           )}
-          {activeId === "autopilot" ? (
+          {activeId === WORKSPACE_AUTOPILOT_ID ? (
             <div className="auto-form">
-              <textarea value={autoInput} onChange={(event) => setAutoInput(event.target.value)} placeholder="例：我是 Amazon 美国站卖家，想做宠物用品类目，预算有限，希望系统自动生成选品、内容、Listing、客服、业绩和利润方案。" />
-              <label className="import-btn">
-                <UploadCloud size={17} />
-                本地导入
-                <input type="file" multiple accept="image/*,.csv,.json,.md,.txt,.log,.html,.xml,.pdf,.doc,.docx,.xls,.xlsx" onChange={handleLocalImport} />
-              </label>
-              <button onClick={runAutopilot} disabled={isRunning}>
-                <Send size={17} /> {isRunning ? "运行中..." : "全自动生成"}
-              </button>
+              <textarea
+                value={panel.input}
+                onChange={(event) => patchPanel(activeId, { input: event.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                  e.preventDefault();
+                  void runAutopilot();
+                }}
+                placeholder="例：我是 Amazon 美国站卖家…（Enter 直接发送，Shift+Enter 换行）"
+              />
+              <div className="composer-toolbar">
+                <label className="import-btn">
+                  <UploadCloud size={16} aria-hidden />
+                  本地导入
+                  <input type="file" multiple accept="image/*,.csv,.json,.md,.txt,.log,.html,.xml,.pdf,.doc,.docx,.xls,.xlsx" onChange={handleLocalImport} />
+                </label>
+                <button type="button" onClick={runAutopilot} disabled={isRunning}>
+                  <Send size={16} aria-hidden />{" "}
+                  {isRunning && runningPanelId === WORKSPACE_AUTOPILOT_ID ? "运行中..." : "一键生成"}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="agent-composer">
-              <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={`例：${activeAgent.prompt}`} />
-              <label className="import-btn">
-                <UploadCloud size={17} />
-                本地导入
-                <input type="file" multiple accept="image/*,.csv,.json,.md,.txt,.log,.html,.xml,.pdf,.doc,.docx,.xls,.xlsx" onChange={handleLocalImport} />
-              </label>
-              <button onClick={runAgent} disabled={isRunning}>
-                <Bot size={17} /> {isRunning ? "生成中..." : "发送给 Agent"}
-              </button>
+              <textarea
+                value={panel.input}
+                onChange={(event) => patchPanel(activeId, { input: event.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                  e.preventDefault();
+                  void runAgent();
+                }}
+                placeholder={`例：${activeAgent.prompt}（Enter 发送，Shift+Enter 换行）`}
+              />
+              <div className="composer-toolbar">
+                <label className="import-btn">
+                  <UploadCloud size={16} aria-hidden />
+                  本地导入
+                  <input type="file" multiple accept="image/*,.csv,.json,.md,.txt,.log,.html,.xml,.pdf,.doc,.docx,.xls,.xlsx" onChange={handleLocalImport} />
+                </label>
+                <button type="button" onClick={runAgent} disabled={isRunning}>
+                  <Bot size={16} aria-hidden />{" "}
+                  {isRunning && runningPanelId === activeId ? "生成中..." : "发送给 Agent"}
+                </button>
+              </div>
             </div>
           )}
         </section>

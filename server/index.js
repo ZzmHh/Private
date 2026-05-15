@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./loadEnv.js";
 import express from "express";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -7,10 +7,12 @@ import { agentSkills, buildAgentMessages } from "./agentSkills.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email.js";
 import {
   adminConfirmOrderPayment,
+  adminGrantUserSubscription,
   claimOrderPaymentSubmitted,
   completeRegistrationWithCode,
   createToken,
   createOrder,
+  effectiveIsAdmin,
   ensureFeatureAccess,
   finalizeUsageLog,
   getAdminSummary,
@@ -32,6 +34,7 @@ import {
   simulatePayOrder,
   startRegistrationEmail,
   submitEnterpriseLead,
+  syncAdminFlagsFromEnv,
   updateTaskFavorite,
   verifyEmailCode,
   verifyToken,
@@ -201,7 +204,7 @@ function authMiddleware(req, res, next) {
 }
 
 function adminMiddleware(req, res, next) {
-  if (!req.user?.isAdmin) {
+  if (!effectiveIsAdmin(req.user)) {
     return res.status(403).json({ error: "需要管理员权限。" });
   }
   next();
@@ -644,6 +647,21 @@ app.post("/api/admin/orders/:orderId/confirm-payment", authMiddleware, adminMidd
   }
 });
 
+app.post("/api/admin/users/:userId/grant-subscription", authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const { planId, days } = req.body || {};
+    const updated = adminGrantUserSubscription({
+      adminUser: req.user,
+      targetUserId: req.params.userId,
+      planId,
+      days,
+    });
+    res.json({ user: updated, plans: listPlans() });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "开通失败。" });
+  }
+});
+
 app.get("/api/agents", (_req, res) => {
   res.json({
     provider: providerName,
@@ -687,22 +705,23 @@ function buildAutopilotMessages({ platform, market, category, extra }) {
     {
       role: "system",
       content: [
-        "你是跨境电商「单轮结构化输出」总控助手：在一次回复中按 6 个业务模块顺序组织内容（非独立多 Agent 调度；各模块之间结论须自洽、不互相矛盾）。",
+        "你是跨境电商「单轮结构化输出」运营总控：在一次回复中按 5 个业务模块顺序组织内容（非独立多 Agent 调度；各模块结论须自洽）。",
+        "说明：不含「AI 客服全自动应答」——客服场景需人工对话式处理，应使用工作台中单独的「AI 客服售后」Agent 生成话术草稿。",
         "目标用户是不懂 AI 的跨境电商卖家，输出须可直接执行、并诚实标注数据与假设。",
         "",
-        "按以下 6 段顺序输出（每段可用 ### 小标题）：",
-        "1. 爆款选品监控：3 个机会 + 测试理由；若仅有爬虫/公开页样本，注明「仅供参考、需交叉验证」。",
+        "按以下 5 段顺序输出（每段可用 ### 小标题）：",
+        "1. 爆款选品监控：3 个机会 + 测试理由；若仅有爬虫/公开页样本，注明为公开页抽样并建议与多源数据交叉验证。",
         "2. 爆款内容：2 条短视频脚本要点。",
         "3. Listing：1 个英文标题草案、5 个卖点关键词方向、5 个搜索词方向（无缺品信息时标假设）。",
         "4. 店铺业绩诊断：诊断版—建议监控的 5～8 个指标与健康区间/假设；勿写「已读取实时后台」。",
-        "5. AI 客服售后：3 组高频场景；每组含中文策略 + 英文回复草稿；高风险动作只给 Checklist +「待人工/API 确认」。",
-        "6. 广告库存利润：广告与补货/清仓原则；无 SKU 成本数据时给框架与待导入字段清单。",
+        "5. 广告库存利润：广告与补货/清仓原则；无 SKU 成本数据时给框架与待导入字段清单。",
         "",
         "【数据与边界】",
         "- Playwright/爬虫结果为公开页面取样，不是平台官方实时行情；失败或无数据时降级为市场经验方案并说明。",
         "- 禁止伪造订单/库存/物流；未提供店铺数据时默认诊断版表述。",
         "",
         "【篇幅】每段约 100～150 字为宜；末段附 7 天执行节奏（按天或按阶段列表）。",
+        "【表格】若某段适合用对照表展示（如机会清单、指标列表），请使用 Markdown 表格（| 列 | 列 |）而非仅用换行分隔。",
       ].join("\n"),
     },
     {
@@ -778,7 +797,7 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
         startedAt,
       });
       return res.status(response.status).json({
-        error: data?.error?.message || data?.message || `${providerName} 全自动运行失败。`,
+        error: data?.error?.message || data?.message || `${providerName} 5 Agent 运营生成失败。`,
         endpoint,
         detail: data,
       });
@@ -796,7 +815,7 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
     const task = saveTask({
       userId: req.user.id,
       type: "autopilot",
-      title: "6 Agent 全自动运行",
+      title: "5 Agent 运营一键生成",
       input: enrichedInput,
       answer,
       metadata: { scrape: scrapeResult, usage },
@@ -814,7 +833,7 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
     if (usage?.logId) {
       finalizeUsageLog(usage.logId, { type: "autopilot", status: "failed", error: error.message, startedAt });
     }
-    res.status(error.status || 500).json({ error: error.message || "全自动运行失败。" });
+    res.status(error.status || 500).json({ error: error.message || "5 Agent 运营生成失败。" });
   }
 });
 
@@ -947,6 +966,8 @@ app.use(express.static(path.join(__dirname, "../dist")));
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, "../dist/index.html"));
 });
+
+syncAdminFlagsFromEnv();
 
 app.listen(port, () => {
   console.log(`凡梦AI server running at http://127.0.0.1:${port}`);
