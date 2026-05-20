@@ -3,6 +3,15 @@
  */
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
 import { generateBuyerReplyText } from "./autoReply/generateBuyerReply.js";
+import { routeBuyerMessage } from "./autoReply/routeBuyerMessage.js";
+import {
+  getCsSettings,
+  listCsFaqTemplates,
+  listCsSellerAlerts,
+  markCsAlertRead,
+  saveCsSettings,
+  syncCsFaqTemplates,
+} from "./autoReply/csStore.js";
 import {
   ensureFeatureAccess,
   finalizeUsageLog,
@@ -109,15 +118,114 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     }
   });
 
+  app.post("/api/extension/cs/route", authMiddleware, async (req, res) => {
+    const startedAt = Date.now();
+    let usage;
+    try {
+      ensureFeatureAccess(req.user, "agent", "service");
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const { buyerText, shopKey, shopName, orderContext, faqTemplates, syncFaq } = req.body || {};
+      if (!buyerText || !String(buyerText).trim()) {
+        return res.status(400).json({ error: "请提供 buyerText。" });
+      }
+
+      const sk = String(shopKey || "").trim();
+      if (syncFaq !== false && Array.isArray(faqTemplates) && faqTemplates.length) {
+        syncCsFaqTemplates(req.user.id, sk, faqTemplates);
+      }
+
+      let ctxText = String(orderContext || "").slice(0, 2000);
+      if (!ctxText) {
+        const merged = getMergedExtensionContext(req.user.id, "tiktok", 4, sk || undefined);
+        if (merged) ctxText = JSON.stringify(merged).slice(0, 2000);
+      }
+
+      usage = incrementUsage(req.user.id, "service");
+      const routed = await routeBuyerMessage({
+        buyerText: String(buyerText).trim(),
+        userId: req.user.id,
+        shopKey: sk,
+        shopName: shopName || "",
+        channel: "extension",
+        orderContext: ctxText,
+        faqTemplates: faqTemplates?.length ? faqTemplates : listCsFaqTemplates(req.user.id, sk),
+        settings: getCsSettings(req.user.id),
+      });
+
+      finalizeUsageLog(usage.logId, {
+        type: "service",
+        status: routed.ok !== false ? "success" : "failed",
+        inputLength: String(buyerText).length,
+        outputLength: (routed.replyText || "").length,
+        startedAt,
+        metadata: { tier: routed.tier, action: routed.action },
+      });
+
+      res.json({
+        ok: routed.ok !== false,
+        routed,
+        text: routed.replyText || "",
+        action: routed.action,
+        tier: routed.tier,
+        notifySeller: routed.notifySeller,
+        sellerMessage: routed.sellerMessage,
+        reason: routed.reason,
+        usage,
+      });
+    } catch (error) {
+      if (usage?.logId) {
+        finalizeUsageLog(usage.logId, { type: "service", status: "failed", error: error.message, startedAt });
+      }
+      res.status(error.status || 500).json({
+        error: error.message || "客服路由失败。",
+        billingUrl: extensionBillingUrl(),
+      });
+    }
+  });
+
   app.post("/api/extension/cs/suggest", authMiddleware, async (req, res) => {
     const startedAt = Date.now();
     let usage;
     try {
       ensureFeatureAccess(req.user, "agent", "service");
       ensureFeatureAccess(req.user, "storeApiAgents");
-      const { buyerText, shopName, platform, languageHint, orderContext } = req.body || {};
+      const { buyerText, shopName, shopKey, orderContext, useLegacy } = req.body || {};
       if (!buyerText || !String(buyerText).trim()) {
         return res.status(400).json({ error: "请提供 buyerText。" });
+      }
+
+      if (useLegacy !== true) {
+        const sk = String(shopKey || "").trim();
+        let ctxText = String(orderContext || "").slice(0, 2000);
+        if (!ctxText) {
+          const merged = getMergedExtensionContext(req.user.id, "tiktok", 4, sk || undefined);
+          if (merged) ctxText = JSON.stringify(merged).slice(0, 2000);
+        }
+        usage = incrementUsage(req.user.id, "service");
+        const routed = await routeBuyerMessage({
+          buyerText: String(buyerText).trim(),
+          userId: req.user.id,
+          shopKey: sk,
+          shopName: shopName || "",
+          channel: "extension",
+          orderContext: ctxText,
+          settings: getCsSettings(req.user.id),
+        });
+        finalizeUsageLog(usage.logId, {
+          type: "service",
+          status: "success",
+          inputLength: String(buyerText).length,
+          outputLength: (routed.replyText || "").length,
+          startedAt,
+        });
+        return res.json({
+          ok: true,
+          text: routed.replyText || "",
+          routed,
+          mode: routed.action === "auto_send" ? "auto-send-candidate" : "buyer-visible-draft",
+          hint: routed.reason || "请人工核对后再发送。",
+          usage,
+        });
       }
 
       usage = incrementUsage(req.user.id, "service");
@@ -129,8 +237,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       const result = await generateBuyerReplyText({
         buyerText: merged,
         shopName: shopName || "",
-        platform: platform || "TikTok Shop",
-        languageHint: languageHint || "",
+        platform: "TikTok Shop",
       });
 
       if (!result.ok) {
@@ -162,6 +269,56 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         code: error.code || "",
         billingUrl: extensionBillingUrl(),
       });
+    }
+  });
+
+  app.post("/api/extension/cs/faq/sync", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const { shopKey, templates } = req.body || {};
+      const rows = syncCsFaqTemplates(req.user.id, String(shopKey || ""), templates || []);
+      res.json({ ok: true, count: rows.length, templates: rows });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "FAQ 同步失败。" });
+    }
+  });
+
+  app.get("/api/extension/cs/alerts", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const unreadOnly = req.query.unread === "1";
+      const alerts = listCsSellerAlerts(req.user.id, { unreadOnly, limit: 30 });
+      res.json({ ok: true, alerts });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取告警失败。" });
+    }
+  });
+
+  app.post("/api/extension/cs/alerts/:id/read", authMiddleware, (req, res) => {
+    try {
+      const alert = markCsAlertRead(req.user.id, req.params.id);
+      res.json({ ok: true, alert });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "更新失败。" });
+    }
+  });
+
+  app.get("/api/extension/cs/settings", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      res.json({ ok: true, settings: getCsSettings(req.user.id) });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取设置失败。" });
+    }
+  });
+
+  app.post("/api/extension/cs/settings", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const settings = saveCsSettings(req.user.id, req.body || {});
+      res.json({ ok: true, settings });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "保存设置失败。" });
     }
   });
 

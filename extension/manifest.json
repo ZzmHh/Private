@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "凡梦AI · TikTok Shop 助手",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "在 TikTok 卖家中心同步页面数据、AI 客服话术建议、业绩与广告库存分析（无需 Open API）。",
   "permissions": ["storage", "activeTab", "contextMenus"],
   "host_permissions": [

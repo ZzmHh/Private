@@ -67,13 +67,16 @@ const FanmengStorage = {
     if (!shopId) return all;
     return all.filter((t) => !t.shopId || t.shopId === shopId);
   },
-  async saveTemplate({ name, text, shopId }) {
+  async saveTemplate({ name, text, shopId, triggers, category, lang }) {
     const all = await this.getTemplates();
     const row = {
       id: uid(),
       name: String(name || "未命名模板").slice(0, 80),
       text: String(text || "").slice(0, 4000),
       shopId: shopId || "",
+      triggers: Array.isArray(triggers) ? triggers.slice(0, 20) : [],
+      category: String(category || "").slice(0, 40),
+      lang: lang === "zh" ? "zh" : "en",
       updatedAt: new Date().toISOString(),
     };
     all.unshift(row);

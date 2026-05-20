@@ -12,6 +12,9 @@ const defaultDb = {
   storeConnections: [],
   extensionSnapshots: [],
   storeMetricsImports: [],
+  csFaqTemplates: [],
+  csSellerAlerts: [],
+  csAutomationSettings: {},
 };
 
 function normalizeDb(db) {
@@ -26,6 +29,9 @@ function normalizeDb(db) {
     storeConnections: Array.isArray(db.storeConnections) ? db.storeConnections : [],
     extensionSnapshots: Array.isArray(db.extensionSnapshots) ? db.extensionSnapshots : [],
     storeMetricsImports: Array.isArray(db.storeMetricsImports) ? db.storeMetricsImports : [],
+    csFaqTemplates: Array.isArray(db.csFaqTemplates) ? db.csFaqTemplates : [],
+    csSellerAlerts: Array.isArray(db.csSellerAlerts) ? db.csSellerAlerts : [],
+    csAutomationSettings: db.csAutomationSettings && typeof db.csAutomationSettings === "object" ? db.csAutomationSettings : {},
   };
 }
 

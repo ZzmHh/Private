@@ -1,11 +1,12 @@
 /**
- * TikTok / 通用形状：Webhook 入站 → 生成买家话术 → 尝试出站（可 dry-run）
+ * TikTok / 通用形状：Webhook 入站 → 分层路由 → 条件自动发送
  */
 
-import { generateBuyerReplyText } from "./generateBuyerReply.js";
 import { findTikTokConnectionByShopCipher } from "./tiktokStoreLookup.js";
 import { getStoreConnectionSecret } from "../db.js";
 import { sendTiktokCustomerServiceText } from "../integrations/storeApi/tiktok/tiktokOutboundCs.js";
+import { routeBuyerMessage, dispatchAutoSend } from "./routeBuyerMessage.js";
+import { getCsSettings } from "./csStore.js";
 
 const processedMessageIds = new Map();
 const DEDUPE_TTL_MS = 1000 * 60 * 30;
@@ -25,9 +26,6 @@ function wasProcessed(messageId) {
   return false;
 }
 
-/**
- * 从 Partner / 邮件转发等渠道尝试解析字段（官方 payload 以控制台为准，可在此扩展分支）
- */
 export function extractTiktokInbound(payload) {
   const root = payload && typeof payload === "object" ? payload : {};
   const t = String(root.type || root.event_type || root.event || "").toUpperCase();
@@ -58,9 +56,6 @@ export function extractTiktokInbound(payload) {
   };
 }
 
-/**
- * @returns {Promise<{ ok: boolean, skipped?: string, replyText?: string, send?: object, error?: string, detail?: string }>}
- */
 export async function handleTiktokBuyerMessageWebhook(payload, options = {}) {
   const force = options.force === true;
   const inbound = extractTiktokInbound(payload);
@@ -101,15 +96,16 @@ export async function handleTiktokBuyerMessageWebhook(payload, options = {}) {
     return { ok: false, error: "无法解密店铺凭据。" };
   }
 
-  const gen = await generateBuyerReplyText({
+  const settings = getCsSettings(connection.userId);
+  const routed = await routeBuyerMessage({
     buyerText: inbound.buyerText,
+    userId: connection.userId,
+    shopKey: connection.storeName,
     shopName: connection.storeName || "",
-    platform: "TikTok Shop",
+    channel: "webhook",
+    settings,
+    orderContext: options.orderContext || "",
   });
-
-  if (!gen.ok) {
-    return { ok: false, error: gen.error };
-  }
 
   let dryRun;
   if (force) {
@@ -119,24 +115,35 @@ export async function handleTiktokBuyerMessageWebhook(payload, options = {}) {
       process.env.TIKTOK_CS_SEND_DRY_RUN === "1" ||
       String(process.env.TIKTOK_CS_SEND_DRY_RUN).toLowerCase() === "true";
   }
-  if (dryRun) {
-    return { ok: true, replyText: gen.text, send: { dryRun: true } };
+
+  if (dryRun || routed.action !== "auto_send") {
+    return {
+      ok: routed.ok !== false,
+      routed,
+      replyText: routed.replyText,
+      send: { dryRun: true, action: routed.action },
+    };
   }
 
   if (!inbound.conversationId) {
-    return { ok: true, replyText: gen.text, send: { skipped: true, reason: "无 conversation_id，仅生成话术。" } };
+    return {
+      ok: true,
+      routed,
+      replyText: routed.replyText,
+      send: { skipped: true, reason: "无 conversation_id，仅生成话术。" },
+    };
   }
 
   const send = await sendTiktokCustomerServiceText({
     conversationId: inbound.conversationId,
-    text: gen.text,
+    text: routed.replyText,
     secret,
     parsed: found.parsed,
   });
 
   if (!send.ok) {
-    return { ok: false, replyText: gen.text, error: send.error, detail: send.detail };
+    return { ok: false, routed, replyText: routed.replyText, error: send.error, detail: send.detail };
   }
 
-  return { ok: true, replyText: gen.text, send: { ok: true } };
+  return { ok: true, routed, replyText: routed.replyText, send: { ok: true } };
 }

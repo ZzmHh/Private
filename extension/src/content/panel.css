@@ -350,3 +350,31 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+#fanmeng-ai-panel-root .fm-cs-alerts {
+  padding: 8px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid rgba(185, 28, 28, 0.2);
+}
+
+#fanmeng-ai-panel-root .fm-cs-alerts.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-cs-alert-item {
+  font-size: 11px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+#fanmeng-ai-panel-root .fm-cs-alert-item strong {
+  display: block;
+  color: #b91c1c;
+}
+
+#fanmeng-ai-panel-root .fm-cs-tier-hint {
+  margin: 0 0 6px;
+  color: #2563eb;
+  font-size: 10px;
+}

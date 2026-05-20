@@ -1,108 +1,137 @@
-const FanmengApi = {
-  platform: () => FanmengTikTok.PLATFORM,
-  platformLabel: () => FanmengTikTok.PLATFORM_LABEL,
-
-  async request(path, options = {}) {
-    const settings = await FanmengStorage.getSettings();
-    const base = String(settings.apiBase || "").replace(/\/+$/, "");
-    if (!base) throw new Error("请先在插件弹窗配置凡梦 API 地址。");
-    if (!settings.token && !path.includes("/auth/login")) {
-      throw new Error("请先在插件中登录凡梦账号。");
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    };
-    if (settings.token) {
-      headers.Authorization = `Bearer ${settings.token}`;
-    }
-
-    const res = await fetch(`${base}${path}`, {
-      ...options,
-      headers,
-    });
-
-    const text = await res.text();
-    let data;
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch {
-      data = { raw: text };
-    }
-
-    if (!res.ok) {
-      const err = new Error(data.error || data.message || `HTTP ${res.status}`);
-      err.status = res.status;
-      err.code = data.code || "";
-      err.billingUrl = data.billingUrl || FanmengBilling.billingUrlFromApiBase(base);
-      throw err;
-    }
-    return data;
-  },
-
-  async login(email, password) {
-    const settings = await FanmengStorage.getSettings();
-    const base = String(settings.apiBase || "").replace(/\/+$/, "");
-    const res = await fetch(`${base}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "登录失败");
-    await FanmengStorage.saveSettings({ token: data.token });
-    return data;
-  },
-
-  async refreshEntitlements(shopKey) {
-    const settings = await FanmengStorage.getSettings();
-    const st = await this.status(shopKey);
-    const ent = FanmengBilling.normalizeEntitlements(st, settings.apiBase);
-    await FanmengBilling.saveEntitlements(ent);
-    return ent;
-  },
-
-  async status(shopKey) {
-    const q = new URLSearchParams({ platform: FanmengTikTok.PLATFORM });
-    if (shopKey) q.set("shopKey", shopKey);
-    return this.request(`/api/extension/status?${q.toString()}`);
-  },
-
-  async pushSnapshot(payload) {
-    return this.request("/api/extension/snapshot", {
-      method: "POST",
-      body: JSON.stringify({ platform: FanmengTikTok.PLATFORM, ...payload }),
-    });
-  },
-
-  async suggestReply({ buyerText, orderContext, shopName, shopKey }) {
-    return this.request("/api/extension/cs/suggest", {
-      method: "POST",
-      body: JSON.stringify({
-        buyerText,
-        orderContext,
-        shopName: shopName || "",
-        shopKey: shopKey || "",
-        platform: FanmengTikTok.PLATFORM_LABEL,
-      }),
-    });
-  },
-
-  async analyze(agentId, input, shopKey) {
-    return this.request("/api/extension/analyze", {
-      method: "POST",
-      body: JSON.stringify({
-        agentId,
-        input,
-        platform: FanmengTikTok.PLATFORM,
-        shopKey: shopKey || "",
-        includeSnapshots: true,
-      }),
-    });
-  },
-};
-
-if (typeof globalThis !== "undefined") {
-  globalThis.FanmengApi = FanmengApi;
-}
+const FanmengApi = {
+  platform: () => FanmengTikTok.PLATFORM,
+  platformLabel: () => FanmengTikTok.PLATFORM_LABEL,
+
+  async request(path, options = {}) {
+    const settings = await FanmengStorage.getSettings();
+    const base = String(settings.apiBase || "").replace(/\/+$/, "");
+    if (!base) throw new Error("请先在插件弹窗配置凡梦 API 地址。");
+    if (!settings.token && !path.includes("/auth/login")) {
+      throw new Error("请先在插件中登录凡梦账号。");
+    }
+
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    };
+    if (settings.token) {
+      headers.Authorization = `Bearer ${settings.token}`;
+    }
+
+    const res = await fetch(`${base}${path}`, {
+      ...options,
+      headers,
+    });
+
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!res.ok) {
+      const err = new Error(data.error || data.message || `HTTP ${res.status}`);
+      err.status = res.status;
+      err.code = data.code || "";
+      err.billingUrl = data.billingUrl || FanmengBilling.billingUrlFromApiBase(base);
+      throw err;
+    }
+    return data;
+  },
+
+  async login(email, password) {
+    const settings = await FanmengStorage.getSettings();
+    const base = String(settings.apiBase || "").replace(/\/+$/, "");
+    const res = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "登录失败");
+    await FanmengStorage.saveSettings({ token: data.token });
+    return data;
+  },
+
+  async refreshEntitlements(shopKey) {
+    const settings = await FanmengStorage.getSettings();
+    const st = await this.status(shopKey);
+    const ent = FanmengBilling.normalizeEntitlements(st, settings.apiBase);
+    await FanmengBilling.saveEntitlements(ent);
+    return ent;
+  },
+
+  async status(shopKey) {
+    const q = new URLSearchParams({ platform: FanmengTikTok.PLATFORM });
+    if (shopKey) q.set("shopKey", shopKey);
+    return this.request(`/api/extension/status?${q.toString()}`);
+  },
+
+  async pushSnapshot(payload) {
+    return this.request("/api/extension/snapshot", {
+      method: "POST",
+      body: JSON.stringify({ platform: FanmengTikTok.PLATFORM, ...payload }),
+    });
+  },
+
+  async suggestReply({ buyerText, orderContext, shopName, shopKey, faqTemplates }) {
+    return this.request("/api/extension/cs/suggest", {
+      method: "POST",
+      body: JSON.stringify({
+        buyerText,
+        orderContext,
+        shopName: shopName || "",
+        shopKey: shopKey || "",
+        faqTemplates,
+      }),
+    });
+  },
+
+  async routeCsMessage({ buyerText, orderContext, shopName, shopKey, faqTemplates, syncFaq = true }) {
+    return this.request("/api/extension/cs/route", {
+      method: "POST",
+      body: JSON.stringify({
+        buyerText,
+        orderContext,
+        shopName: shopName || "",
+        shopKey: shopKey || "",
+        faqTemplates,
+        syncFaq,
+      }),
+    });
+  },
+
+  async syncFaqTemplates(shopKey, templates) {
+    return this.request("/api/extension/cs/faq/sync", {
+      method: "POST",
+      body: JSON.stringify({ shopKey, templates }),
+    });
+  },
+
+  async getCsAlerts() {
+    return this.request("/api/extension/cs/alerts?unread=1");
+  },
+
+  async getCsSettings() {
+    return this.request("/api/extension/cs/settings");
+  },
+
+  async analyze(agentId, input, shopKey) {
+    return this.request("/api/extension/analyze", {
+      method: "POST",
+      body: JSON.stringify({
+        agentId,
+        input,
+        platform: FanmengTikTok.PLATFORM,
+        shopKey: shopKey || "",
+        includeSnapshots: true,
+      }),
+    });
+  },
+};
+
+if (typeof globalThis !== "undefined") {
+  globalThis.FanmengApi = FanmengApi;
+}

@@ -216,6 +216,106 @@
     return false;
   }
 
+  function tryAutoClickSend() {
+    const labels = /^(发送|send|reply|回复)$/i;
+    const candidates = document.querySelectorAll("button, [role='button'], a");
+    for (const btn of candidates) {
+      if (!btn.offsetParent) continue;
+      const t = (btn.innerText || btn.getAttribute("aria-label") || "").trim();
+      if (!labels.test(t) && !/send/i.test(t)) continue;
+      const r = btn.getBoundingClientRect();
+      if (r.width < 24 || r.height < 16) continue;
+      btn.click();
+      return true;
+    }
+    return false;
+  }
+
+  async function getFaqTemplatesForApi() {
+    const templates = await FanmengStorage.getTemplates(activeShop?.id);
+    return templates.map((t) => ({
+      id: t.id,
+      name: t.name,
+      text: t.text,
+      triggers: t.triggers?.length ? t.triggers : t.name.split(/[,，|/]/).map((s) => s.trim()).filter(Boolean),
+      category: t.category || "",
+      lang: t.lang || "zh",
+    }));
+  }
+
+  async function syncFaqToServer() {
+    if (!activeShop) return;
+    try {
+      const templates = await getFaqTemplatesForApi();
+      if (templates.length) {
+        await FanmengApi.syncFaqTemplates(activeShop.id, templates);
+      }
+    } catch {
+      /* 离线时忽略 */
+    }
+  }
+
+  async function refreshCsAlerts() {
+    const box = document.querySelector(`#${PANEL_ID} .fm-cs-alerts`);
+    if (!box) return;
+    try {
+      const res = await FanmengApi.getCsAlerts();
+      const alerts = res.alerts || [];
+      box.innerHTML = "";
+      if (!alerts.length) {
+        box.classList.add("hidden");
+        return;
+      }
+      box.classList.remove("hidden");
+      for (const a of alerts.slice(0, 5)) {
+        const row = el("div", "fm-cs-alert-item");
+        row.appendChild(el("strong", "", "⚠️ 售后待处理"));
+        row.appendChild(el("span", "fm-cs-alert-text", (a.buyerText || "").slice(0, 100)));
+        box.appendChild(row);
+      }
+    } catch {
+      box.classList.add("hidden");
+    }
+  }
+
+  async function applyRoutedCsResult(res, opts = {}) {
+    const { fromAuto = false, via = "" } = opts;
+    const routed = res.routed || res;
+    const text = res.text || routed.replyText || "";
+    const box = document.querySelector(`#${PANEL_ID} .fm-reply-text`);
+    if (box) box.value = text;
+
+    const tierLabel = {
+      faq: "FAQ 模板",
+      aftersales: "售后安抚",
+      night_ai: "夜间 AI",
+      manual: "人工草稿",
+    }[routed.tier || res.tier] || routed.tier || "";
+
+    if (routed.action === "auto_send" || res.action === "auto_send") {
+      fillReplyInput(text);
+      const sent = tryAutoClickSend();
+      setStatus(
+        sent
+          ? `已自动发送（${tierLabel}）${via}`
+          : `已填入聊天框（${tierLabel}），请点发送${via}`,
+        sent ? "ok" : "busy",
+      );
+    } else {
+      setStatus(
+        fromAuto
+          ? `已生成${tierLabel}${via}（${routed.reason || "请核对后发送"}）`
+          : `${tierLabel}${via}：${routed.reason || "请核对后填入或发送"}`,
+        routed.notifySeller ? "err" : "ok",
+      );
+    }
+
+    if (routed.notifySeller && routed.sellerMessage) {
+      setStatus(routed.sellerMessage, "err");
+      await refreshCsAlerts();
+    }
+  }
+
   async function syncCurrentPage(opts = {}) {
     const { silent = false } = opts;
     try {
@@ -291,23 +391,21 @@
       return;
     }
 
-    if (!fromAuto) setStatus("正在生成话术…", "busy");
-    else setStatus("检测到新消息，正在生成话术…", "busy");
+    if (!fromAuto) setStatus("正在智能路由客服…", "busy");
+    else setStatus("检测到新消息，正在路由…", "busy");
     try {
       const ctx = (scraped.data.textSample || "").slice(0, 800);
-      const res = await FanmengApi.suggestReply({
+      const faqTemplates = await getFaqTemplatesForApi();
+      const res = await FanmengApi.routeCsMessage({
         buyerText: buyerText.trim(),
         orderContext: ctx,
         shopName: shop.name,
         shopKey: shop.id,
+        faqTemplates,
+        syncFaq: true,
       });
-      const box = document.querySelector(`#${PANEL_ID} .fm-reply-text`);
-      if (box) box.value = res.text || "";
       const via = fromSelection || selected ? "（来自选中文字）" : "";
-      setStatus(
-        fromAuto ? `新消息话术已生成${via}（请核对后发送）` : `话术已生成${via}，请核对后填入或发送`,
-        "ok",
-      );
+      await applyRoutedCsResult(res, { fromAuto, via });
       refreshChatPreview();
     } catch (e) {
       handlePaidApiError(e);
@@ -359,6 +457,10 @@
     const planLine = el("p", "fm-plan-line fm-hint", "");
     body.appendChild(planLine);
 
+    const alertsBox = el("div", "fm-cs-alerts hidden");
+    body.appendChild(alertsBox);
+    body.appendChild(el("p", "fm-hint fm-cs-tier-hint", "FAQ 命中自动发 · 售后转人工 · 北京23:00–09:00 AI 守店"));
+
     const tutBox = el("div", "fm-tutorial-box hidden");
     tutBox.appendChild(el("p", "fm-label", "📖 卖家试用教程（点 ? 随时打开）"));
     const tutMount = el("div", "fm-tutorial-mount");
@@ -399,7 +501,7 @@
     profitBtn.type = "button";
     btnRow2.append(growthBtn, profitBtn);
 
-    const replyLabel = el("label", "fm-label", "客服回复草稿（人工确认后发送）");
+    const replyLabel = el("label", "fm-label", "客服回复草稿（FAQ/售后可自动发送）");
     const replyArea = el("textarea", "fm-reply-text");
     replyArea.rows = 4;
     replyArea.placeholder = "开启「自动监听新消息」后此处会自动填入…";
@@ -476,9 +578,16 @@
       if (!text) return setStatus("草稿为空，无法保存模板", "err");
       const name = prompt("模板名称", "常用回复");
       if (!name) return;
-      await FanmengStorage.saveTemplate({ name, text, shopId: activeShop?.id });
+      const triggers = prompt("触发关键词（逗号分隔，可选）", name) || name;
+      await FanmengStorage.saveTemplate({
+        name,
+        text,
+        shopId: activeShop?.id,
+        triggers: triggers.split(/[,，|/]/).map((s) => s.trim()).filter(Boolean),
+      });
       await refreshTemplateSelect();
-      setStatus("模板已保存", "ok");
+      await syncFaqToServer();
+      setStatus("模板已保存并同步到服务端", "ok");
     });
 
     tplSelect.addEventListener("change", async () => {
@@ -593,7 +702,10 @@
     await refreshDiagnosisProgress();
     await refreshTemplateSelect();
     await setupAutoSync();
+    await syncFaqToServer();
     setupChatWatcher();
+    refreshCsAlerts();
+    setInterval(refreshCsAlerts, 60000);
 
     const pt = FanmengScrape.detectPageType(location.href, document.title);
     if (pt !== "chat") {
