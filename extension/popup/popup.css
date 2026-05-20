@@ -1,0 +1,86 @@
+body {
+  width: 320px;
+  margin: 0;
+  padding: 14px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sub {
+  margin: 4px 0 12px;
+  color: rgba(15, 23, 42, 0.55);
+  font-size: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[type="text"],
+input[type="number"] {
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+button {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: #f8fafc;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+button.secondary {
+  background: #fff;
+}
+
+.check {
+  flex-direction: row;
+  align-items: center;
+  font-weight: 500;
+}
+
+.hidden {
+  display: none;
+}
+
+.user-line {
+  font-size: 12px;
+  color: #15803d;
+}
+
+.msg {
+  min-height: 18px;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.hint {
+  font-size: 11px;
+  color: rgba(15, 23, 42, 0.5);
+  line-height: 1.4;
+}

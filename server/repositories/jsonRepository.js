@@ -10,6 +10,7 @@ const defaultDb = {
   usageLogs: [],
   feedback: [],
   storeConnections: [],
+  extensionSnapshots: [],
 };
 
 function normalizeDb(db) {
@@ -22,6 +23,7 @@ function normalizeDb(db) {
     usageLogs: Array.isArray(db.usageLogs) ? db.usageLogs : [],
     feedback: Array.isArray(db.feedback) ? db.feedback : [],
     storeConnections: Array.isArray(db.storeConnections) ? db.storeConnections : [],
+    extensionSnapshots: Array.isArray(db.extensionSnapshots) ? db.extensionSnapshots : [],
   };
 }
 

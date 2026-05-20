@@ -1300,6 +1300,28 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
   const [activePlatform, setActivePlatform] = useState("tiktok");
   const [showGuide, setShowGuide] = useState(false);
 
+  async function startTiktokShopOAuth() {
+    setSnapshotLoading("oauth");
+    try {
+      const response = await fetch("/api/store/tiktok/oauth/url", {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error([data.error, data.hint].filter(Boolean).join(" ") || "无法获取授权链接");
+      }
+      if (!data.url) {
+        throw new Error("服务器未返回授权地址");
+      }
+      window.location.assign(data.url);
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setSnapshotLoading(null);
+    }
+  }
+
   async function testSnapshot(platform) {
     const cfg = { platform, ...storeBlocks[platform] };
     setSnapshotLoading(platform);
@@ -1417,6 +1439,21 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
                     placeholder="API Token / Access Key"
                   />
                   <p className="store-field-hint">{platformEndpointHint(platform)} · {platformTokenHint(platform)}</p>
+                  {platform === "tiktok" && (
+                    <div className="store-oauth-row">
+                      <button
+                        type="button"
+                        className="header-ghost slim store-oauth-btn"
+                        disabled={snapshotLoading === "oauth"}
+                        onClick={startTiktokShopOAuth}
+                      >
+                        {snapshotLoading === "oauth" ? "正在跳转授权…" : "使用 TikTok Shop OAuth 连接"}
+                      </button>
+                      <span className="store-oauth-note">
+                        跳转 TikTok 授权后会回到站点并自动保存令牌（需服务端已配置回调 URL）。
+                      </span>
+                    </div>
+                  )}
                   {platform === "tiktok" && (
                     <label className="scrape-toggle tiktok-autoreply-toggle">
                       <input
@@ -1892,11 +1929,15 @@ function StoreApiGuideModal({ onClose }) {
             <h3>TikTok Shop（跨境电商开放平台）</h3>
             <ol>
               <li>使用 <a href="https://partner.tiktokshop.com/" target="_blank" rel="noreferrer">TikTok Shop Partner Center</a> 注册合作伙伴账号并完成入驻资料。</li>
-              <li>在开发者中心创建应用（公开应用或定制应用视你的业务模式而定），获取 <code>app key</code> 等凭证；卖家侧通常需在卖家中心完成<strong>授权</strong>以换取店铺级 <code>access_token</code>、<code>shop_cipher</code>。</li>
+              <li>在开发者中心创建应用（公开应用或定制应用视你的业务模式而定），获取 <code>app key</code> / <code>app secret</code>；在应用里配置<strong>回调 URL</strong>与本服务一致，例如 <code>/api/store/tiktok/oauth/callback</code>（完整域名以部署为准）。</li>
+              <li>工作台「配置店铺 API」中可使用 <strong>OAuth 连接</strong>跳转授权，成功后服务端会写入 <code>access_token</code>、<code>refresh_token</code> 与 <code>shop_cipher</code>；亦支持手动粘贴 JSON 凭据（高级/排障）。</li>
               <li>接口与字段说明以 Open API 文档为准（Partner Center 内「文档」栏目）。</li>
             </ol>
             <p className="store-guide-li">
               文档入口：<a href="https://partner.tiktokshop.com/doc" target="_blank" rel="noreferrer">partner.tiktokshop.com/doc</a>
+            </p>
+            <p className="store-guide-note">
+              <strong>无需 Open API 的替代方案：</strong>可安装仓库内 Chrome 插件（<code>extension/</code>），在卖家中心同步页面并生成客服/诊断话术，详见 <code>docs/CHROME_EXTENSION.md</code>。
             </p>
           </article>
 
@@ -2444,6 +2485,7 @@ function Workspace() {
   const [storeBlocks, setStoreBlocks] = useState(defaultStoreBlocks);
   const [routeHash, setRouteHash] = useState(readRouteHash);
   const [storeDataNudge, setStoreDataNudge] = useState(null);
+  const tiktokOAuthReturnHandledRef = useRef(false);
 
   const caseSlug = useMemo(() => parseCaseSlugFromHash(routeHash), [routeHash]);
   const authEntryMode = useMemo(() => {
@@ -2521,6 +2563,52 @@ function Workspace() {
   }, [token]);
 
   useEffect(() => {
+    if (!token || !user) return;
+    if (tiktokOAuthReturnHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const oauthSt = params.get("tiktok_oauth");
+    if (!oauthSt) return;
+    tiktokOAuthReturnHandledRef.current = true;
+
+    const rawMsg = params.get("tiktok_msg") || "";
+    function clearOAuthQuery() {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("tiktok_oauth");
+      u.searchParams.delete("tiktok_msg");
+      window.history.replaceState(null, "", u.pathname + u.search + window.location.hash);
+    }
+
+    if (oauthSt === "ok") {
+      setToast("TikTok Shop 已连接，店铺凭据已保存。");
+      setShowStoreApiModal(true);
+      window.setTimeout(() => setToast(""), 4200);
+      fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (response) => {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error);
+          setUser(data.user);
+          setTasks(data.tasks || []);
+          if (data.storeConnections?.length) {
+            setStoreBlocks(mergeRemoteStoreConnections(data.storeConnections));
+          } else if (data.storeConnection) {
+            setStoreBlocks(mergeRemoteStoreConnections([data.storeConnection]));
+          }
+        })
+        .catch(() => {});
+      clearOAuthQuery();
+      return;
+    }
+
+    try {
+      setToast(`TikTok 授权未成功：${decodeURIComponent(rawMsg) || "未知错误"}`);
+    } catch {
+      setToast(`TikTok 授权未成功：${rawMsg || "未知错误"}`);
+    }
+    window.setTimeout(() => setToast(""), 5200);
+    clearOAuthQuery();
+  }, [token, user]);
+
+  useEffect(() => {
     if (!token || !user?.trialEndingSoon || isBetaMode) return;
     const key = "fanmeng_trial_last24_nudge";
     if (sessionStorage.getItem(key)) return;
@@ -2551,6 +2639,7 @@ function Workspace() {
   }
 
   function logout() {
+    tiktokOAuthReturnHandledRef.current = false;
     localStorage.removeItem("fanmeng_token");
     setToken("");
     setUser(null);

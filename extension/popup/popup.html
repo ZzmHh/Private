@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>凡梦AI · TikTok 助手</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>凡梦AI</h1>
+    <p class="sub">TikTok Shop 浏览器助手</p>
+
+    <label>
+      凡梦 API 地址
+      <input id="apiBase" type="url" placeholder="http://127.0.0.1:8787" />
+    </label>
+    <label>
+      店铺显示名（可选）
+      <input id="shopName" type="text" placeholder="我的 TikTok 店" />
+    </label>
+
+    <div id="loginBlock">
+      <label>
+        邮箱
+        <input id="email" type="email" autocomplete="username" />
+      </label>
+      <label>
+        密码
+        <input id="password" type="password" autocomplete="current-password" />
+      </label>
+      <button type="button" id="loginBtn" class="primary">登录</button>
+    </div>
+
+    <div id="loggedBlock" class="hidden">
+      <p id="userLine" class="user-line"></p>
+      <button type="button" id="logoutBtn">退出登录</button>
+    </div>
+
+    <label class="check">
+      <input id="autoSync" type="checkbox" />
+      打开卖家中心时定时同步页面（分钟）
+    </label>
+    <input id="autoSyncMinutes" type="number" min="5" max="120" value="15" />
+
+    <p id="msg" class="msg"></p>
+
+    <button type="button" id="openSeller" class="secondary">打开 TikTok 卖家中心</button>
+    <p class="hint">安装后请刷新卖家中心页面。无需 TikTok Open API。</p>
+
+    <script src="../src/lib/storage.js"></script>
+    <script src="../src/lib/api.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

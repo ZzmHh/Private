@@ -1,0 +1,111 @@
+#fanmeng-ai-panel-root {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 2147483646;
+  width: 320px;
+  max-height: 85vh;
+  overflow: auto;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  color: #0f172a;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+}
+
+#fanmeng-ai-panel-root .fm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  border-radius: 14px 14px 0 0;
+}
+
+#fanmeng-ai-panel-root .fm-title {
+  font-size: 14px;
+}
+
+#fanmeng-ai-panel-root .fm-icon-btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#fanmeng-ai-panel-root .fm-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#fanmeng-ai-panel-root .fm-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(15, 23, 42, 0.65);
+}
+
+#fanmeng-ai-panel-root .fm-status[data-kind="ok"] {
+  color: #15803d;
+}
+
+#fanmeng-ai-panel-root .fm-status[data-kind="err"] {
+  color: #b91c1c;
+}
+
+#fanmeng-ai-panel-root .fm-status[data-kind="busy"] {
+  color: #2563eb;
+}
+
+#fanmeng-ai-panel-root .fm-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#fanmeng-ai-panel-root .fm-btn {
+  flex: 1;
+  min-width: 88px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#fanmeng-ai-panel-root .fm-btn.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+#fanmeng-ai-panel-root .fm-btn:hover {
+  filter: brightness(0.97);
+}
+
+#fanmeng-ai-panel-root .fm-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+#fanmeng-ai-panel-root .fm-reply-text,
+#fanmeng-ai-panel-root .fm-result {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}

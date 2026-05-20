@@ -49,6 +49,17 @@ import {
 import { buildPaymentPublicConfig } from "./paymentConfig.js";
 import { handleTiktokBuyerMessageWebhook } from "./autoReply/tiktokInbound.js";
 import { parseTikTokShopCredentials } from "./integrations/storeApi/tiktok/tiktokShopConnector.js";
+import {
+  buildTiktokAuthorizeUrl,
+  buildTiktokConnectionTokenJson,
+  decodeTiktokOAuthState,
+  encodeTiktokOAuthState,
+  exchangeTiktokAuthCodeForToken,
+  fetchTiktokAuthorizedShops,
+  getTiktokOAuthRedirectUri,
+} from "./integrations/storeApi/tiktok/tiktokShopOAuth.js";
+import { registerExtensionRoutes } from "./extensionRoutes.js";
+import { getMergedExtensionContext } from "./extensionSync.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,6 +185,14 @@ app.post("/webhooks/tiktok", express.json({ limit: "512kb" }), async (req, res) 
 
 app.use(express.json({ limit: "1mb" }));
 app.use("/payment", express.static(path.join(__dirname, "../public/payment")));
+
+registerExtensionRoutes(app, {
+  authMiddleware,
+  apiKey,
+  providerName,
+  model,
+  callChatCompletions,
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -509,6 +528,138 @@ app.post("/api/store-connection", authMiddleware, (req, res) => {
   }
 });
 
+/**
+ * TikTok Shop OAuth：返回授权页 URL（浏览器需整页跳转，故不用 GET 以免无法带 Bearer）
+ */
+app.post("/api/store/tiktok/oauth/url", authMiddleware, (req, res) => {
+  try {
+    if (!getTiktokOAuthRedirectUri()) {
+      return res.status(503).json({
+        error: "服务端未配置 TIKTOK_SHOP_OAUTH_REDIRECT_URI，无法发起 TikTok 授权。",
+        hint: "在 Partner Center 登记与此完全一致的回调 URL，并写入环境变量。",
+      });
+    }
+    const state = encodeTiktokOAuthState(req.user.id);
+    const url = buildTiktokAuthorizeUrl(state);
+    res.json({ url, state });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "无法生成 TikTok 授权链接。" });
+  }
+});
+
+function publicAppRedirectPath(query) {
+  const base = process.env.APP_PUBLIC_URL?.trim().replace(/\/+$/, "");
+  if (base) {
+    const u = new URL(base.includes("://") ? base : `https://${base}`);
+    for (const [k, v] of Object.entries(query)) {
+      if (v != null && v !== "") u.searchParams.set(k, String(v));
+    }
+    return u.toString();
+  }
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v != null && v !== "") qs.set(k, String(v));
+  }
+  const q = qs.toString();
+  return q ? `/?${q}` : "/";
+}
+
+/** TikTok 授权回调（浏览器直达，无 Authorization 头；靠 state 校验 User） */
+app.get("/api/store/tiktok/oauth/callback", async (req, res) => {
+  const q = req.query || {};
+  try {
+    const errParam = q.error || q.error_string;
+    if (errParam) {
+      return res.redirect(
+        302,
+        publicAppRedirectPath({
+          tiktok_oauth: "error",
+          tiktok_msg: String(errParam).slice(0, 240),
+        }),
+      );
+    }
+
+    const state = decodeTiktokOAuthState(q.state);
+    if (!state) {
+      return res.redirect(
+        302,
+        publicAppRedirectPath({
+          tiktok_oauth: "error",
+          tiktok_msg: "state无效或已过期请重新发起连接",
+        }),
+      );
+    }
+
+    const authCode = q.code || q.auth_code;
+    if (!authCode || !String(authCode).trim()) {
+      return res.redirect(
+        302,
+        publicAppRedirectPath({
+          tiktok_oauth: "error",
+          tiktok_msg: "未返回授权码",
+        }),
+      );
+    }
+
+    const exchanged = await exchangeTiktokAuthCodeForToken(String(authCode).trim());
+    if (!exchanged.ok) {
+      return res.redirect(
+        302,
+        publicAppRedirectPath({
+          tiktok_oauth: "error",
+          tiktok_msg: exchanged.error || "换票失败",
+        }),
+      );
+    }
+
+    const tokenData = exchanged.data;
+    const shopsResult = await fetchTiktokAuthorizedShops(tokenData.access_token);
+    let shopCipher = String(q.shop_cipher || q.shopCipher || "").trim();
+    let shopMeta = {};
+
+    if (shopsResult.ok && shopsResult.shops?.length) {
+      const first = shopsResult.shops[0];
+      shopCipher = shopCipher || String(first.cipher).trim();
+      shopMeta = { id: first.id, name: first.name };
+    }
+
+    if (!shopCipher) {
+      return res.redirect(
+        302,
+        publicAppRedirectPath({
+          tiktok_oauth: "error",
+          tiktok_msg: shopsResult.error || "无法获取shop_cipher请在Partner后台确认应用店铺权限",
+        }),
+      );
+    }
+
+    const sellerName = tokenData.seller_name || shopMeta.name || "";
+    const storeName = String(shopMeta.name || sellerName || "TikTok Shop").slice(0, 120);
+    const apiToken = buildTiktokConnectionTokenJson(tokenData, shopCipher, shopMeta);
+
+    saveStoreConnection({
+      userId: state,
+      config: {
+        platform: "tiktok",
+        storeName,
+        apiEndpoint: "",
+        apiToken,
+      },
+    });
+
+    return res.redirect(302, publicAppRedirectPath({ tiktok_oauth: "ok" }));
+  } catch (error) {
+    console.error("[tiktok oauth callback]", error);
+    return res.redirect(
+      302,
+      publicAppRedirectPath({
+        tiktok_oauth: "error",
+        tiktok_msg: error.message || "回调处理失败",
+      }),
+    );
+  }
+});
+
 /** 聚合快照：按 platform 分发至 Amazon / TikTok / Shopify / Woo */
 app.post("/api/store/snapshot", authMiddleware, async (req, res) => {
   try {
@@ -841,7 +992,7 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
   const startedAt = Date.now();
   let usage;
   try {
-    const { agentId, input, scrape, useStoreSnapshot, storeSnapshotPlatform } = req.body || {};
+    const { agentId, input, scrape, useStoreSnapshot, storeSnapshotPlatform, useExtensionSnapshot } = req.body || {};
 
     if (!agentId || typeof input !== "string" || !input.trim()) {
       return res.status(400).json({ error: "请提供 agentId 和要执行的业务问题。" });
@@ -878,6 +1029,19 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
         "Python/Playwright 公开页面参考数据（非官方实时、仅供交叉验证）：",
         JSON.stringify(scrapeResult, null, 2),
       ].join("\n");
+    }
+
+    if (useExtensionSnapshot && ["growth", "service", "profit"].includes(agentId)) {
+      const plat = String(storeSnapshotPlatform || "tiktok").toLowerCase();
+      const ctx = getMergedExtensionContext(req.user.id, plat, 5);
+      if (ctx) {
+        enrichedInput = [
+          enrichedInput,
+          "",
+          "## 浏览器插件同步的店铺页面快照（卖家已登录后台；非官方 API，可能不完整）",
+          JSON.stringify(ctx, null, 2),
+        ].join("\n");
+      }
     }
 
     if (useStoreSnapshot && ["growth", "service", "profit"].includes(agentId)) {
