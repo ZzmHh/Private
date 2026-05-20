@@ -1,54 +1,63 @@
 import fs from "node:fs";
 import path from "node:path";
+import { defaultDb, normalizeDb } from "./dbSchema.js";
+import { backupDbNow, dbPath, restoreLatestBackup } from "../jobs/dbBackup.js";
 
-const dbPath = path.join(process.cwd(), "data", "app-db.json");
-
-const defaultDb = {
-  users: [],
-  tasks: [],
-  orders: [],
-  usageLogs: [],
-  feedback: [],
-  storeConnections: [],
-  extensionSnapshots: [],
-  storeMetricsImports: [],
-  csFaqTemplates: [],
-  csSellerAlerts: [],
-  csAutomationSettings: {},
-};
-
-function normalizeDb(db) {
-  return {
-    ...defaultDb,
-    ...db,
-    users: Array.isArray(db.users) ? db.users : [],
-    tasks: Array.isArray(db.tasks) ? db.tasks : [],
-    orders: Array.isArray(db.orders) ? db.orders : [],
-    usageLogs: Array.isArray(db.usageLogs) ? db.usageLogs : [],
-    feedback: Array.isArray(db.feedback) ? db.feedback : [],
-    storeConnections: Array.isArray(db.storeConnections) ? db.storeConnections : [],
-    extensionSnapshots: Array.isArray(db.extensionSnapshots) ? db.extensionSnapshots : [],
-    storeMetricsImports: Array.isArray(db.storeMetricsImports) ? db.storeMetricsImports : [],
-    csFaqTemplates: Array.isArray(db.csFaqTemplates) ? db.csFaqTemplates : [],
-    csSellerAlerts: Array.isArray(db.csSellerAlerts) ? db.csSellerAlerts : [],
-    csAutomationSettings: db.csAutomationSettings && typeof db.csAutomationSettings === "object" ? db.csAutomationSettings : {},
-  };
-}
+export { dbPath };
 
 export function ensureDb() {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, JSON.stringify(defaultDb, null, 2), "utf8");
   }
 }
 
+function readJsonFile(filePath) {
+  const raw = fs.readFileSync(filePath, "utf8");
+  return JSON.parse(raw);
+}
+
 export function readDb() {
   ensureDb();
-  return normalizeDb(JSON.parse(fs.readFileSync(dbPath, "utf8")));
+  try {
+    return normalizeDb(readJsonFile(dbPath));
+  } catch (error) {
+    console.error("[jsonRepository] 主库损坏，尝试从备份恢复:", error.message);
+    if (restoreLatestBackup()) {
+      return normalizeDb(readJsonFile(dbPath));
+    }
+    throw error;
+  }
 }
 
 export function writeDb(db) {
   ensureDb();
-  fs.writeFileSync(dbPath, JSON.stringify(normalizeDb(db), null, 2), "utf8");
+  const normalized = normalizeDb(db);
+  const tmpPath = `${dbPath}.tmp`;
+  const payload = JSON.stringify(normalized, null, 2);
+  fs.writeFileSync(tmpPath, payload, "utf8");
+  fs.renameSync(tmpPath, dbPath);
+}
+
+export function getDatabaseInfo() {
+  ensureDb();
+  let stat = null;
+  try {
+    stat = fs.statSync(dbPath);
+  } catch {
+    /* ignore */
+  }
+  return {
+    backend: "json",
+    path: dbPath,
+    ok: Boolean(stat?.isFile()),
+    sizeBytes: stat?.size ?? 0,
+    mtime: stat?.mtime?.toISOString() ?? null,
+  };
+}
+
+/** 写入后可选触发备份（大批量迁移时用） */
+export function writeDbWithBackup(db) {
+  writeDb(db);
+  backupDbNow("after-write");
 }

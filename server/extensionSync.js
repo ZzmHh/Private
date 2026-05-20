@@ -2,7 +2,7 @@
  * 浏览器插件同步的店铺页面快照（不依赖 TikTok Open API）
  */
 import crypto from "node:crypto";
-import { readDb, writeDb } from "./repositories/jsonRepository.js";
+import { readDb, writeDb } from "./repositories/index.js";
 
 const MAX_SNAPSHOTS_PER_USER = 20;
 

@@ -1,4 +1,4 @@
-import { readDb } from "../repositories/jsonRepository.js";
+import { readDb } from "../repositories/index.js";
 import { parseTikTokShopCredentials } from "../integrations/storeApi/tiktok/tiktokShopConnector.js";
 
 /**

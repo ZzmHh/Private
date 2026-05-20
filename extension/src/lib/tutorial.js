@@ -11,7 +11,7 @@ const FanmengTutorial = {
       body: [
         "在 TikTok 卖家中心里，用 AI 帮你写买家回复、看店铺业绩、分析广告和库存。",
         "不需要 TikTok Open API / Partner 应用，在你已登录的浏览器里就能用。",
-        "重要：插件只生成草稿，不会自动发送消息，避免误回复。",
+        "重要：复杂问题多为草稿；FAQ/夜间/售后安抚可能自动发送，见分层客服说明。",
       ],
     },
     {
@@ -113,7 +113,7 @@ const FanmengTutorial = {
     }
 
     for (const sec of this.sections) {
-      parts.push(`<details class="fm-tut-section"${sec.id === "setup" || sec.id === "cs" ? " open" : ""}>`);
+      parts.push(`<details class="fm-tut-section"${sec.id === "setup" ? " open" : ""}>`);
       parts.push(`<summary class="fm-tut-summary">${this.escapeHtml(sec.title)}</summary>`);
       parts.push(`<div class="fm-tut-body">`);
       if (sec.body) {
@@ -157,6 +157,25 @@ const FanmengTutorial = {
 
   async markPanelSeen() {
     await chrome.storage.local.set({ fanmeng_tutorial_panel_seen: true });
+  },
+
+  async shouldAutoOpenPopup() {
+    const data = await chrome.storage.local.get(["fanmeng_tutorial_popup_seen"]);
+    return !data.fanmeng_tutorial_popup_seen;
+  },
+
+  async markPopupSeen() {
+    await chrome.storage.local.set({ fanmeng_tutorial_popup_seen: true });
+  },
+
+  /** 弹窗：包在可折叠外壳里，默认收起 */
+  mountPopupCollapsible(shellEl, mountEl) {
+    if (!mountEl) return;
+    this.mountInto(mountEl, "popup");
+    if (!shellEl || shellEl.tagName !== "DETAILS") return;
+    shellEl.addEventListener("toggle", () => {
+      if (!shellEl.open) this.markPopupSeen();
+    });
   },
 };
 

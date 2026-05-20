@@ -10,11 +10,14 @@
     "build:extension": "node extension/scripts/build.mjs",
     "build:all": "npm run build:extension && npm run build",
     "preview": "vite preview",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "migrate:db": "node scripts/migrate-json-to-sqlite.mjs"
   },
   "dependencies": {
+    "better-sqlite3": "^11.9.1",
     "dotenv": "latest",
     "express": "latest",
+    "express-rate-limit": "^7.5.0",
     "lucide-react": "latest",
     "nodemailer": "^8.0.7",
     "react": "latest",

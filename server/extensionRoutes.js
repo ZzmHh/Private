@@ -25,6 +25,8 @@ import {
   getMergedExtensionContext,
 } from "./extensionSync.js";
 import { getStoreMetricsAgentContext } from "./storeMetrics/store.js";
+import { validateBody, validators } from "./validate/index.js";
+import { asyncHandler } from "./middleware/asyncHandler.js";
 
 function extensionBillingUrl() {
   const base = process.env.APP_PUBLIC_URL?.trim().replace(/\/+$/, "");
@@ -91,13 +93,10 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     });
   });
 
-  app.post("/api/extension/snapshot", authMiddleware, (req, res) => {
+  app.post("/api/extension/snapshot", authMiddleware, validateBody(validators.extensionSnapshot), (req, res) => {
     try {
       ensureFeatureAccess(req.user, "storeApiAgents");
       const { platform, pageType, pageUrl, title, data, shopKey, shopName } = req.body || {};
-      if (!data || typeof data !== "object") {
-        return res.status(400).json({ error: "请提供 data 对象（页面抓取结果）。" });
-      }
       const snapshot = saveExtensionSnapshot({
         userId: req.user.id,
         platform: platform || "tiktok",
@@ -118,16 +117,13 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     }
   });
 
-  app.post("/api/extension/cs/route", authMiddleware, async (req, res) => {
+  app.post("/api/extension/cs/route", authMiddleware, validateBody(validators.csBuyerText), asyncHandler(async (req, res) => {
     const startedAt = Date.now();
     let usage;
     try {
       ensureFeatureAccess(req.user, "agent", "service");
       ensureFeatureAccess(req.user, "storeApiAgents");
       const { buyerText, shopKey, shopName, orderContext, faqTemplates, syncFaq } = req.body || {};
-      if (!buyerText || !String(buyerText).trim()) {
-        return res.status(400).json({ error: "请提供 buyerText。" });
-      }
 
       const sk = String(shopKey || "").trim();
       if (syncFaq !== false && Array.isArray(faqTemplates) && faqTemplates.length) {
@@ -179,20 +175,18 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       res.status(error.status || 500).json({
         error: error.message || "客服路由失败。",
         billingUrl: extensionBillingUrl(),
+        requestId: req.requestId,
       });
     }
-  });
+  }));
 
-  app.post("/api/extension/cs/suggest", authMiddleware, async (req, res) => {
+  app.post("/api/extension/cs/suggest", authMiddleware, validateBody(validators.csBuyerText), asyncHandler(async (req, res) => {
     const startedAt = Date.now();
     let usage;
     try {
       ensureFeatureAccess(req.user, "agent", "service");
       ensureFeatureAccess(req.user, "storeApiAgents");
       const { buyerText, shopName, shopKey, orderContext, useLegacy } = req.body || {};
-      if (!buyerText || !String(buyerText).trim()) {
-        return res.status(400).json({ error: "请提供 buyerText。" });
-      }
 
       if (useLegacy !== true) {
         const sk = String(shopKey || "").trim();
@@ -268,9 +262,10 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         error: error.message || "话术生成失败。",
         code: error.code || "",
         billingUrl: extensionBillingUrl(),
+        requestId: req.requestId,
       });
     }
-  });
+  }));
 
   app.post("/api/extension/cs/faq/sync", authMiddleware, (req, res) => {
     try {

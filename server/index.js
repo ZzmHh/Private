@@ -61,6 +61,14 @@ import {
 import { registerExtensionRoutes } from "./extensionRoutes.js";
 import { getMergedExtensionContext } from "./extensionSync.js";
 import { registerStoreMetricsRoutes, getStoreMetricsAgentContext } from "./storeMetricsRoutes.js";
+import { requestIdMiddleware } from "./middleware/requestId.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { apiIpLimiter, extensionLimiter, agentRunLimiter } from "./middleware/rateLimit.js";
+import { errorHandler, apiNotFoundHandler } from "./middleware/errorHandler.js";
+import { asyncHandler } from "./middleware/asyncHandler.js";
+import { validateBody, validators } from "./validate/index.js";
+import { registerHealthRoutes } from "./routes/health.js";
+import { startDbBackupScheduler } from "./jobs/dbBackup.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,17 +182,20 @@ app.get("/webhooks/tiktok", (req, res) => {
   res.status(200).json({ ok: true, hint: "凡梦 TikTok Webhook 接入点" });
 });
 
-app.post("/webhooks/tiktok", express.json({ limit: "512kb" }), async (req, res) => {
-  try {
-    const result = await handleTiktokBuyerMessageWebhook(req.body);
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("[webhooks/tiktok]", error);
-    res.status(500).json({ ok: false, error: error.message || "webhook 处理失败" });
-  }
-});
+app.post("/webhooks/tiktok", express.json({ limit: "512kb" }), asyncHandler(async (req, res) => {
+  const result = await handleTiktokBuyerMessageWebhook(req.body);
+  res.status(200).json(result);
+}));
 
 app.use(express.json({ limit: "1mb" }));
+app.use(requestIdMiddleware);
+app.use(requestLogger);
+
+app.use("/api", apiIpLimiter);
+app.use("/api/extension", extensionLimiter);
+app.use("/api/agents/run", agentRunLimiter);
+app.use("/api/autopilot/run", agentRunLimiter);
+
 app.use("/payment", express.static(path.join(__dirname, "../public/payment")));
 app.use("/downloads", express.static(path.join(__dirname, "../public/downloads")));
 app.use(express.static(path.join(__dirname, "../public")));
@@ -199,15 +210,7 @@ registerExtensionRoutes(app, {
 
 registerStoreMetricsRoutes(app, { authMiddleware });
 
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    service: "凡梦AI",
-    provider: providerName,
-    model,
-    openclawConfigured: Boolean(apiKey),
-  });
-});
+registerHealthRoutes(app, { providerName, model, apiKey });
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -351,7 +354,7 @@ app.post("/api/auth/register", (req, res) => {
   }
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", validateBody(validators.login), (req, res) => {
   try {
     const { email, password } = req.body || {};
 
@@ -894,7 +897,7 @@ function buildAutopilotMessages({ platform, market, category, extra }) {
   ];
 }
 
-app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
+app.post("/api/autopilot/run", authMiddleware, validateBody(validators.autopilotRun), async (req, res) => {
   const startedAt = Date.now();
   let usage;
   try {
@@ -993,7 +996,7 @@ app.post("/api/autopilot/run", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/api/agents/run", authMiddleware, async (req, res) => {
+app.post("/api/agents/run", authMiddleware, validateBody(validators.agentRun), async (req, res) => {
   const startedAt = Date.now();
   let usage;
   try {
@@ -1146,11 +1149,21 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
 
 app.use(express.static(path.join(__dirname, "../dist")));
 
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/webhooks")) {
+    return apiNotFoundHandler(req, res);
+  }
+  next();
+});
+
+app.use(errorHandler);
+
 app.use((_req, res) => {
   res.sendFile(path.join(__dirname, "../dist/index.html"));
 });
 
 syncAdminFlagsFromEnv();
+startDbBackupScheduler();
 
 app.listen(port, () => {
   console.log(`凡梦AI server running at http://127.0.0.1:${port}`);

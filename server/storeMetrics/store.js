@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { readDb, writeDb } from "../repositories/jsonRepository.js";
+import { readDb, writeDb } from "../repositories/index.js";
 
 const MAX_IMPORTS_PER_USER = 30;
 

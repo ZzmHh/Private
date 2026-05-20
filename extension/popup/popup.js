@@ -133,5 +133,12 @@ document.getElementById("subscribeBtn").addEventListener("click", async () => {
   else showMsg("请先在网站注册并打开订阅页");
 });
 
-FanmengTutorial.mountInto(document.getElementById("tutorialMount"), "popup");
+const tutorialShell = document.getElementById("tutorialShell");
+const tutorialMount = document.getElementById("tutorialMount");
+FanmengTutorial.mountPopupCollapsible(tutorialShell, tutorialMount);
+(async () => {
+  if (tutorialShell && (await FanmengTutorial.shouldAutoOpenPopup())) {
+    tutorialShell.open = true;
+  }
+})();
 loadUi();

@@ -2,7 +2,7 @@
  * 客服自动化 · FAQ / 设置 / 卖家待办 存储
  */
 import crypto from "node:crypto";
-import { readDb, writeDb } from "../repositories/jsonRepository.js";
+import { readDb, writeDb } from "../repositories/index.js";
 
 export function defaultCsAutomationSettings() {
   return {

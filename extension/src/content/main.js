@@ -438,7 +438,7 @@
     const headActions = el("div", "fm-head-actions");
     const tutBtn = el("button", "fm-icon-btn fm-tut-btn", "?");
     tutBtn.type = "button";
-    tutBtn.title = "卖家试用教程";
+    tutBtn.title = "打开/关闭卖家教程";
     const collapseBtn = el("button", "fm-icon-btn", "—");
     collapseBtn.type = "button";
     headActions.append(tutBtn, collapseBtn);
@@ -462,7 +462,13 @@
     body.appendChild(el("p", "fm-hint fm-cs-tier-hint", "FAQ 命中自动发 · 售后转人工 · 北京23:00–09:00 AI 守店"));
 
     const tutBox = el("div", "fm-tutorial-box hidden");
-    tutBox.appendChild(el("p", "fm-label", "📖 卖家试用教程（点 ? 随时打开）"));
+    const tutHead = el("div", "fm-tutorial-head");
+    tutHead.appendChild(el("span", "fm-label", "📖 卖家试用教程"));
+    const tutCloseBtn = el("button", "fm-icon-btn fm-tut-close", "×");
+    tutCloseBtn.type = "button";
+    tutCloseBtn.title = "关闭教程";
+    tutHead.appendChild(tutCloseBtn);
+    tutBox.appendChild(tutHead);
     const tutMount = el("div", "fm-tutorial-mount");
     tutBox.appendChild(tutMount);
     body.appendChild(tutBox);
@@ -532,7 +538,13 @@
 
     FanmengTutorial.mountInto(tutMount, "panel");
     tutBtn.addEventListener("click", () => {
+      const willHide = !tutBox.classList.contains("hidden");
       tutBox.classList.toggle("hidden");
+      if (willHide) FanmengTutorial.markPanelSeen();
+    });
+    tutCloseBtn.addEventListener("click", () => {
+      tutBox.classList.add("hidden");
+      FanmengTutorial.markPanelSeen();
     });
 
     subscribeBtn.addEventListener("click", async () => {
@@ -688,7 +700,6 @@
     const tutBox = document.querySelector(`#${PANEL_ID} .fm-tutorial-box`);
     if (tutBox && (await FanmengTutorial.shouldAutoOpenPanel())) {
       tutBox.classList.remove("hidden");
-      await FanmengTutorial.markPanelSeen();
     }
 
     try {

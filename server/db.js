@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
-import { readDb, writeDb } from "./repositories/jsonRepository.js";
+import { readDb, writeDb } from "./repositories/index.js";
+import { createError } from "./lib/errors.js";
+
+export { createError };
 
 const isProduction = process.env.NODE_ENV === "production";
 const tokenSecret = process.env.JWT_SECRET || (!isProduction ? process.env.OPENCLAW_API_KEY || "local-dev-secret" : "");
@@ -117,14 +120,6 @@ function hashVerificationCode(email, code, purpose = "email") {
   return crypto.createHmac("sha256", tokenSecret).update(`${purpose}:${email}:${code}`).digest("hex");
 }
 
-function createError(message, status = 400, code = "") {
-  const error = new Error(message);
-  error.status = status;
-  if (code) error.code = code;
-  return error;
-}
-
-/** 在 .env 中配置 ADMIN_EMAILS=a@x.com,b@y.com 即可将对应账号标为运营后台管理员 */
 function isConfiguredAdminEmail(email) {
   const raw = String(process.env.ADMIN_EMAILS || "").trim();
   if (!raw) return false;

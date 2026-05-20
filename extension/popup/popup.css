@@ -138,6 +138,47 @@ button.secondary {
   line-height: 1.4;
 }
 
+.tutorial-shell {
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f0f7ff 0%, #fff 100%);
+  margin-bottom: 6px;
+}
+
+.tutorial-shell-summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  color: #1d4ed8;
+  list-style: none;
+  user-select: none;
+}
+
+.tutorial-shell-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tutorial-shell-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.tutorial-shell[open] .tutorial-shell-summary::before {
+  transform: rotate(90deg);
+}
+
+.tutorial-shell-body {
+  padding: 0 8px 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.tutorial-shell-hint {
+  margin: 0 0 10px;
+}
+
 .tutorial-fieldset {
   background: linear-gradient(180deg, #f0f7ff 0%, #fff 100%);
 }

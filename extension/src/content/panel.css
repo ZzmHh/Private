@@ -245,6 +245,27 @@
   overflow-y: auto;
 }
 
+#fanmeng-ai-panel-root .fm-tutorial-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+#fanmeng-ai-panel-root .fm-tutorial-head .fm-label {
+  margin: 0;
+  flex: 1;
+  font-size: 11px;
+}
+
+#fanmeng-ai-panel-root .fm-tut-close {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
 #fanmeng-ai-panel-root .fm-tutorial-box.hidden {
   display: none;
 }
