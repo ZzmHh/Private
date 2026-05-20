@@ -27,6 +27,15 @@ import {
   Zap,
 } from "lucide-react";
 import "./styles.css";
+import {
+  ExtensionInstallBanner,
+  ExtensionInstallModal,
+  ExtensionInstallPanel,
+} from "./extensionInstallUi.jsx";
+import {
+  EXTENSION_INSTALL_DISMISS_KEY,
+  extensionInstallAvailable,
+} from "./extensionInstallConfig.js";
 
 const pricingPlans = [
   {
@@ -569,6 +578,10 @@ function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
           <div>
             <h3>工作台 · 执行任务</h3>
             <p>在控制台内运行各模块、5 Agent 运营一键生成、配置店铺 API 与本地附件。</p>
+          </div>
+          <div>
+            <h3>插件 · TikTok 卖家中心</h3>
+            <p>标准版含 Chrome 助手：工作台内按向导安装，在卖家后台生成客服话术与页面诊断。</p>
           </div>
         </div>
       </section>
@@ -1497,6 +1510,7 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
             推荐路径：<strong>Chrome 插件</strong>（卖家中心浏览器内）+ 下方 <strong>经营 CSV</strong> 导入；可选 Open API / OAuth 补充。
           </span>
         </div>
+        <ExtensionInstallPanel compact />
         <StoreMetricsImportSection authHeaders={authHeaders} showToast={showToast} onImported={onMetricsImported} />
         <p className="store-api-intro">
           配置 <strong>TikTok Shop</strong> 店铺凭据，或使用插件同步页面数据（无需 Partner 也可跑诊断/客服）。
@@ -1600,7 +1614,7 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
   );
 }
 
-function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user }) {
+function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user, onSubscribed }) {
   const [selectedPlanId, setSelectedPlanId] = useState(() =>
     user?.plan && PAID_PLAN_IDS.has(user.plan) ? user.plan : "standard",
   );
@@ -1724,6 +1738,9 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
       onUserUpdate(data.user);
       showToast("开发模式已模拟支付成功，套餐已开通。");
       onClose();
+      if (onSubscribed && data.user?.planFeatures?.storeApiAgents) {
+        onSubscribed();
+      }
     } catch (error) {
       showToast(formatError(error));
     } finally {
@@ -2586,6 +2603,10 @@ function Workspace() {
   const [tasks, setTasks] = useState([]);
   const [showSubscription, setShowSubscription] = useState(false);
   const [showStoreApiModal, setShowStoreApiModal] = useState(false);
+  const [showExtensionInstall, setShowExtensionInstall] = useState(false);
+  const [extensionInstallDismissed, setExtensionInstallDismissed] = useState(
+    () => localStorage.getItem(EXTENSION_INSTALL_DISMISS_KEY) === "1",
+  );
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminSummary, setAdminSummary] = useState(null);
@@ -2624,6 +2645,17 @@ function Workspace() {
     [tasks, activeId, historyQuery],
   );
   const storeConnected = STORE_PLATFORM_ORDER.some((p) => isPlatformBlockReady(p, storeBlocks[p]));
+  const showExtensionInstallBanner =
+    Boolean(token && user && extensionInstallAvailable(user, isBetaMode) && !extensionInstallDismissed);
+
+  function dismissExtensionInstallBanner() {
+    localStorage.setItem(EXTENSION_INSTALL_DISMISS_KEY, "1");
+    setExtensionInstallDismissed(true);
+  }
+
+  function openExtensionInstallGuide() {
+    setShowExtensionInstall(true);
+  }
   const accessActive = isBetaMode || user?.accessActive;
 
   useEffect(() => {
@@ -3251,8 +3283,10 @@ function Workspace() {
           showToast={showToast}
           authHeaders={authHeaders}
           onUserUpdate={updateUser}
+          onSubscribed={() => setShowExtensionInstall(true)}
         />
       )}
+      {showExtensionInstall ? <ExtensionInstallModal onClose={() => setShowExtensionInstall(false)} /> : null}
       {showFeedbackModal && (
         <div className="modal-backdrop" role="presentation" onClick={() => setShowFeedbackModal(false)}>
           <section className="store-api-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
@@ -3318,6 +3352,9 @@ function Workspace() {
           {!isBetaMode && !user?.trialActive && user?.plan === "trial" && <em>试用期结束，请订阅后继续使用</em>}
           {!isBetaMode && !storeConnected && !(user?.plan === "trial" && user?.trialActive) && <em>建议配置店铺 API 以便付费套餐深度接入</em>}
           <button type="button" onClick={() => setShowSubscription(true)}>查看/升级订阅</button>
+          {extensionInstallAvailable(user, isBetaMode) ? (
+            <button type="button" onClick={openExtensionInstallGuide}>安装 TikTok 插件</button>
+          ) : null}
           <button type="button" onClick={() => setShowStoreApiModal(true)}>店铺 API 配置</button>
           <button type="button" onClick={() => setIsBetaMode((value) => !value)}>{isBetaMode ? "退出内测版" : "进入内测版"}</button>
           {user?.isAdmin && <button type="button" onClick={loadAdminSummary}>运营后台</button>}
@@ -3380,6 +3417,9 @@ function Workspace() {
               <button type="button" onClick={() => setShowSubscription(true)}>去订阅</button>
             </div>
           )}
+          {showExtensionInstallBanner ? (
+            <ExtensionInstallBanner onOpenGuide={openExtensionInstallGuide} onDismiss={dismissExtensionInstallBanner} />
+          ) : null}
           <div className="work-header-inner">
             <div>
               <p>OpenClaw Agent Console</p>

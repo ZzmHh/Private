@@ -7,6 +7,8 @@
     "dev": "vite",
     "dev:server": "node server/index.js",
     "build": "vite build",
+    "build:extension": "node extension/scripts/build.mjs",
+    "build:all": "npm run build:extension && npm run build",
     "preview": "vite preview",
     "start": "node server/index.js"
   },
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "latest",
+    "archiver": "^7.0.1",
     "vite": "latest"
   }
 }

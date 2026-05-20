@@ -30,6 +30,7 @@
         "https://*.tiktokshop.com/*"
       ],
       "js": [
+        "src/lib/config.js",
         "src/lib/tiktok.js",
         "src/lib/billing.js",
         "src/lib/tutorial.js",

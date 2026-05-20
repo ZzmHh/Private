@@ -1,0 +1,41 @@
+name: Extension Release
+
+on:
+  push:
+    tags:
+      - "extension-v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build extension ZIP
+        env:
+          EXTENSION_DEFAULT_API_BASE: ${{ vars.EXTENSION_DEFAULT_API_BASE || secrets.EXTENSION_DEFAULT_API_BASE || 'https://example.com' }}
+          EXTENSION_WEBSITE_URL: ${{ vars.EXTENSION_WEBSITE_URL || secrets.EXTENSION_WEBSITE_URL || 'https://example.com' }}
+          EXTENSION_PRIVACY_URL: ${{ vars.EXTENSION_PRIVACY_URL || secrets.EXTENSION_PRIVACY_URL || 'https://example.com/privacy-extension.html' }}
+          VITE_EXTENSION_CWS_URL: ${{ vars.VITE_EXTENSION_CWS_URL || secrets.VITE_EXTENSION_CWS_URL || '' }}
+        run: npm run build:extension
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fanmeng-tiktok-extension
+          path: public/downloads/fanmeng-tiktok-extension.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/extension-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: public/downloads/fanmeng-tiktok-extension.zip
+          generate_release_notes: true

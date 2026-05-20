@@ -5,7 +5,7 @@
 /** @typedef {{ id: string, name: string, text: string, shopId?: string, updatedAt: string }} ReplyTemplate */
 
 const DEFAULT_SETTINGS = {
-  apiBase: "http://127.0.0.1:8787",
+  apiBase: (typeof FanmengExtensionConfig !== "undefined" && FanmengExtensionConfig.DEFAULT_API_BASE) || "http://127.0.0.1:8787",
   token: "",
   autoSync: false,
   autoSyncMinutes: 15,

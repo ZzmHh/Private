@@ -46,6 +46,15 @@
 3. 面板显示 `诊断包 3/4：✓数据概览 ✓订单 ✓广告 ○库存`  
 4. 至少 **2/4** 后再点 **业绩诊断 / 广告库存利润** 效果更好  
 
+## 卖家如何安装？
+
+1. 在 **凡梦网站** 登录（试用或订阅标准版）
+2. 工作台点击 **「安装 TikTok 插件」** 或顶部安装横幅
+3. 按向导从 Chrome 商店安装，或下载 ZIP 后加载解压扩展
+4. 插件弹窗登录同一凡梦账号 → 打开 TikTok 卖家中心
+
+详细运营配置见 [docs/EXTENSION_INSTALL.md](../docs/EXTENSION_INSTALL.md) · 商店上架见 [docs/CHROME_WEB_STORE.md](../docs/CHROME_WEB_STORE.md)
+
 ## 安装（开发者模式）
 
 1. 启动凡梦后端：`npm run dev:server`（默认 `http://127.0.0.1:8787`）  

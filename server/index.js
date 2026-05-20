@@ -186,6 +186,8 @@ app.post("/webhooks/tiktok", express.json({ limit: "512kb" }), async (req, res) 
 
 app.use(express.json({ limit: "1mb" }));
 app.use("/payment", express.static(path.join(__dirname, "../public/payment")));
+app.use("/downloads", express.static(path.join(__dirname, "../public/downloads")));
+app.use(express.static(path.join(__dirname, "../public")));
 
 registerExtensionRoutes(app, {
   authMiddleware,

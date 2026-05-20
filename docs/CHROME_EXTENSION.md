@@ -35,8 +35,9 @@
 ## 平台方（你）步骤
 
 1. 部署凡梦后端（含 `/api/extension/*` 路由）  
-2. **无需** TikTok Partner 应用即可让卖家使用插件能力  
-3. 可选：在官网增加「下载/安装插件」说明  
+2. 配置 `extension/build.env` 后执行 `npm run build:extension` 生成 ZIP  
+3. 网站 `.env` 配置 `VITE_EXTENSION_CWS_URL` 等（见 `docs/EXTENSION_INSTALL.md`）  
+4. 工作台内已内置 **安装向导** 与 `/downloads/*.zip` 下载  
 
 ## 自动化程度
 

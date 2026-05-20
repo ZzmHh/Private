@@ -1,6 +1,9 @@
 async function loadUi() {
   const s = await FanmengStorage.getSettings();
-  document.getElementById("apiBase").value = s.apiBase || "http://127.0.0.1:8787";
+  const defaultApi =
+    (typeof FanmengExtensionConfig !== "undefined" && FanmengExtensionConfig.DEFAULT_API_BASE) ||
+    "http://127.0.0.1:8787";
+  document.getElementById("apiBase").value = s.apiBase || defaultApi;
   document.getElementById("autoSync").checked = Boolean(s.autoSync);
   document.getElementById("autoSyncMinutes").value = String(s.autoSyncMinutes || 15);
   document.getElementById("autoCsListen").checked = s.autoCsListen !== false;
