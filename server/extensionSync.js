@@ -9,7 +9,7 @@ const MAX_SNAPSHOTS_PER_USER = 20;
 /**
  * @param {{ userId: string, platform?: string, pageType?: string, pageUrl?: string, title?: string, data: object }} param0
  */
-export function saveExtensionSnapshot({ userId, platform = "tiktok", pageType = "unknown", pageUrl = "", title = "", data }) {
+export function saveExtensionSnapshot({ userId, platform = "tiktok", pageType = "unknown", pageUrl = "", title = "", data, shopKey = "", shopName = "" }) {
   const db = readDb();
   if (!Array.isArray(db.extensionSnapshots)) {
     db.extensionSnapshots = [];
@@ -19,6 +19,8 @@ export function saveExtensionSnapshot({ userId, platform = "tiktok", pageType = 
     id: crypto.randomUUID(),
     userId,
     platform: String(platform || "tiktok").toLowerCase(),
+    shopKey: String(shopKey || "").slice(0, 200),
+    shopName: String(shopName || "").slice(0, 200),
     pageType: String(pageType || "unknown"),
     pageUrl: String(pageUrl || "").slice(0, 2000),
     title: String(title || "").slice(0, 500),
@@ -54,21 +56,29 @@ export function getLatestExtensionSnapshot(userId, platform = "tiktok") {
  * @param {string} [platform]
  * @param {number} [limit]
  */
-export function getMergedExtensionContext(userId, platform = "tiktok", limit = 5) {
+export function getMergedExtensionContext(userId, platform = "tiktok", limit = 5, shopKey) {
   const db = readDb();
   const p = String(platform || "tiktok").toLowerCase();
-  const list = (db.extensionSnapshots || [])
-    .filter((s) => s.userId === userId && String(s.platform || "tiktok").toLowerCase() === p)
-    .slice(0, limit);
+  const sk = shopKey ? String(shopKey) : "";
+  let list = (db.extensionSnapshots || []).filter(
+    (s) => s.userId === userId && String(s.platform || "tiktok").toLowerCase() === p,
+  );
+  if (sk) {
+    list = list.filter((s) => s.shopKey === sk);
+  }
+  list = list.slice(0, limit);
 
   if (!list.length) return null;
 
   return {
     platform: p,
+    shopKey: sk || null,
     source: "browser-extension",
     snapshotCount: list.length,
     latestAt: list[0].pulledAt,
     pages: list.map((s) => ({
+      shopKey: s.shopKey,
+      shopName: s.shopName,
       pageType: s.pageType,
       pageUrl: s.pageUrl,
       title: s.title,

@@ -8,12 +8,42 @@ import {
   finalizeUsageLog,
   incrementUsage,
   saveTask,
+  sanitizeUser,
 } from "./db.js";
 import {
   listExtensionSnapshots,
   saveExtensionSnapshot,
   getMergedExtensionContext,
 } from "./extensionSync.js";
+import { getStoreMetricsAgentContext } from "./storeMetrics/store.js";
+
+function extensionBillingUrl() {
+  const base = process.env.APP_PUBLIC_URL?.trim().replace(/\/+$/, "");
+  return base ? `${base}/#subscription` : null;
+}
+
+function extensionEntitlements(rawUser) {
+  const user = sanitizeUser(rawUser);
+  let extensionAllowed = true;
+  let extensionBlockReason = "";
+  try {
+    ensureFeatureAccess(rawUser, "storeApiAgents");
+  } catch (error) {
+    extensionAllowed = false;
+    extensionBlockReason = error.message || "当前套餐不支持 TikTok 插件。";
+  }
+  return {
+    accessActive: Boolean(user.accessActive),
+    plan: user.plan,
+    planName: user.planName,
+    trialActive: Boolean(user.trialActive),
+    subscriptionActive: Boolean(user.subscriptionActive),
+    storeApiAgents: Boolean(user.planFeatures?.storeApiAgents),
+    extensionAllowed,
+    extensionBlockReason,
+    trialQuota: user.trialQuota || null,
+  };
+}
 
 /**
  * @param {import("express").Express} app
@@ -35,11 +65,17 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
 
   app.get("/api/extension/status", authMiddleware, (req, res) => {
     const platform = String(req.query.platform || "tiktok").toLowerCase();
-    const snaps = listExtensionSnapshots(req.user.id, platform, 5);
+    const shopKey = String(req.query.shopKey || "").trim();
+    let snaps = listExtensionSnapshots(req.user.id, platform, 20);
+    if (shopKey) snaps = snaps.filter((s) => s.shopKey === shopKey);
+    const user = sanitizeUser(req.user);
     res.json({
       ok: true,
-      user: { email: req.user.email, name: req.user.name },
+      user: { email: user.email, name: user.name },
+      entitlements: extensionEntitlements(req.user),
+      billingUrl: extensionBillingUrl(),
       platform,
+      shopKey: shopKey || null,
       snapshotCount: snaps.length,
       latestAt: snaps[0]?.pulledAt || null,
       pageTypes: [...new Set(snaps.map((s) => s.pageType))],
@@ -49,7 +85,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
   app.post("/api/extension/snapshot", authMiddleware, (req, res) => {
     try {
       ensureFeatureAccess(req.user, "storeApiAgents");
-      const { platform, pageType, pageUrl, title, data } = req.body || {};
+      const { platform, pageType, pageUrl, title, data, shopKey, shopName } = req.body || {};
       if (!data || typeof data !== "object") {
         return res.status(400).json({ error: "请提供 data 对象（页面抓取结果）。" });
       }
@@ -59,11 +95,17 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         pageType: pageType || "unknown",
         pageUrl: pageUrl || "",
         title: title || "",
+        shopKey: shopKey || "",
+        shopName: shopName || "",
         data,
       });
       res.json({ ok: true, snapshot: { id: snapshot.id, pulledAt: snapshot.pulledAt, pageType: snapshot.pageType } });
     } catch (error) {
-      res.status(error.status || 500).json({ error: error.message || "快照保存失败。" });
+      res.status(error.status || 500).json({
+        error: error.message || "快照保存失败。",
+        code: error.code || "",
+        billingUrl: extensionBillingUrl(),
+      });
     }
   });
 
@@ -115,7 +157,11 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       if (usage?.logId) {
         finalizeUsageLog(usage.logId, { type: "service", status: "failed", error: error.message, startedAt });
       }
-      res.status(error.status || 500).json({ error: error.message || "话术生成失败。" });
+      res.status(error.status || 500).json({
+        error: error.message || "话术生成失败。",
+        code: error.code || "",
+        billingUrl: extensionBillingUrl(),
+      });
     }
   });
 
@@ -137,6 +183,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
 
       usage = incrementUsage(req.user.id, agentId);
       const plat = String(platform || "tiktok").toLowerCase();
+      const shopKey = String(req.body?.shopKey || "").trim();
       let enrichedInput = typeof input === "string" && input.trim()
         ? input.trim()
         : agentId === "growth"
@@ -146,20 +193,29 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
             : "基于插件提供的上下文，输出客服策略摘要。";
 
       if (includeSnapshots !== false) {
-        const ctx = getMergedExtensionContext(req.user.id, plat, 5);
+        const ctx = getMergedExtensionContext(req.user.id, plat, 8, shopKey || undefined);
+        const metricsCtx = getStoreMetricsAgentContext(req.user.id, plat);
+        const blocks = [];
+        if (metricsCtx) {
+          blocks.push(
+            "## 多平台通用 CSV 经营数据（已解析 + 规则预计算）",
+            JSON.stringify(metricsCtx, null, 2),
+          );
+        }
         if (ctx) {
-          enrichedInput = [
-            enrichedInput,
-            "",
+          blocks.push(
             "## 浏览器插件同步的店铺页面快照（卖家已登录后台；非官方 API，可能不完整）",
             JSON.stringify(ctx, null, 2),
-          ].join("\n");
+          );
+        }
+        if (blocks.length) {
+          enrichedInput = [enrichedInput, "", ...blocks].join("\n");
         } else {
           enrichedInput = [
             enrichedInput,
             "",
-            "## 浏览器插件快照",
-            "当前无已同步页面。请先在 TikTok 卖家中心打开数据/订单/广告页，点击插件「同步本页」。",
+            "## 店铺数据",
+            "当前无 CSV 导入或插件快照。请导入通用 CSV 或在卖家中心点击插件「同步本页」。",
           ].join("\n");
         }
       }
@@ -210,7 +266,11 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       if (usage?.logId) {
         finalizeUsageLog(usage.logId, { type: req.body?.agentId || "extension", status: "failed", error: error.message, startedAt });
       }
-      res.status(error.status || 500).json({ error: error.message || "分析失败。" });
+      res.status(error.status || 500).json({
+        error: error.message || "分析失败。",
+        code: error.code || "",
+        billingUrl: extensionBillingUrl(),
+      });
     }
   });
 }

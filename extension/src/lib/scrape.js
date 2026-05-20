@@ -59,19 +59,58 @@ const FanmengScrape = {
     return cards.slice(0, 24);
   },
 
+  /** @returns {{ messages: object[], lastBuyer: object|null, recognized: boolean, profileId: string|null }} */
+  parseChat(root = document.body) {
+    return FanmengMessageParser.parse(root);
+  },
+
   extractChatMessages(root) {
-    const messages = [];
-    const candidates = root.querySelectorAll(
-      "[class*='message'], [class*='chat'], [class*='bubble'], [role='listitem'], li",
-    );
-    candidates.forEach((el) => {
-      const text = (el.innerText || "").trim();
-      if (text.length < 2 || text.length > 800) return;
-      if (/^(发送|Send|Reply|回复|Today|Yesterday)/i.test(text)) return;
-      messages.push(text.slice(0, 400));
-    });
-    const uniq = [...new Set(messages)];
-    return uniq.slice(-12);
+    const parsed = this.parseChat(root);
+    return parsed.messages.map((m) => m.text);
+  },
+
+  extractChatMessagesWithRoles(root) {
+    return this.parseChat(root).messages;
+  },
+
+  extractLatestBuyerMessage(root) {
+    const parsed = this.parseChat(root);
+    return parsed.lastBuyer?.text || "";
+  },
+
+  isChatRecognized(root) {
+    return this.parseChat(root).recognized;
+  },
+
+  detectShopContext() {
+    const pick = (sel) => {
+      const el = document.querySelector(sel);
+      return el?.innerText?.trim().slice(0, 120) || "";
+    };
+    const candidates = [
+      pick("[class*='shop-name']"),
+      pick("[class*='shopName']"),
+      pick("[class*='store-name']"),
+      pick("header h1"),
+      pick("[class*='header'] [class*='title']"),
+    ].filter(Boolean);
+
+    let name = candidates[0] || "";
+    if (!name && document.title) {
+      name = document.title.replace(/\s*[-|].*TikTok.*$/i, "").trim();
+    }
+    if (!name) name = FanmengTikTok.PLATFORM_LABEL;
+
+    const region = FanmengTikTok.detectRegion(location.hostname);
+    const id = FanmengTikTok.buildShopId(name, location.hostname);
+
+    return {
+      id,
+      name,
+      platform: FanmengTikTok.PLATFORM,
+      region,
+      regionLabel: FanmengTikTok.regionLabel(region),
+    };
   },
 
   scrapePage() {
@@ -92,9 +131,21 @@ const FanmengScrape = {
     };
 
     if (pageType === "chat") {
-      data.recentMessages = this.extractChatMessages(document.body);
-      data.latestBuyerMessage = data.recentMessages[data.recentMessages.length - 1] || "";
+      const chatParse = this.parseChat(document.body);
+      data.chatParse = {
+        profileId: chatParse.profileId,
+        profileLabel: chatParse.profileLabel,
+        region: chatParse.region,
+        recognized: chatParse.recognized,
+        method: chatParse.method,
+        confidence: chatParse.confidence,
+      };
+      data.messagesWithRoles = chatParse.messages;
+      data.recentMessages = chatParse.messages.map((m) => m.text);
+      data.latestBuyerMessage = chatParse.lastBuyer?.text || "";
     }
+
+    data.shopHint = this.detectShopContext();
 
     return { pageType, pageUrl: url, title, data };
   },

@@ -11,6 +11,7 @@ const defaultDb = {
   feedback: [],
   storeConnections: [],
   extensionSnapshots: [],
+  storeMetricsImports: [],
 };
 
 function normalizeDb(db) {
@@ -24,6 +25,7 @@ function normalizeDb(db) {
     feedback: Array.isArray(db.feedback) ? db.feedback : [],
     storeConnections: Array.isArray(db.storeConnections) ? db.storeConnections : [],
     extensionSnapshots: Array.isArray(db.extensionSnapshots) ? db.extensionSnapshots : [],
+    storeMetricsImports: Array.isArray(db.storeMetricsImports) ? db.storeMetricsImports : [],
   };
 }
 

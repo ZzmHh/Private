@@ -60,6 +60,7 @@ import {
 } from "./integrations/storeApi/tiktok/tiktokShopOAuth.js";
 import { registerExtensionRoutes } from "./extensionRoutes.js";
 import { getMergedExtensionContext } from "./extensionSync.js";
+import { registerStoreMetricsRoutes, getStoreMetricsAgentContext } from "./storeMetricsRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -193,6 +194,8 @@ registerExtensionRoutes(app, {
   model,
   callChatCompletions,
 });
+
+registerStoreMetricsRoutes(app, { authMiddleware });
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -992,7 +995,8 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
   const startedAt = Date.now();
   let usage;
   try {
-    const { agentId, input, scrape, useStoreSnapshot, storeSnapshotPlatform, useExtensionSnapshot } = req.body || {};
+    const { agentId, input, scrape, useStoreSnapshot, storeSnapshotPlatform, useExtensionSnapshot, useStoreMetrics } =
+      req.body || {};
 
     if (!agentId || typeof input !== "string" || !input.trim()) {
       return res.status(400).json({ error: "请提供 agentId 和要执行的业务问题。" });
@@ -1029,6 +1033,19 @@ app.post("/api/agents/run", authMiddleware, async (req, res) => {
         "Python/Playwright 公开页面参考数据（非官方实时、仅供交叉验证）：",
         JSON.stringify(scrapeResult, null, 2),
       ].join("\n");
+    }
+
+    if (useStoreMetrics && ["growth", "service", "profit"].includes(agentId)) {
+      const plat = String(storeSnapshotPlatform || "auto").toLowerCase();
+      const ctx = getStoreMetricsAgentContext(req.user.id, plat === "auto" ? undefined : plat);
+      if (ctx) {
+        enrichedInput = [
+          enrichedInput,
+          "",
+          "## 多平台通用 CSV 经营数据（已解析 + 规则预计算；非官方 API 实时）",
+          JSON.stringify(ctx, null, 2),
+        ].join("\n");
+      }
     }
 
     if (useExtensionSnapshot && ["growth", "service", "profit"].includes(agentId)) {

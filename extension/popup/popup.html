@@ -8,15 +8,16 @@
   </head>
   <body>
     <h1>凡梦AI</h1>
-    <p class="sub">TikTok Shop 浏览器助手</p>
+    <p class="sub">TikTok Shop 专用助手 v0.3</p>
+
+    <fieldset class="fieldset tutorial-fieldset">
+      <legend>📖 5 分钟上手教程</legend>
+      <div id="tutorialMount"></div>
+    </fieldset>
 
     <label>
       凡梦 API 地址
       <input id="apiBase" type="url" placeholder="http://127.0.0.1:8787" />
-    </label>
-    <label>
-      店铺显示名（可选）
-      <input id="shopName" type="text" placeholder="我的 TikTok 店" />
     </label>
 
     <div id="loginBlock">
@@ -33,20 +34,48 @@
 
     <div id="loggedBlock" class="hidden">
       <p id="userLine" class="user-line"></p>
+      <p id="planLine" class="plan-line"></p>
+      <button type="button" id="subscribeBtn" class="primary hidden">去网站订阅 / 续费</button>
       <button type="button" id="logoutBtn">退出登录</button>
     </div>
 
-    <label class="check">
-      <input id="autoSync" type="checkbox" />
-      打开卖家中心时定时同步页面（分钟）
-    </label>
-    <input id="autoSyncMinutes" type="number" min="5" max="120" value="15" />
+    <fieldset class="fieldset">
+      <legend>自动化</legend>
+      <label class="check">
+        <input id="autoCsListen" type="checkbox" />
+        聊天页自动监听新消息并生成话术（不自动发送）
+      </label>
+      <label class="check">
+        <input id="autoDiagnosisSync" type="checkbox" />
+        非聊天页自动同步诊断包页面
+      </label>
+      <label class="check">
+        <input id="autoSync" type="checkbox" />
+        定时同步（分钟）
+      </label>
+      <input id="autoSyncMinutes" type="number" min="5" max="120" value="15" />
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend>多店铺</legend>
+      <ul id="shopList" class="shop-list"></ul>
+      <p class="hint">在卖家中心面板点「绑定本页店铺」添加；下拉框切换。</p>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend>回复模板</legend>
+      <ul id="templateList" class="shop-list"></ul>
+      <p class="hint">在面板草稿区点「存为模板」；可在面板下拉插入。</p>
+    </fieldset>
 
     <p id="msg" class="msg"></p>
 
     <button type="button" id="openSeller" class="secondary">打开 TikTok 卖家中心</button>
-    <p class="hint">安装后请刷新卖家中心页面。无需 TikTok Open API。</p>
+    <p class="hint">更新插件后请刷新卖家中心页面。</p>
 
+    <script src="../src/lib/tiktok.js"></script>
+    <script src="../src/lib/billing.js"></script>
+    <script src="../src/lib/tutorial.js"></script>
     <script src="../src/lib/storage.js"></script>
     <script src="../src/lib/api.js"></script>
     <script src="popup.js"></script>

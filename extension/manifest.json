@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "凡梦AI · TikTok Shop 助手",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "在 TikTok 卖家中心同步页面数据、AI 客服话术建议、业绩与广告库存分析（无需 Open API）。",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "contextMenus"],
   "host_permissions": [
     "https://seller.tiktok.com/*",
     "https://seller-us.tiktok.com/*",
@@ -29,7 +29,19 @@
         "https://seller-us.tiktokglobalshop.com/*",
         "https://*.tiktokshop.com/*"
       ],
-      "js": ["src/lib/storage.js", "src/lib/api.js", "src/lib/scrape.js", "src/content/main.js"],
+      "js": [
+        "src/lib/tiktok.js",
+        "src/lib/billing.js",
+        "src/lib/tutorial.js",
+        "src/lib/storage.js",
+        "src/lib/chatSelectors.js",
+        "src/lib/messageParser.js",
+        "src/lib/api.js",
+        "src/lib/scrape.js",
+        "src/lib/diagnosisPack.js",
+        "src/lib/chatWatcher.js",
+        "src/content/main.js"
+      ],
       "css": ["src/content/panel.css"],
       "run_at": "document_idle"
     }

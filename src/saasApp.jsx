@@ -49,8 +49,8 @@ const pricingPlans = [
     price: "299",
     desc: "适合已有店铺、希望稳定提效的卖家。",
     recommended: true,
-    features: ["每日 500 次 Agent 调用", "店铺 API 配置", "业绩诊断与利润分析", "AI 客服售后模板", "公开页参考抓取（Playwright）", "优先支持"],
-    access: "开放全部 6 个独立 Agent +「5 Agent 运营一键生成」（一键不含客服自动应答）；含公开页参考抓取（非官方实时）与店铺相关 Agent。",
+    features: ["每日 500 次 Agent 调用", "TikTok 卖家中心 Chrome 插件", "店铺 API / CSV 配置", "业绩诊断与利润分析", "AI 客服售后模板", "公开页参考抓取（Playwright）", "优先支持"],
+    access: "开放全部 6 个独立 Agent + TikTok 浏览器插件 +「5 Agent 运营一键生成」；含店铺相关 Agent 与诊断能力。",
   },
   {
     id: "managed",
@@ -1166,6 +1166,7 @@ function workspaceEmptyPanel() {
     attachments: [],
     snapshotPlatform: "auto",
     attachStoreSnapshot: false,
+    attachStoreMetrics: true,
     scrape: { enabled: false, platform: "", market: "", category: "", url: "" },
   };
 }
@@ -1238,13 +1239,10 @@ function NavigateInterruptModal({ runningLabel, targetLabel, onCancel, onConfirm
   );
 }
 
-const STORE_PLATFORM_ORDER = ["tiktok", "amazon", "shopify", "woocommerce"];
+const STORE_PLATFORM_ORDER = ["tiktok"];
 
 const STORE_PLATFORM_LABELS = {
   tiktok: "TikTok Shop",
-  amazon: "Amazon",
-  shopify: "Shopify",
-  woocommerce: "WooCommerce",
 };
 
 function emptyStoreBlock() {
@@ -1254,9 +1252,6 @@ function emptyStoreBlock() {
 function defaultStoreBlocks() {
   return {
     tiktok: emptyStoreBlock(),
-    amazon: emptyStoreBlock(),
-    shopify: emptyStoreBlock(),
-    woocommerce: emptyStoreBlock(),
   };
 }
 
@@ -1264,7 +1259,7 @@ function mergeRemoteStoreConnections(connections) {
   const blocks = defaultStoreBlocks();
   for (const c of connections || []) {
     const p = String(c.platform || "").toLowerCase();
-    if (!blocks[p]) continue;
+    if (p !== "tiktok") continue;
     blocks[p] = {
       storeName: c.storeName || "",
       apiEndpoint: c.apiEndpoint || "",
@@ -1275,27 +1270,151 @@ function mergeRemoteStoreConnections(connections) {
   return blocks;
 }
 
-function platformEndpointHint(platform) {
-  if (platform === "shopify") return "例：https://your-store.myshopify.com";
-  if (platform === "woocommerce") return "例：https://your-site.com（WordPress 根地址）";
-  if (platform === "tiktok") return "可选：Open API 网关备注；凭据主要为下方 JSON";
-  return "可选：区域/备注；SP-API 主凭据为 JSON";
+function platformEndpointHint(_platform) {
+  return "可选：Open API 网关备注；凭据主要为下方 JSON，或直接用 Chrome 插件";
 }
 
-function platformTokenHint(platform) {
-  if (platform === "shopify") return "Admin API access token";
-  if (platform === "woocommerce") return "Woo：ck_xxx:cs_xxx";
-  if (platform === "tiktok") return "JSON：access_token、shop_cipher；KEY 在服务端 .env";
-  return "JSON：refreshToken、sellerId 等（以实现为准）";
+function platformTokenHint(_platform) {
+  return "JSON：access_token、shop_cipher；KEY 在服务端 .env";
 }
 
 function isPlatformBlockReady(platform, block) {
+  if (platform !== "tiktok") return false;
   if (!block?.storeName?.trim() || !block?.apiToken?.trim()) return false;
-  if (platform === "tiktok" || platform === "amazon") return true;
-  return Boolean(block.apiEndpoint?.trim());
+  return true;
 }
 
-function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform, showToast, authHeaders }) {
+function StoreMetricsImportSection({ authHeaders, showToast, onImported }) {
+  const [latest, setLatest] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  async function loadLatest() {
+    try {
+      const response = await fetch("/api/store-metrics/latest", { headers: authHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setLatest(data.latest || null);
+    } catch {
+      setLatest(null);
+    }
+  }
+
+  useEffect(() => {
+    loadLatest();
+  }, []);
+
+  async function downloadTemplate(kind) {
+    setBusy(`dl-${kind}`);
+    try {
+      const response = await fetch(`/api/store-metrics/template/${kind}`, { headers: authHeaders() });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "下载失败");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        kind === "shop"
+          ? "fanmeng-store-overview.csv"
+          : kind === "sku"
+            ? "fanmeng-sku-inventory-cost.csv"
+            : "fanmeng-store-metrics-universal.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("模板已下载");
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setBusy("import");
+    try {
+      const csvText = await readFileAsText(file);
+      const response = await fetch("/api/store-metrics/import", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ csvText, label: file.name }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setLatest(data.import ? { ...data.import, analysis: data.analysis } : null);
+      await loadLatest();
+      onImported?.(data);
+      const flags = data.analysis?.flags?.length || 0;
+      showToast(
+        `导入成功：店铺周期 ${data.import?.shopPeriods ?? 0}、SKU ${data.import?.skuCount ?? 0}；规则标记 ${flags} 项`,
+      );
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const analysis = latest?.analysis;
+  const summary = analysis?.currentPeriod || latest?.shopRows?.[0];
+
+  return (
+    <section className="store-metrics-import" aria-labelledby="store-metrics-h">
+      <div className="store-metrics-head">
+        <h3 id="store-metrics-h">TikTok Shop 经营数据 CSV（推荐）</h3>
+        <span className="store-metrics-badge">诊断 / 广告利润</span>
+      </div>
+      <p className="store-metrics-desc">
+        从 TikTok 卖家后台<strong>导出或按模板手工填入</strong>，无需 Open API。支持中英文列名；填两行店铺周期可自动算环比。
+      </p>
+      <div className="store-metrics-actions">
+        <button type="button" className="header-ghost slim" disabled={busy != null} onClick={() => downloadTemplate("combined")}>
+          {busy === "dl-combined" ? "下载中…" : "下载通用模板"}
+        </button>
+        <button type="button" className="header-ghost slim" disabled={busy != null} onClick={() => downloadTemplate("shop")}>
+          店铺汇总
+        </button>
+        <button type="button" className="header-ghost slim" disabled={busy != null} onClick={() => downloadTemplate("sku")}>
+          SKU 库存/成本
+        </button>
+        <label className="store-metrics-upload continue-checkout slim">
+          {busy === "import" ? "导入中…" : "上传 CSV"}
+          <input type="file" accept=".csv,text/csv" hidden onChange={handleImportFile} />
+        </label>
+      </div>
+      {latest ? (
+        <div className="store-metrics-latest">
+          <strong>最近导入</strong>
+          <span>
+            {latest.importedAt ? new Date(latest.importedAt).toLocaleString() : "—"}
+            {summary?.platform ? ` · ${summary.platform}` : ""}
+            {summary?.gmv != null ? ` · GMV ${summary.gmv}` : ""}
+            {analysis?.comparisons?.gmv_change_pct != null
+              ? ` · 环比 ${analysis.comparisons.gmv_change_pct}%`
+              : ""}
+          </span>
+          {analysis?.flags?.length ? (
+            <ul className="store-metrics-flags">
+              {analysis.flags.slice(0, 3).map((f) => (
+                <li key={f.code}>
+                  [{f.severity}] {f.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : (
+        <p className="store-metrics-empty">尚未导入 CSV；强数据 Agent 将使用诊断版框架。</p>
+      )}
+    </section>
+  );
+}
+
+function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform, showToast, authHeaders, onMetricsImported }) {
   const [snapshotLoading, setSnapshotLoading] = useState(null);
   const [activePlatform, setActivePlatform] = useState("tiktok");
   const [showGuide, setShowGuide] = useState(false);
@@ -1326,12 +1445,7 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
     const cfg = { platform, ...storeBlocks[platform] };
     setSnapshotLoading(platform);
     try {
-      const path =
-        platform === "amazon"
-          ? "/api/store/amazon/snapshot"
-          : platform === "tiktok"
-            ? "/api/store/tiktok/snapshot"
-            : "/api/store/snapshot";
+      const path = "/api/store/tiktok/snapshot";
       const response = await fetch(path, {
         method: "POST",
         headers: authHeaders(),
@@ -1378,14 +1492,16 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
           </div>
         </div>
         <div className="store-api-callout" role="note">
-          <strong>强数据 Agent 建议配置</strong>
+          <strong>凡梦专注 TikTok Shop</strong>
           <span>
-            诊断、客服、广告与库存等能力需要对接店铺数据。请选择一个平台标签，分别填写并保存；TikTok 与 Amazon 凭据互不影响。
+            推荐路径：<strong>Chrome 插件</strong>（卖家中心浏览器内）+ 下方 <strong>经营 CSV</strong> 导入；可选 Open API / OAuth 补充。
           </span>
         </div>
+        <StoreMetricsImportSection authHeaders={authHeaders} showToast={showToast} onImported={onMetricsImported} />
         <p className="store-api-intro">
-          点击下方 <strong>TikTok / Amazon</strong> 等标签切换表单，每平台独立「测试快照」与「保存」。
+          配置 <strong>TikTok Shop</strong> 店铺凭据，或使用插件同步页面数据（无需 Partner 也可跑诊断/客服）。
         </p>
+        {STORE_PLATFORM_ORDER.length > 1 ? (
         <div className="store-platform-tabs" role="tablist" aria-label="选择店铺平台">
           {STORE_PLATFORM_ORDER.map((platform) => {
             const ready = isPlatformBlockReady(platform, storeBlocks[platform] || emptyStoreBlock());
@@ -1406,6 +1522,7 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
             );
           })}
         </div>
+        ) : null}
         <div
           className="store-platform-blocks"
           role="tabpanel"
@@ -1431,7 +1548,7 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
                   <input
                     value={block.apiEndpoint}
                     onChange={(e) => updateBlock(platform, "apiEndpoint", e.target.value)}
-                    placeholder={platform === "shopify" ? "店铺 API Endpoint（如 Shopify 店铺地址）" : "店铺 API Endpoint"}
+                    placeholder="店铺 API Endpoint（可选）"
                   />
                   <input
                     value={block.apiToken}
@@ -2484,7 +2601,7 @@ function Workspace() {
   const panelsRef = useRef(panels);
   const [storeBlocks, setStoreBlocks] = useState(defaultStoreBlocks);
   const [routeHash, setRouteHash] = useState(readRouteHash);
-  const [storeDataNudge, setStoreDataNudge] = useState(null);
+  const [storeMetricsReady, setStoreMetricsReady] = useState(false);
   const tiktokOAuthReturnHandledRef = useRef(false);
 
   const caseSlug = useMemo(() => parseCaseSlugFromHash(routeHash), [routeHash]);
@@ -2560,6 +2677,20 @@ function Workspace() {
         setToken("");
         setUser(null);
       });
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setStoreMetricsReady(false);
+      return;
+    }
+    fetch("/api/store-metrics/latest", { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) return;
+        setStoreMetricsReady(Boolean(data.latest));
+      })
+      .catch(() => setStoreMetricsReady(false));
   }, [token]);
 
   useEffect(() => {
@@ -3047,6 +3178,8 @@ function Workspace() {
           scrape: activeAgent.id === "trend" && p.scrape.enabled ? p.scrape : { enabled: false },
           useStoreSnapshot:
             p.attachStoreSnapshot && ["growth", "service", "profit"].includes(activeAgent.id) && storeConnected,
+          useStoreMetrics:
+            p.attachStoreMetrics && ["growth", "profit"].includes(activeAgent.id),
           storeSnapshotPlatform: p.snapshotPlatform === "auto" ? undefined : p.snapshotPlatform,
         }),
       });
@@ -3151,6 +3284,7 @@ function Workspace() {
           saveStorePlatform={saveStorePlatform}
           showToast={showToast}
           authHeaders={authHeaders}
+          onMetricsImported={() => setStoreMetricsReady(true)}
         />
       )}
       {storeDataNudge && (
@@ -3379,11 +3513,7 @@ function Workspace() {
                   value={panel.snapshotPlatform}
                   onChange={(e) => patchPanel(activeId, { snapshotPlatform: e.target.value })}
                 >
-                  <option value="auto">自动（TikTok→Shopify→Woo→Amazon）</option>
-                  <option value="tiktok">TikTok Shop</option>
-                  <option value="amazon">Amazon</option>
-                  <option value="shopify">Shopify</option>
-                  <option value="woocommerce">WooCommerce</option>
+                  <option value="tiktok">TikTok Shop（插件 / API）</option>
                 </select>
               </label>
               <label className="scrape-toggle">
@@ -3395,6 +3525,16 @@ function Workspace() {
                 />
                 本次运行附带所选店铺的只读快照
               </label>
+              {["growth", "profit"].includes(activeId) && (
+                <label className="scrape-toggle">
+                  <input
+                    type="checkbox"
+                    checked={panel.attachStoreMetrics}
+                    onChange={(event) => patchPanel(activeId, { attachStoreMetrics: event.target.checked })}
+                  />
+                  附带已导入的 TikTok 经营 CSV{storeMetricsReady ? "（已就绪）" : "（请先在店铺配置中上传）"}
+                </label>
+              )}
             </div>
           )}
           {panel.attachments.length > 0 && (

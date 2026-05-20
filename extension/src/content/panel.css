@@ -19,10 +19,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px;
   background: linear-gradient(135deg, #2563eb, #7c3aed);
   color: #fff;
   border-radius: 14px 14px 0 0;
+}
+
+#fanmeng-ai-panel-root .fm-head-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
 }
 
 #fanmeng-ai-panel-root .fm-title {
@@ -98,6 +105,41 @@
   color: rgba(15, 23, 42, 0.55);
 }
 
+#fanmeng-ai-panel-root .fm-shop-row {
+  align-items: stretch;
+}
+
+#fanmeng-ai-panel-root .fm-shop-select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  font-size: 12px;
+}
+
+#fanmeng-ai-panel-root .fm-btn.slim {
+  flex: 0 0 auto;
+  min-width: auto;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+#fanmeng-ai-panel-root .fm-hint {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+#fanmeng-ai-panel-root .fm-template-select {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  font-size: 12px;
+}
+
 #fanmeng-ai-panel-root .fm-reply-text,
 #fanmeng-ai-panel-root .fm-result {
   width: 100%;
@@ -108,4 +150,203 @@
   font-size: 12px;
   line-height: 1.45;
   resize: vertical;
+}
+
+#fanmeng-ai-panel-root .fm-chat-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+#fanmeng-ai-panel-root .fm-chat-meta[data-kind="ok"] {
+  color: #15803d;
+}
+
+#fanmeng-ai-panel-root .fm-chat-meta[data-kind="err"] {
+  color: #b91c1c;
+}
+
+#fanmeng-ai-panel-root .fm-msg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+#fanmeng-ai-panel-root .fm-msg-empty {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(15, 23, 42, 0.45);
+}
+
+#fanmeng-ai-panel-root .fm-msg-item {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #fff;
+}
+
+#fanmeng-ai-panel-root .fm-msg-role {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+#fanmeng-ai-panel-root .fm-msg-buyer .fm-msg-role {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+#fanmeng-ai-panel-root .fm-msg-seller .fm-msg-role {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+#fanmeng-ai-panel-root .fm-msg-system .fm-msg-role {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+#fanmeng-ai-panel-root .fm-msg-unknown .fm-msg-role {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+#fanmeng-ai-panel-root .fm-msg-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  color: rgba(15, 23, 42, 0.75);
+}
+
+#fanmeng-ai-panel-root .fm-shortcut-hint {
+  margin: 0;
+  font-size: 10px;
+}
+
+#fanmeng-ai-panel-root .fm-tutorial-box {
+  padding: 8px;
+  border-radius: 10px;
+  background: #f0f7ff;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+#fanmeng-ai-panel-root .fm-tutorial-box.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-tut-panel .fm-tut-lead {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-tut-section {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  margin-bottom: 4px;
+  background: #fff;
+}
+
+#fanmeng-ai-panel-root .fm-tut-summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 8px;
+  list-style: none;
+}
+
+#fanmeng-ai-panel-root .fm-tut-summary::-webkit-details-marker {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-tut-body {
+  padding: 0 8px 8px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgba(15, 23, 42, 0.78);
+}
+
+#fanmeng-ai-panel-root .fm-tut-ol {
+  margin: 0;
+  padding-left: 16px;
+}
+
+#fanmeng-ai-panel-root .fm-tut-ol li {
+  margin-bottom: 3px;
+}
+
+#fanmeng-ai-panel-root .fm-tut-tip {
+  margin: 4px 0 0;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: #fef9c3;
+  color: #854d0e;
+  font-size: 10px;
+}
+
+#fanmeng-ai-panel-root .fm-tut-faq-list {
+  margin: 0;
+  font-size: 10px;
+}
+
+#fanmeng-ai-panel-root .fm-tut-faq-list dt {
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+#fanmeng-ai-panel-root .fm-tut-faq-list dd {
+  margin: 2px 0 0;
+  color: rgba(15, 23, 42, 0.65);
+}
+
+#fanmeng-ai-panel-root .fm-paywall {
+  padding: 8px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid rgba(185, 28, 28, 0.2);
+}
+
+#fanmeng-ai-panel-root .fm-paywall.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-paywall-text {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #b91c1c;
+}
+
+#fanmeng-ai-panel-root .fm-paywall-btn {
+  width: 100%;
+}
+
+#fanmeng-ai-panel-root .fm-plan-line[data-kind="ok"] {
+  color: #15803d;
+}
+
+#fanmeng-ai-panel-root .fm-plan-line[data-kind="warn"] {
+  color: #b45309;
+}
+
+#fanmeng-ai-panel-root .fm-plan-line[data-kind="err"] {
+  color: #b91c1c;
+}
+
+#fanmeng-ai-panel-root .fm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
