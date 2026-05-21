@@ -103,6 +103,13 @@ const FanmengApi = {
     });
   },
 
+  async getFaqTemplates(shopKey = "") {
+    const q = new URLSearchParams();
+    if (shopKey) q.set("shopKey", shopKey);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return this.request(`/api/extension/cs/faq${suffix}`);
+  },
+
   async syncFaqTemplates(shopKey, templates) {
     return this.request("/api/extension/cs/faq/sync", {
       method: "POST",

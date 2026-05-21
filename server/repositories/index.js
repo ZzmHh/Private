@@ -1,4 +1,6 @@
-const backend = String(process.env.DB_BACKEND || "json").toLowerCase();
+const backend = String(
+  process.env.DB_BACKEND || (process.env.NODE_ENV === "production" ? "sqlite" : "json"),
+).toLowerCase();
 
 /** @type {{ readDb: Function, writeDb: Function, getDatabaseInfo: Function, closeDatabase?: Function }} */
 let impl;
@@ -16,3 +18,4 @@ export const writeDb = impl.writeDb;
 export const getDatabaseInfo = impl.getDatabaseInfo;
 export const closeDatabase = impl.closeDatabase || (() => {});
 export const dbBackend = backend;
+export { withDbLock } from "./dbSerialize.js";

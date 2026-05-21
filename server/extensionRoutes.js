@@ -4,13 +4,21 @@
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
 import { generateBuyerReplyText } from "./autoReply/generateBuyerReply.js";
 import { routeBuyerMessage } from "./autoReply/routeBuyerMessage.js";
+import { listLanguagesForApi } from "../../shared/tiktokShopLanguages.js";
+import { getCsAnalyticsSummary, recordCsRouteEvent } from "./autoReply/csAnalytics.js";
+import { parseFaqImportPayload, FAQ_IMPORT_SAMPLE_CSV } from "./autoReply/parseFaqImport.js";
+import { withDbLock } from "./repositories/index.js";
 import {
+  deleteCsFaqTemplate,
   getCsSettings,
+  importCsFaqTemplates,
   listCsFaqTemplates,
+  listCsFaqTemplatesForEditor,
   listCsSellerAlerts,
   markCsAlertRead,
   saveCsSettings,
   syncCsFaqTemplates,
+  upsertCsFaqTemplate,
 } from "./autoReply/csStore.js";
 import {
   ensureFeatureAccess,
@@ -24,6 +32,7 @@ import {
   listExtensionSnapshots,
   saveExtensionSnapshot,
   getMergedExtensionContext,
+  listExtensionShops,
 } from "./extensionSync.js";
 import { getStoreMetricsAgentContext } from "./storeMetrics/store.js";
 import { buildExtensionWorkspaceSummary } from "./extensionWorkspace.js";
@@ -109,16 +118,84 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     }
   });
 
+  app.get("/api/extension/cs/shops", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const platform = String(req.query.platform || "tiktok").toLowerCase();
+      const shops = listExtensionShops(req.user.id, platform);
+      res.json({ ok: true, shops });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取店铺列表失败。" });
+    }
+  });
+
   app.get("/api/extension/cs/faq", authMiddleware, (req, res) => {
     try {
       ensureFeatureAccess(req.user, "storeApiAgents");
       const shopKey = String(req.query.shopKey || "");
-      const templates = listCsFaqTemplates(req.user.id, shopKey);
-      res.json({ ok: true, templates });
+      const editor = req.query.editor === "1" || req.query.editor === "true";
+      const templates = editor
+        ? listCsFaqTemplatesForEditor(req.user.id, shopKey)
+        : listCsFaqTemplates(req.user.id, shopKey);
+      res.json({ ok: true, templates, shopKey, scope: editor ? "editor" : "route" });
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message || "读取 FAQ 失败。" });
     }
   });
+
+  app.get("/api/extension/cs/faq/languages", authMiddleware, (_req, res) => {
+    res.json({ ok: true, ...listLanguagesForApi() });
+  });
+
+  app.get("/api/extension/cs/faq/template.csv", authMiddleware, (_req, res) => {
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="fanmeng-faq-template.csv"');
+    res.send(`\uFEFF${FAQ_IMPORT_SAMPLE_CSV}`);
+  });
+
+  app.post("/api/extension/cs/faq", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const { shopKey, template } = req.body || {};
+      if (!template?.text?.trim()) {
+        return res.status(400).json({ error: "请填写回复内容。" });
+      }
+      const row = upsertCsFaqTemplate(req.user.id, String(shopKey || ""), template);
+      res.json({ ok: true, template: row });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "保存 FAQ 失败。" });
+    }
+  });
+
+  app.delete("/api/extension/cs/faq/:id", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const ok = deleteCsFaqTemplate(req.user.id, req.params.id);
+      if (!ok) return res.status(404).json({ error: "模板不存在。" });
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "删除 FAQ 失败。" });
+    }
+  });
+
+  app.post("/api/extension/cs/faq/import", authMiddleware, asyncHandler(async (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const { shopKey, mode, csv, templates, payload } = req.body || {};
+      const parsed = parseFaqImportPayload(templates || payload || csv || "");
+      if (!parsed.length) {
+        return res.status(400).json({ error: "未能解析任何 FAQ 行，请检查 CSV/JSON 格式。" });
+      }
+      const rows = await withDbLock(async () =>
+        importCsFaqTemplates(req.user.id, String(shopKey || ""), parsed, {
+          mode: mode === "replace" ? "replace" : "merge",
+        }),
+      );
+      res.json({ ok: true, count: rows.length, templates: rows });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "导入 FAQ 失败。" });
+    }
+  }));
 
   app.post("/api/extension/snapshot", authMiddleware, validateBody(validators.extensionSnapshot), (req, res) => {
     try {
@@ -150,7 +227,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     try {
       ensureFeatureAccess(req.user, "agent", "service");
       ensureFeatureAccess(req.user, "storeApiAgents");
-      const { buyerText, shopKey, shopName, orderContext, faqTemplates, syncFaq } = req.body || {};
+      const { buyerText, shopKey, shopName, orderContext, faqTemplates, syncFaq, dryRun } = req.body || {};
 
       const sk = String(shopKey || "").trim();
       if (syncFaq !== false && Array.isArray(faqTemplates) && faqTemplates.length) {
@@ -163,7 +240,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         if (merged) ctxText = JSON.stringify(merged).slice(0, 2000);
       }
 
-      usage = incrementUsage(req.user.id, "service");
+      usage = dryRun ? null : incrementUsage(req.user.id, "service");
       const routed = await routeBuyerMessage({
         buyerText: String(buyerText).trim(),
         userId: req.user.id,
@@ -176,14 +253,28 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         planAllowsAutoSend: Boolean(getPlan(req.user).features.extensionAutoSend),
       });
 
-      finalizeUsageLog(usage.logId, {
-        type: "service",
-        status: routed.ok !== false ? "success" : "failed",
-        inputLength: String(buyerText).length,
-        outputLength: (routed.replyText || "").length,
-        startedAt,
-        metadata: { tier: routed.tier, action: routed.action },
-      });
+      if (usage?.logId) {
+        finalizeUsageLog(usage.logId, {
+          type: "service",
+          status: routed.ok !== false ? "success" : "failed",
+          inputLength: String(buyerText).length,
+          outputLength: (routed.replyText || "").length,
+          startedAt,
+          metadata: { tier: routed.tier, action: routed.action, dryRun: Boolean(dryRun) },
+        });
+      }
+
+      if (!dryRun) {
+        recordCsRouteEvent({
+          userId: req.user.id,
+          shopKey: sk,
+          channel: "extension",
+          tier: routed.tier,
+          action: routed.action,
+          lang: routed.lang,
+          faqHit: routed.tier === "faq" && routed.faqMatch?.source === "user_template",
+        });
+      }
 
       res.json({
         ok: routed.ok !== false,
@@ -194,7 +285,8 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         notifySeller: routed.notifySeller,
         sellerMessage: routed.sellerMessage,
         reason: routed.reason,
-        usage,
+        dryRun: Boolean(dryRun),
+        usage: usage || null,
       });
     } catch (error) {
       if (usage?.logId) {
@@ -240,6 +332,16 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
           inputLength: String(buyerText).length,
           outputLength: (routed.replyText || "").length,
           startedAt,
+          metadata: { tier: routed.tier, action: routed.action },
+        });
+        recordCsRouteEvent({
+          userId: req.user.id,
+          shopKey: sk,
+          channel: "extension",
+          tier: routed.tier,
+          action: routed.action,
+          lang: routed.lang,
+          faqHit: routed.tier === "faq" && routed.faqMatch?.source === "user_template",
         });
         return res.json({
           ok: true,
@@ -324,6 +426,16 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       res.json({ ok: true, alert });
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message || "更新失败。" });
+    }
+  });
+
+  app.get("/api/extension/cs/analytics", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const days = Math.min(90, Math.max(7, Number(req.query.days) || 30));
+      res.json({ ok: true, analytics: getCsAnalyticsSummary(req.user.id, { days }) });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取客服数据失败。" });
     }
   });
 

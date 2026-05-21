@@ -12,6 +12,7 @@ export const defaultDb = {
   csFaqTemplates: [],
   csSellerAlerts: [],
   csAutomationSettings: {},
+  csRouteEvents: [],
   productEvents: [],
 };
 
@@ -35,6 +36,7 @@ export function normalizeDb(db) {
     csSellerAlerts: Array.isArray(db.csSellerAlerts) ? db.csSellerAlerts : [],
     csAutomationSettings:
       db.csAutomationSettings && typeof db.csAutomationSettings === "object" ? db.csAutomationSettings : {},
+    csRouteEvents: Array.isArray(db.csRouteEvents) ? db.csRouteEvents : [],
     productEvents: Array.isArray(db.productEvents) ? db.productEvents : [],
   };
 }

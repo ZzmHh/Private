@@ -3488,27 +3488,72 @@ function Workspace() {
     fetchAbortRef.current = ac;
     setIsRunning(true);
     setRunningPanelId(panelId);
-    patchPanel(panelId, { answer: "正在生成，请稍候…", typingReveal: false });
+    patchPanel(panelId, { answer: "", typingReveal: false });
     try {
-      const response = await fetch("/api/agents/run", {
+      const runBody = {
+        agentId: activeAgent.id,
+        input: inputText,
+        scrape: activeAgent.id === "trend" && p.scrape.enabled ? p.scrape : { enabled: false },
+        useStoreSnapshot:
+          p.attachStoreSnapshot && ["growth", "service", "profit"].includes(activeAgent.id) && storeConnected,
+        useExtensionSnapshot: useExtension,
+        useStoreMetrics: useMetrics,
+        storeSnapshotPlatform: p.snapshotPlatform === "auto" ? "tiktok" : p.snapshotPlatform,
+      };
+
+      const response = await fetch("/api/agents/run/stream", {
         method: "POST",
         headers: authHeaders(),
         signal: ac.signal,
-        body: JSON.stringify({
-          agentId: activeAgent.id,
-          input: inputText,
-          scrape: activeAgent.id === "trend" && p.scrape.enabled ? p.scrape : { enabled: false },
-          useStoreSnapshot:
-            p.attachStoreSnapshot && ["growth", "service", "profit"].includes(activeAgent.id) && storeConnected,
-          useExtensionSnapshot: useExtension,
-          useStoreMetrics: useMetrics,
-          storeSnapshotPlatform: p.snapshotPlatform === "auto" ? "tiktok" : p.snapshotPlatform,
-        }),
+        body: JSON.stringify(runBody),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      patchPanel(panelId, { answer: data.answer, typingReveal: true, echotikHint: data.echotik || null });
-      if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Agent 执行失败");
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("浏览器不支持流式响应");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamedAnswer = "";
+      let donePayload = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+
+        for (const block of chunks) {
+          const lines = block.split("\n");
+          let eventType = "message";
+          let dataLine = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+          }
+          if (!dataLine) continue;
+          const parsed = JSON.parse(dataLine);
+          if (eventType === "delta" && parsed.text) {
+            streamedAnswer += parsed.text;
+            patchPanel(panelId, { answer: streamedAnswer, typingReveal: false });
+          } else if (eventType === "done") {
+            donePayload = parsed;
+          } else if (eventType === "error") {
+            throw new Error(parsed.error || "流式生成失败");
+          }
+        }
+      }
+
+      const finalAnswer = donePayload?.answer || streamedAnswer;
+      patchPanel(panelId, { answer: finalAnswer, typingReveal: false, echotikHint: donePayload?.echotik || null });
+      if (donePayload?.task) {
+        setTasks((current) => [donePayload.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
+      }
       void refreshMeProfile();
     } catch (error) {
       if (error?.name === "AbortError") {
@@ -3547,7 +3592,7 @@ function Workspace() {
     }
   }
 
-  async function runCsDrill() {
+  async function runCsDrill(shopKey = "") {
     const text = panel.csDrillText?.trim();
     if (!text) return;
     setCsDrillBusy(true);
@@ -3556,11 +3601,15 @@ function Workspace() {
       const response = await fetch("/api/extension/cs/route", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ buyerText: text }),
+        body: JSON.stringify({
+          buyerText: text,
+          shopKey: shopKey || "",
+          dryRun: true,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      patchPanel(activeId, { csDrillResult: data });
+      patchPanel(activeId, { csDrillResult: data.routed || data });
     } catch (error) {
       showToast(formatError(error));
     } finally {

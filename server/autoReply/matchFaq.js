@@ -1,6 +1,7 @@
 /**
- * FAQ 模板匹配（插件/服务端同步的 triggers + 内置分类）
+ * FAQ 模板匹配（插件/服务端同步的 triggers + 内置分类 + 买家语言优先）
  */
+import { langCompatible } from "../../shared/tiktokShopLanguages.js";
 
 const BUILTIN_BY_CATEGORY = {
   greeting: ["greeting", "hello", "在吗", "你好", "您好"],
@@ -10,7 +11,7 @@ const BUILTIN_BY_CATEGORY = {
   product: ["product", "尺码", "size", "颜色", "color"],
 };
 
-export function matchFaqTemplate(buyerText, templates = [], intent = {}) {
+export function matchFaqTemplate(buyerText, templates = [], intent = {}, buyerLang = "") {
   const text = String(buyerText || "").toLowerCase();
   const list = Array.isArray(templates) ? templates : [];
   let best = null;
@@ -26,6 +27,10 @@ export function matchFaqTemplate(buyerText, templates = [], intent = {}) {
     }
     if (tpl.category && intent.category && tpl.category === intent.category) {
       score += 2;
+    }
+    if (buyerLang && tpl.lang) {
+      if (langCompatible(tpl.lang, buyerLang)) score += 4;
+      else score -= 2;
     }
     if (score > bestScore) {
       bestScore = score;

@@ -87,6 +87,12 @@ function initSchema(database) {
       user_id TEXT PRIMARY KEY,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS cs_route_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      data TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS product_events (
       id TEXT PRIMARY KEY,
       user_id TEXT,
@@ -94,6 +100,7 @@ function initSchema(database) {
       created_at TEXT NOT NULL,
       data TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_cs_route_events_user_created ON cs_route_events(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_product_events_created ON product_events(created_at);
     CREATE INDEX IF NOT EXISTS idx_product_events_event ON product_events(event);
     CREATE INDEX IF NOT EXISTS idx_usage_logs_user_created ON usage_logs(user_id, created_at);
@@ -176,6 +183,10 @@ export function readDb() {
     .prepare("SELECT data FROM cs_seller_alerts")
     .all()
     .map((r) => JSON.parse(r.data));
+  db.csRouteEvents = database
+    .prepare("SELECT data FROM cs_route_events ORDER BY created_at DESC")
+    .all()
+    .map((r) => JSON.parse(r.data));
 
   db.csAutomationSettings = {};
   for (const row of database.prepare("SELECT user_id, data FROM cs_automation_settings").all()) {
@@ -244,6 +255,12 @@ export function writeDb(data) {
       a.id,
       a.userId || null,
       JSON.stringify(a),
+    ]);
+    replaceTable(database, "cs_route_events", normalized.csRouteEvents, (e) => [
+      e.id,
+      e.userId,
+      e.createdAt,
+      JSON.stringify(e),
     ]);
 
     database.prepare("DELETE FROM cs_automation_settings").run();

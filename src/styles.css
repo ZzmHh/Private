@@ -5139,6 +5139,84 @@ footer a {
   font-size: 13px;
 }
 
+.tt-faq-manager {
+  display: grid;
+  gap: 16px;
+}
+
+.tt-faq-intro {
+  margin: 0;
+}
+
+.tt-faq-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tt-faq-editor {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--soft);
+}
+
+.tt-faq-editor h5 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.tt-faq-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tt-faq-editor-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tt-faq-editor-grid input,
+.tt-faq-editor-grid select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.tt-faq-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tt-faq-list-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tt-faq-list-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tt-faq-list-actions .danger {
+  color: #b42318;
+}
+
+@media (max-width: 720px) {
+  .tt-faq-editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .tt-read-tag {
   font-size: 12px;
   color: var(--muted);
@@ -5152,12 +5230,179 @@ footer a {
   font-size: 13px;
 }
 
+.tt-cs-analytics-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.tt-cs-analytics-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.tt-cs-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.tt-cs-metric-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tt-cs-metric-card span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tt-cs-metric-card strong {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.tt-cs-metric-card small {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.tt-cs-analytics-section h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.tt-cs-trend-list,
+.tt-cs-lang-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.tt-cs-trend-list li,
+.tt-cs-lang-list li {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tt-cs-lang-list li {
+  justify-content: space-between;
+}
+
+.tt-cs-shop-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+}
+
+.tt-cs-shop-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tt-cs-shop-bar select {
+  max-width: 360px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tt-cs-template-langs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.tt-cs-template-langs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tt-cs-template-langs-head select {
+  min-width: 200px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tt-cs-template-langs textarea {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  resize: vertical;
+}
+
 .tt-drill-result {
   margin-top: 14px;
   padding: 12px;
   border-radius: 12px;
   background: var(--soft);
   border: 1px solid var(--line);
+}
+
+.tt-drill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px 16px;
+  margin: 10px 0 0;
+}
+
+.tt-drill-kv {
+  margin: 0;
+}
+
+.tt-drill-kv dt {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.tt-drill-kv dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tt-drill-reply-label {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.tt-drill-error {
+  margin-top: 8px;
+  color: var(--danger, #c0392b);
+  font-size: 13px;
 }
 
 .tt-drill-result pre {

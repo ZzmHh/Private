@@ -7,6 +7,7 @@ import { getStoreConnectionSecret } from "../db.js";
 import { sendTiktokCustomerServiceText } from "../integrations/storeApi/tiktok/tiktokOutboundCs.js";
 import { routeBuyerMessage, dispatchAutoSend } from "./routeBuyerMessage.js";
 import { getCsSettings } from "./csStore.js";
+import { recordCsRouteEvent } from "./csAnalytics.js";
 
 const processedMessageIds = new Map();
 const DEDUPE_TTL_MS = 1000 * 60 * 30;
@@ -105,6 +106,16 @@ export async function handleTiktokBuyerMessageWebhook(payload, options = {}) {
     channel: "webhook",
     settings,
     orderContext: options.orderContext || "",
+  });
+
+  recordCsRouteEvent({
+    userId: connection.userId,
+    shopKey: connection.storeName || "",
+    channel: "webhook",
+    tier: routed.tier,
+    action: routed.action,
+    lang: routed.lang,
+    faqHit: routed.tier === "faq" && routed.faqMatch?.source === "user_template",
   });
 
   let dryRun;

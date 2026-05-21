@@ -1,14 +1,15 @@
 import { callChatCompletionsJson, openClawConfigured, model } from "./llmClient.js";
 import { detectBuyerLanguage } from "./classifyBuyerIntent.js";
+import { buildCsReplyLanguageRule, buildCsReplyUserLanguageLine } from "./llmLanguagePrompt.js";
 
 const NIGHT_SYSTEM = `你是 TikTok Shop 跨境店铺夜间值班客服（仅售前/一般咨询，非售后）。
 
 【必须遵守】
 - 只输出可直接发给买家的正文，无标题无列表。
-- 使用与买家相同的语言（中文或英文）。
+- 语言规则见下方「站点语言」说明，与 FAQ 模板语言策略一致。
 - 不承诺退款、赔偿、改价、具体到货日期；不说已操作后台。
 - 没有确切价格/库存数据时，说明「上班后会确认」，不要编造数字。
-- 语气简短友好，不超过 350 字（英文约 220 词）。
+- 语气简短友好，不超过 350 字（拉丁语系约 220 词以内）。
 
 【上下文】
 下方可能有插件同步的页面摘要，仅作参考；若与买家问题无关可忽略。`;
@@ -29,19 +30,21 @@ export async function generateNightBuyerReplyText({
   const lang = languageHint || detectBuyerLanguage(buyerText);
   const userBlock = [
     `店铺：${shopName || "TikTok Shop"}`,
-    `请用${lang === "zh" ? "中文" : "英文"}回复。`,
+    buildCsReplyUserLanguageLine(lang),
     "",
     "买家消息：",
     String(buyerText || "").slice(0, 2000),
     orderContext ? `\n【页面/商品上下文（未核实）】\n${String(orderContext).slice(0, 1500)}` : "",
   ].join("\n");
 
+  const system = `${NIGHT_SYSTEM}\n\n【站点语言】\n${buildCsReplyLanguageRule(lang)}`;
+
   const { response, data } = await callChatCompletionsJson({
     model,
     temperature: 0.3,
     max_tokens: 500,
     messages: [
-      { role: "system", content: NIGHT_SYSTEM },
+      { role: "system", content: system },
       { role: "user", content: userBlock },
     ],
   });

@@ -6,10 +6,11 @@ import { applyTemplateVars, getSlaText, isBeijingRestHours } from "./beijingTime
 import { matchFaqTemplate } from "./matchFaq.js";
 import {
   createCsSellerAlert,
-  defaultCsAutomationSettings,
   getCsSettings,
   listCsFaqTemplates,
 } from "./csStore.js";
+import { getLanguageLabel } from "../../shared/tiktokShopLanguages.js";
+import { pickLocalizedTemplate } from "./csBuiltinTemplates.js";
 import { generateNightBuyerReplyText } from "./generateNightBuyerReply.js";
 import { generateBuyerReplyText } from "./generateBuyerReply.js";
 
@@ -28,7 +29,7 @@ import { generateBuyerReplyText } from "./generateBuyerReply.js";
  */
 export async function routeBuyerMessage(input) {
   const buyerText = String(input.buyerText || "").trim();
-  const settings = { ...defaultCsAutomationSettings(), ...(input.settings || getCsSettings(input.userId)) };
+  const settings = input.settings || getCsSettings(input.userId);
   const planAllowsAutoSend = input.planAllowsAutoSend !== false;
   const intent = classifyBuyerIntent(buyerText);
   const lang = detectBuyerLanguage(buyerText);
@@ -52,8 +53,7 @@ export async function routeBuyerMessage(input) {
 
   // —— 售后：标准模板 + 通知卖家 ——
   if (intent.tier === "aftersales") {
-    const tpl =
-      lang === "zh" ? settings.afterSalesTemplateZh : settings.afterSalesTemplateEn;
+    const tpl = pickLocalizedTemplate(settings.afterSalesTemplates, lang);
     const replyText = applyTemplateVars(tpl, { sla, shopName });
     const alert = createCsSellerAlert({
       userId: input.userId,
@@ -74,6 +74,8 @@ export async function routeBuyerMessage(input) {
       tier: "aftersales",
       action: autoSend ? "auto_send" : "draft",
       replyText,
+      langLabel: getLanguageLabel(lang),
+      templateUsed: { kind: "aftersales", lang },
       notifySeller: true,
       sellerMessage: `⚠️ 售后待处理：买家消息需人工跟进（${intent.category}）`,
       alertId: alert.id,
@@ -82,7 +84,7 @@ export async function routeBuyerMessage(input) {
   }
 
   // —— FAQ 模板命中 ——
-  const faqHit = matchFaqTemplate(buyerText, templates, intent);
+  const faqHit = matchFaqTemplate(buyerText, templates, intent, lang);
   if (faqHit?.template?.text) {
     const replyText = applyTemplateVars(faqHit.template.text, { sla, shopName });
     const autoSend =
@@ -95,7 +97,16 @@ export async function routeBuyerMessage(input) {
       tier: "faq",
       action: autoSend ? "auto_send" : "draft",
       replyText,
-      faqMatch: { name: faqHit.template.name, source: faqHit.source },
+      langLabel: getLanguageLabel(lang),
+      faqMatch: {
+        id: faqHit.template.id,
+        name: faqHit.template.name,
+        source: faqHit.source,
+        lang: faqHit.template.lang,
+        shopKey: faqHit.template.shopKey || "",
+        category: faqHit.template.category || "",
+        score: faqHit.score,
+      },
       notifySeller: false,
       reason: "FAQ 模板命中，可自动发送",
     };
@@ -104,7 +115,7 @@ export async function routeBuyerMessage(input) {
   // —— 简单问候（无模板时用内置） ——
   if (intent.category === "greeting") {
     const replyText = applyTemplateVars(
-      lang === "zh" ? settings.greetingTemplateZh : settings.greetingTemplateEn,
+      pickLocalizedTemplate(settings.greetingTemplates, lang),
       { sla, shopName },
     );
     const autoSend =
@@ -117,7 +128,9 @@ export async function routeBuyerMessage(input) {
       tier: "faq",
       action: autoSend ? "auto_send" : "draft",
       replyText,
-      faqMatch: { name: "builtin_greeting", source: "builtin" },
+      langLabel: getLanguageLabel(lang),
+      faqMatch: { name: "builtin_greeting", source: "builtin", lang },
+      templateUsed: { kind: "greeting", lang },
       notifySeller: false,
       reason: "问候语内置模板",
     };

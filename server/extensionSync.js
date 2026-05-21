@@ -95,3 +95,25 @@ export function listExtensionSnapshots(userId, platform = "tiktok", limit = 10) 
     .filter((s) => s.userId === userId && String(s.platform || "tiktok").toLowerCase() === p)
     .slice(0, limit);
 }
+
+/** 插件快照中出现过的 TikTok 店铺（FAQ / 演练按 shopKey 隔离） */
+export function listExtensionShops(userId, platform = "tiktok") {
+  const db = readDb();
+  const p = String(platform || "tiktok").toLowerCase();
+  const seen = new Map();
+  for (const s of db.extensionSnapshots || []) {
+    if (s.userId !== userId || String(s.platform || "tiktok").toLowerCase() !== p) continue;
+    const shopKey = String(s.shopKey || "").trim();
+    if (!shopKey) continue;
+    const prev = seen.get(shopKey);
+    const pulledAt = s.pulledAt || "";
+    if (!prev || pulledAt > (prev.lastSeenAt || "")) {
+      seen.set(shopKey, {
+        shopKey,
+        shopName: String(s.shopName || shopKey).slice(0, 200),
+        lastSeenAt: pulledAt,
+      });
+    }
+  }
+  return [...seen.values()].sort((a, b) => (b.lastSeenAt || "").localeCompare(a.lastSeenAt || ""));
+}

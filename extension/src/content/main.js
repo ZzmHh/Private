@@ -321,6 +321,21 @@
   }
 
   async function getFaqTemplatesForApi() {
+    try {
+      const res = await FanmengApi.getFaqTemplates(activeShop?.id || "");
+      if (Array.isArray(res.templates) && res.templates.length) {
+        return res.templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          text: t.text,
+          triggers: t.triggers?.length ? t.triggers : [],
+          category: t.category || "",
+          lang: t.lang || "zh",
+        }));
+      }
+    } catch {
+      /* 离线时回退本地 */
+    }
     const templates = await FanmengStorage.getTemplates(activeShop?.id);
     return templates.map((t) => ({
       id: t.id,
@@ -335,9 +350,18 @@
   async function syncFaqToServer() {
     if (!activeShop) return;
     try {
-      const templates = await getFaqTemplatesForApi();
+      const res = await FanmengApi.getFaqTemplates(activeShop.id);
+      if (Array.isArray(res.templates) && res.templates.length) return;
+      const templates = await FanmengStorage.getTemplates(activeShop.id);
       if (templates.length) {
-        await FanmengApi.syncFaqTemplates(activeShop.id, templates);
+        await FanmengApi.syncFaqTemplates(activeShop.id, templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          text: t.text,
+          triggers: t.triggers || [],
+          category: t.category || "",
+          lang: t.lang || "zh",
+        })));
       }
     } catch {
       /* 离线时忽略 */

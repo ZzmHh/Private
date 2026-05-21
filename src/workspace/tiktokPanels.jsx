@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -6,10 +6,22 @@ import {
   Circle,
   Headphones,
   LineChart,
+  Plus,
   RefreshCw,
   Shield,
+  Trash2,
+  UploadCloud,
   Zap,
 } from "lucide-react";
+import {
+  FAQ_CATEGORY_OPTIONS,
+  TIKTOK_SHOP_LANGUAGES,
+  buildLanguageSelectOptions,
+  downloadFaqTemplateCsv,
+  emptyFaqDraft,
+  getLanguageLabel,
+  parseFaqCsvText,
+} from "../lib/csFaqTemplates.js";
 
 const PACK_ORDER = ["analytics", "orders", "ads", "inventory"];
 
@@ -245,10 +257,432 @@ export function ProfitWorkbenchPanel({
 
 const CS_TABS = [
   { id: "alerts", label: "待处理" },
+  { id: "analytics", label: "数据看板" },
   { id: "rules", label: "自动化规则" },
   { id: "faq", label: "FAQ 模板" },
   { id: "drill", label: "离线演练" },
 ];
+
+const TIER_LABELS = {
+  aftersales: "售后安抚",
+  faq: "FAQ / 问候",
+  night_ai: "夜间 AI 兜底",
+  manual: "人工草稿",
+};
+
+const ACTION_LABELS = {
+  auto_send: "可自动发送",
+  draft: "仅草稿",
+};
+
+function CsShopScopeBar({ shops, shopKey, onShopKeyChange, hint }) {
+  return (
+    <div className="tt-cs-shop-bar">
+      <label>
+        店铺范围
+        <select value={shopKey} onChange={(e) => onShopKeyChange(e.target.value)}>
+          <option value="">全店通用（全局模板）</option>
+          {shops.map((s) => (
+            <option key={s.shopKey} value={s.shopKey}>
+              {s.shopName || s.shopKey}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="tt-hint">{hint}</p>
+    </div>
+  );
+}
+
+function CsAnalyticsPanel({ authHeaders, analytics, loading, onReload, days, onDaysChange }) {
+  if (loading && !analytics) {
+    return <p className="tt-empty">加载客服数据中…</p>;
+  }
+  if (!analytics) {
+    return (
+      <p className="tt-empty">
+        暂无统计数据。插件在 TikTok 聊天页处理买家消息后会自动累计。
+        <button type="button" className="header-ghost slim" onClick={onReload}>
+          刷新
+        </button>
+      </p>
+    );
+  }
+
+  const metrics = [
+    { label: "FAQ 模板命中率", value: `${analytics.faqHitRate}%`, hint: "用户 FAQ 模板命中 / 总路由" },
+    { label: "自动发送率", value: `${analytics.autoSendRate}%`, hint: "套餐允许且动作为 auto_send" },
+    { label: "售后路由占比", value: `${analytics.aftersalesRate}%`, hint: "触发售后安抚 + 告警" },
+    { label: "夜间 AI 占比", value: `${analytics.nightAiRate}%`, hint: "北京休息时段 AI 兜底" },
+    {
+      label: "售后告警均时",
+      value: analytics.alertAvgHandleMinutes != null ? `${analytics.alertAvgHandleMinutes} 分钟` : "—",
+      hint: "从告警到标记已处理的平均时长",
+    },
+    { label: "待处理告警", value: String(analytics.alertUnread ?? 0), hint: `近 ${analytics.windowDays} 天共 ${analytics.totalRoutes} 次路由` },
+  ];
+
+  return (
+    <div className="tt-cs-analytics">
+      <div className="tt-cs-analytics-toolbar">
+        <label>
+          统计窗口
+          <select value={days} onChange={(e) => onDaysChange(Number(e.target.value))}>
+            <option value={7}>近 7 天</option>
+            <option value={30}>近 30 天</option>
+            <option value={90}>近 90 天</option>
+          </select>
+        </label>
+        <button type="button" className="header-ghost slim" onClick={onReload}>
+          <RefreshCw size={14} aria-hidden /> 刷新
+        </button>
+      </div>
+      <div className="tt-cs-analytics-grid">
+        {metrics.map((m) => (
+          <div key={m.label} className="tt-cs-metric-card">
+            <span>{m.label}</span>
+            <strong>{m.value}</strong>
+            <small>{m.hint}</small>
+          </div>
+        ))}
+      </div>
+      {analytics.byDay?.length ? (
+        <div className="tt-cs-analytics-section">
+          <h5>近 {analytics.byDay.length} 日趋势</h5>
+          <ul className="tt-cs-trend-list">
+            {analytics.byDay.map((d) => (
+              <li key={d.date}>
+                <span>{d.date}</span>
+                <span>{d.total} 次路由</span>
+                <span>FAQ {d.faq}</span>
+                <span>自动发 {d.autoSend}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {analytics.byLang?.length ? (
+        <div className="tt-cs-analytics-section">
+          <h5>买家语言分布</h5>
+          <ul className="tt-cs-lang-list">
+            {analytics.byLang.map((row) => (
+              <li key={row.lang}>
+                <span>{getLanguageLabel(row.lang)}</span>
+                <em>{row.count}</em>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CsMultiLangTemplatesEditor({ draftSettings, setDraftSettings, field, title, rows = 3 }) {
+  const [lang, setLang] = useState("en");
+  const map = draftSettings?.[field] || {};
+  const value = map[lang] || "";
+
+  function update(nextText) {
+    setDraftSettings({
+      ...draftSettings,
+      [field]: { ...map, [lang]: nextText },
+    });
+  }
+
+  return (
+    <div className="tt-cs-template-langs">
+      <div className="tt-cs-template-langs-head">
+        <strong>{title}</strong>
+        <select value={lang} onChange={(e) => setLang(e.target.value)}>
+          {TIKTOK_SHOP_LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {getLanguageLabel(l.code)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <textarea rows={rows} value={value} onChange={(e) => update(e.target.value)} />
+      <p className="tt-hint">可使用 {"{shopName}"}、{"{sla}"} 变量 · 共 {TIKTOK_SHOP_LANGUAGES.length} 种站点语言</p>
+    </div>
+  );
+}
+
+function DrillResultPanel({ result }) {
+  if (!result) return null;
+  const faq = result.faqMatch;
+  const intent = result.intent || {};
+  const rows = [
+    ["路由层级", TIER_LABELS[result.tier] || result.tier || "—"],
+    ["动作", ACTION_LABELS[result.action] || result.action || "—"],
+    ["识别语言", result.langLabel || getLanguageLabel(result.lang) || result.lang || "—"],
+    ["北京夜间", result.beijingNight ? "是（休息时段）" : "否（工作时段）"],
+    ["SLA 占位", result.sla || "—"],
+    ["意图分类", intent.category || "—"],
+    ["路由说明", result.reason || "—"],
+  ];
+  if (faq) {
+    rows.push(["FAQ 模板", faq.name || "—"]);
+    rows.push(["FAQ 来源", faq.source || "—"]);
+    if (faq.lang) rows.push(["FAQ 语言", getLanguageLabel(faq.lang)]);
+    if (faq.category) rows.push(["FAQ 分类", faq.category]);
+    if (faq.score != null) rows.push(["匹配得分", String(faq.score)]);
+    if (faq.shopKey != null) rows.push(["FAQ 店铺", faq.shopKey ? faq.shopKey : "全店通用"]);
+  }
+  if (result.templateUsed) {
+    rows.push(["内置模板", `${result.templateUsed.kind || "—"} · ${getLanguageLabel(result.templateUsed.lang)}`]);
+  }
+  if (result.notifySeller) rows.push(["卖家告警", result.sellerMessage || "将通知卖家"]);
+
+  return (
+    <div className="tt-drill-result">
+      <strong>演练结果</strong>
+      <dl className="tt-drill-grid">
+        {rows.map(([label, val]) => (
+          <div key={label} className="tt-drill-kv">
+            <dt>{label}</dt>
+            <dd>{val}</dd>
+          </div>
+        ))}
+      </dl>
+      {result.replyText ? (
+        <>
+          <strong className="tt-drill-reply-label">拟回复话术</strong>
+          <pre>{result.replyText}</pre>
+        </>
+      ) : null}
+      {result.error ? <p className="tt-drill-error">{result.error}</p> : null}
+    </div>
+  );
+}
+
+function FaqTemplateManager({ authHeaders, showToast, formatError, templates, onReload, busy, setBusy, shopKey, shopLabel }) {
+  const [draft, setDraft] = useState(emptyFaqDraft);
+  const [editingId, setEditingId] = useState(null);
+  const importRef = useRef(null);
+  const languageOptions = buildLanguageSelectOptions();
+
+  function startEdit(template) {
+    setEditingId(template.id);
+    setDraft({
+      id: template.id,
+      name: template.name || "",
+      triggers: (template.triggers || []).join(" | "),
+      text: template.text || "",
+      category: template.category || "",
+      lang: template.lang || "en",
+    });
+  }
+
+  function resetDraft() {
+    setEditingId(null);
+    setDraft(emptyFaqDraft());
+  }
+
+  async function saveDraft() {
+    if (!draft.text.trim()) {
+      showToast("请填写回复内容。");
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/extension/cs/faq", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          shopKey: shopKey || "",
+          template: {
+            id: draft.id || undefined,
+            name: draft.name.trim() || "未命名模板",
+            text: draft.text.trim(),
+            triggers: draft.triggers
+              .split(/[,，|/;；]+/)
+              .map((s) => s.trim())
+              .filter(Boolean),
+            category: draft.category,
+            lang: draft.lang || "",
+          },
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast(editingId ? "FAQ 模板已更新" : "FAQ 模板已添加");
+      resetDraft();
+      await onReload();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeTemplate(id) {
+    if (!window.confirm("确定删除这条 FAQ 模板？")) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/extension/cs/faq/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast("已删除");
+      if (editingId === id) resetDraft();
+      await onReload();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importCsvText(text, mode) {
+    const parsed = parseFaqCsvText(text);
+    if (!parsed.length) {
+      showToast("未能解析 CSV，请使用下载的模板格式。");
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/extension/cs/faq/import", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ shopKey: shopKey || "", mode, templates: parsed }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast(`已导入 ${data.count} 条 FAQ 模板`);
+      await onReload();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const text = await file.text();
+    const mode = window.confirm("点「确定」= 合并导入（同名覆盖）；点「取消」= 全量替换现有模板") ? "merge" : "replace";
+    await importCsvText(text, mode);
+  }
+
+  return (
+    <div className="tt-faq-manager">
+      <div className="tt-faq-toolbar">
+        <p className="tt-hint tt-faq-intro">
+          当前编辑：<strong>{shopLabel}</strong>。覆盖 15 国站点语言；插件识别买家语言后优先匹配同语言 FAQ。
+        </p>
+        <div className="tt-faq-toolbar-actions">
+          <button type="button" className="header-ghost slim" onClick={downloadFaqTemplateCsv}>
+            下载 CSV 模板
+          </button>
+          <label className="import-btn slim">
+            <UploadCloud size={14} aria-hidden />
+            导入 CSV
+            <input ref={importRef} type="file" accept=".csv,text/csv" onChange={handleImportFile} hidden />
+          </label>
+        </div>
+      </div>
+
+      <div className="tt-faq-editor">
+        <h5>{editingId ? "编辑模板" : "新增模板"}</h5>
+        <div className="tt-faq-editor-grid">
+          <label>
+            模板名称
+            <input
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              placeholder="例如：物流时效"
+            />
+          </label>
+          <label>
+            触发关键词
+            <input
+              value={draft.triggers}
+              onChange={(e) => setDraft({ ...draft, triggers: e.target.value })}
+              placeholder="物流 | shipping | 几天到（用 | 或逗号分隔）"
+            />
+          </label>
+          <label>
+            分类
+            <select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>
+              {FAQ_CATEGORY_OPTIONS.map((opt) => (
+                <option key={opt.value || "auto"} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            语言 / 国家站点
+            <select value={draft.lang} onChange={(e) => setDraft({ ...draft, lang: e.target.value })}>
+              <option value="">通用（不限语言）</option>
+              {languageOptions.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {group.options.map((opt) => (
+                    <option key={`${group.id}-${opt.value}`} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="tt-note-field">
+          回复内容（可使用 {"{shopName}"}、{"{sla}"} 变量）
+          <textarea
+            rows={4}
+            value={draft.text}
+            onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+            placeholder="Hi! Thanks for reaching out..."
+          />
+        </label>
+        <div className="tt-faq-editor-actions">
+          <button type="button" className="continue-checkout slim" disabled={busy} onClick={saveDraft}>
+            <Plus size={14} aria-hidden /> {editingId ? "保存修改" : "添加模板"}
+          </button>
+          {editingId ? (
+            <button type="button" className="header-ghost slim" disabled={busy} onClick={resetDraft}>
+              取消编辑
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {!templates.length ? (
+        <p className="tt-empty">还没有 FAQ。可上方手动添加，或下载 CSV 模板填好后导入。</p>
+      ) : (
+        <ul className="tt-faq-list">
+          {templates.map((t) => (
+            <li key={t.id}>
+              <div className="tt-faq-list-body">
+                <strong>{t.name}</strong>
+                <p>{t.text?.slice(0, 200)}{t.text?.length > 200 ? "…" : ""}</p>
+                <small>
+                  {(t.triggers || []).join(" · ") || "无触发词"}
+                  {t.category ? ` · ${t.category}` : ""}
+                  {t.lang ? ` · ${getLanguageLabel(t.lang)}` : " · 通用"}
+                </small>
+              </div>
+              <div className="tt-faq-list-actions">
+                <button type="button" className="header-ghost slim" disabled={busy} onClick={() => startEdit(t)}>
+                  编辑
+                </button>
+                <button type="button" className="header-ghost slim danger" disabled={busy} onClick={() => removeTemplate(t.id)}>
+                  <Trash2 size={14} aria-hidden />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function CsControlConsole({
   authHeaders,
@@ -267,31 +701,82 @@ export function CsControlConsole({
   const [alerts, setAlerts] = useState([]);
   const [settings, setSettings] = useState(null);
   const [faqTemplates, setFaqTemplates] = useState([]);
+  const [shops, setShops] = useState([]);
+  const [csShopKey, setCsShopKey] = useState("");
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsDays, setAnalyticsDays] = useState(30);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [draftSettings, setDraftSettings] = useState(null);
 
+  const shopLabel = csShopKey
+    ? shops.find((s) => s.shopKey === csShopKey)?.shopName || csShopKey
+    : "全店通用（全局模板）";
+
+  async function loadShops() {
+    try {
+      const response = await fetch("/api/extension/cs/shops?platform=tiktok", { headers: authHeaders() });
+      const data = await response.json();
+      if (response.ok) setShops(data.shops || []);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function loadFaqForShop(shopKey = csShopKey) {
+    try {
+      const qs = new URLSearchParams({ editor: "1", shopKey: shopKey || "" });
+      const response = await fetch(`/api/extension/cs/faq?${qs}`, { headers: authHeaders() });
+      const data = await response.json();
+      if (response.ok) setFaqTemplates(data.templates || []);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function loadAnalytics(days = analyticsDays) {
+    setAnalyticsLoading(true);
+    try {
+      const response = await fetch(`/api/extension/cs/analytics?days=${days}`, { headers: authHeaders() });
+      const data = await response.json();
+      if (response.ok) setAnalytics(data.analytics);
+    } catch {
+      setAnalytics(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }
+
   async function loadCsData() {
     try {
-      const [aRes, sRes, fRes] = await Promise.all([
+      const [aRes, sRes] = await Promise.all([
         fetch("/api/extension/cs/alerts", { headers: authHeaders() }),
         fetch("/api/extension/cs/settings", { headers: authHeaders() }),
-        fetch("/api/extension/cs/faq", { headers: authHeaders() }),
       ]);
-      const [aData, sData, fData] = await Promise.all([aRes.json(), sRes.json(), fRes.json()]);
+      const [aData, sData] = await Promise.all([aRes.json(), sRes.json()]);
       if (aRes.ok) setAlerts(aData.alerts || []);
       if (sRes.ok) {
         setSettings(sData.settings);
         setDraftSettings(sData.settings);
       }
-      if (fRes.ok) setFaqTemplates(fData.templates || []);
+      await loadFaqForShop(csShopKey);
     } catch {
       /* ignore */
     }
   }
 
   useEffect(() => {
+    loadShops();
     loadCsData();
   }, []);
+
+  useEffect(() => {
+    loadFaqForShop(csShopKey);
+  }, [csShopKey]);
+
+  useEffect(() => {
+    if (tab === "analytics") loadAnalytics(analyticsDays);
+  }, [tab, analyticsDays]);
 
   async function markRead(id) {
     setBusy(true);
@@ -300,6 +785,7 @@ export function CsControlConsole({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       await loadCsData();
+      if (tab === "analytics") await loadAnalytics(analyticsDays);
     } catch (error) {
       showToast(formatError(error));
     } finally {
@@ -335,7 +821,7 @@ export function CsControlConsole({
         <div>
           <h4>客服控制台</h4>
           <p>
-            <strong>实时回复在 TikTok 插件里完成</strong>（识别消息、生成话术、FAQ/售后自动发）。此处配置规则、处理告警、管理 FAQ。
+            <strong>实时回复在 TikTok 插件里完成</strong>（识别消息、生成话术、FAQ/售后自动发）。此处配置规则、<strong>管理 FAQ 模板</strong>、处理告警。
           </p>
         </div>
       </div>
@@ -393,6 +879,19 @@ export function CsControlConsole({
         </div>
       )}
 
+      {tab === "analytics" && (
+        <div className="tt-cs-pane">
+          <CsAnalyticsPanel
+            authHeaders={authHeaders}
+            analytics={analytics}
+            loading={analyticsLoading}
+            onReload={() => loadAnalytics(analyticsDays)}
+            days={analyticsDays}
+            onDaysChange={setAnalyticsDays}
+          />
+        </div>
+      )}
+
       {tab === "rules" && draftSettings && (
         <div className="tt-cs-pane">
           <label className="tt-toggle-row">
@@ -419,14 +918,20 @@ export function CsControlConsole({
             />
             北京夜间（23:00–09:00）启用 AI 兜底回复
           </label>
-          <label className="tt-note-field">
-            售后安抚模板（中文）
-            <textarea
-              rows={3}
-              value={draftSettings.afterSalesTemplateZh || ""}
-              onChange={(e) => setDraftSettings({ ...draftSettings, afterSalesTemplateZh: e.target.value })}
-            />
-          </label>
+          <CsMultiLangTemplatesEditor
+            draftSettings={draftSettings}
+            setDraftSettings={setDraftSettings}
+            field="afterSalesTemplates"
+            title="售后安抚模板"
+            rows={3}
+          />
+          <CsMultiLangTemplatesEditor
+            draftSettings={draftSettings}
+            setDraftSettings={setDraftSettings}
+            field="greetingTemplates"
+            title="问候模板"
+            rows={2}
+          />
           <button type="button" className="continue-checkout slim" disabled={busy} onClick={saveSettings}>
             保存规则
           </button>
@@ -438,27 +943,35 @@ export function CsControlConsole({
 
       {tab === "faq" && (
         <div className="tt-cs-pane">
-          {!faqTemplates.length ? (
-            <p className="tt-empty">
-              暂无 FAQ 模板。可在插件面板维护，或后续在此添加。模板用于插件自动匹配买家常见问题。
-            </p>
-          ) : (
-            <ul className="tt-faq-list">
-              {faqTemplates.slice(0, 20).map((t) => (
-                <li key={t.id}>
-                  <strong>{t.name}</strong>
-                  <p>{t.text?.slice(0, 160)}</p>
-                  <small>{(t.triggers || []).join(" · ") || "无触发词"}</small>
-                </li>
-              ))}
-            </ul>
-          )}
+          <CsShopScopeBar
+            shops={shops}
+            shopKey={csShopKey}
+            onShopKeyChange={setCsShopKey}
+            hint="每个 TikTok 店铺可维护独立 FAQ；「全店通用」对所有店铺生效。需先在插件里打开对应店铺页面以出现在列表中。"
+          />
+          <FaqTemplateManager
+            authHeaders={authHeaders}
+            showToast={showToast}
+            formatError={formatError}
+            templates={faqTemplates}
+            onReload={() => loadFaqForShop(csShopKey)}
+            busy={busy}
+            setBusy={setBusy}
+            shopKey={csShopKey}
+            shopLabel={shopLabel}
+          />
         </div>
       )}
 
       {tab === "drill" && (
         <div className="tt-cs-pane">
-          <p className="tt-hint">粘贴一条买家消息，测试分层路由（FAQ / 售后 / 夜间 AI / 草稿），不发送到 TikTok。</p>
+          <CsShopScopeBar
+            shops={shops}
+            shopKey={csShopKey}
+            onShopKeyChange={setCsShopKey}
+            hint={`演练将匹配：${csShopKey ? "本店 FAQ + 全店通用" : "仅全店通用 FAQ"}。不消耗套餐次数、不发送到 TikTok。`}
+          />
+          <p className="tt-hint">粘贴一条买家消息，测试分层路由（FAQ / 售后 / 夜间 AI / 草稿）。</p>
           <label className="tt-note-field">
             买家消息
             <textarea
@@ -468,16 +981,15 @@ export function CsControlConsole({
               placeholder="Where is my order? It's been 2 weeks..."
             />
           </label>
-          <button type="button" className="continue-checkout slim" disabled={drillBusy || !drillText.trim()} onClick={onDrillRun}>
+          <button
+            type="button"
+            className="continue-checkout slim"
+            disabled={drillBusy || !drillText.trim()}
+            onClick={() => onDrillRun(csShopKey)}
+          >
             {drillBusy ? "路由中…" : "测试分层路由"}
           </button>
-          {drillResult ? (
-            <div className="tt-drill-result">
-              <strong>层级：{drillResult.tier}</strong>
-              <p>{drillResult.reason}</p>
-              {drillResult.replyText ? <pre>{drillResult.replyText}</pre> : null}
-            </div>
-          ) : null}
+          <DrillResultPanel result={drillResult} />
         </div>
       )}
     </div>

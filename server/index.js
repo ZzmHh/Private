@@ -76,6 +76,8 @@ import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { startDbBackupScheduler } from "./jobs/dbBackup.js";
 import { maybeRecordFirstAgentRun, recordProductEvent } from "./productEvents.js";
 import { buildEchoTikContext, loadMarketCatalogMeta } from "./integrations/echotik/index.js";
+import { prepareAgentRunInput } from "./prepareAgentRun.js";
+import { streamChatCompletions } from "./llmStream.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -201,6 +203,7 @@ app.use(requestLogger);
 app.use("/api", apiIpLimiter);
 app.use("/api/extension", extensionLimiter);
 app.use("/api/agents/run", agentRunLimiter);
+app.use("/api/agents/run/stream", agentRunLimiter);
 app.use("/api/autopilot/run", agentRunLimiter);
 
 registerSeoRoutes(app);
@@ -1063,113 +1066,24 @@ app.post("/api/agents/run", authMiddleware, validateBody(validators.agentRun), a
   const startedAt = Date.now();
   let usage;
   try {
-    const { agentId, input, scrape, useStoreSnapshot, storeSnapshotPlatform, useExtensionSnapshot, useStoreMetrics } =
-      req.body || {};
-
-    if (!agentId || typeof input !== "string" || !input.trim()) {
-      return res.status(400).json({ error: "请提供 agentId 和要执行的业务问题。" });
-    }
-
     if (!apiKey) {
       return res.status(400).json({
         error: `还没有配置 ${providerName} API Key。请在 .env 中设置 OPENCLAW_API_KEY。`,
       });
     }
 
-    ensureFeatureAccess(req.user, "agent", agentId);
-
-    if (["growth", "service", "profit"].includes(agentId)) {
-      ensureFeatureAccess(req.user, "storeApiAgents");
-    }
-
-    usage = incrementUsage(req.user.id, agentId);
-    let scrapeResult = null;
-    let echotikContext = null;
-    let enrichedInput = input.trim();
-
-    if (agentId === "trend") {
-      echotikContext = buildEchoTikContext(enrichedInput);
-      if (echotikContext?.detected || echotikContext?.catalog) {
-        enrichedInput = [
-          enrichedInput,
-          "",
-          "## EchoTik 选品榜单样本（自动识别市场/类目关键词；第三方时点数据，非官方实时）",
-          JSON.stringify(echotikContext, null, 2),
-        ].join("\n");
-      }
-    }
-
-    if (agentId === "trend" && scrape?.enabled) {
-      ensureFeatureAccess(req.user, "scraper");
-      incrementUsage(req.user.id, "scrape");
-      scrapeResult = await runPythonScraper({
-        platform: scrape.platform,
-        market: scrape.market,
-        category: scrape.category,
-        url: scrape.url,
-      });
-      enrichedInput = [
-        enrichedInput,
-        "",
-        "Python/Playwright 公开页面参考数据（非官方实时、仅供交叉验证）：",
-        JSON.stringify(scrapeResult, null, 2),
-      ].join("\n");
-    }
-
-    if (useStoreMetrics && ["growth", "service", "profit"].includes(agentId)) {
-      const plat = String(storeSnapshotPlatform || "auto").toLowerCase();
-      const ctx = getStoreMetricsAgentContext(req.user.id, plat === "auto" ? undefined : plat);
-      if (ctx) {
-        enrichedInput = [
-          enrichedInput,
-          "",
-          "## 多平台通用 CSV 经营数据（已解析 + 规则预计算；非官方 API 实时）",
-          JSON.stringify(ctx, null, 2),
-        ].join("\n");
-      }
-    }
-
-    if (useExtensionSnapshot && ["growth", "service", "profit"].includes(agentId)) {
-      const plat = String(storeSnapshotPlatform || "tiktok").toLowerCase();
-      const ctx = getMergedExtensionContext(req.user.id, plat, 5);
-      if (ctx) {
-        enrichedInput = [
-          enrichedInput,
-          "",
-          "## 浏览器插件同步的店铺页面快照（卖家已登录后台；非官方 API，可能不完整）",
-          JSON.stringify(ctx, null, 2),
-        ].join("\n");
-      }
-    }
-
-    if (useStoreSnapshot && ["growth", "service", "profit"].includes(agentId)) {
-      const secret = pickStoreSnapshotSecret(req.user.id, storeSnapshotPlatform);
-      const plat = String(secret?.platform || "").toLowerCase();
-      if (secret?.apiToken && snapshotRequiresSavedSecret(secret) && ["shopify", "woocommerce", "amazon", "tiktok"].includes(plat)) {
-        const snap = await fetchStoreSnapshot(secret);
-        if (snap.ok) {
-          enrichedInput = [
-            enrichedInput,
-            "",
-            "## 店铺 API 只读快照（服务端经官方/计划中的平台接口拉取，样本非全量）",
-            JSON.stringify(snap.data, null, 2),
-          ].join("\n");
-        } else {
-          enrichedInput = [
-            enrichedInput,
-            "",
-            "## 店铺 API 快照不可用或尚未实现",
-            [snap.error, snap.hint, snap.nextSteps ? snap.nextSteps.join("；") : ""].filter(Boolean).join("\n"),
-          ].join("\n");
-        }
-      }
-    }
+    const prepared = await prepareAgentRunInput(req.user, req.body, {
+      runPythonScraper,
+      pickStoreSnapshotSecret,
+    });
+    const { agentId, enrichedInput, scrapeResult, echotikContext } = prepared;
+    usage = prepared.usage;
 
     const { response, data, endpoint } = await callChatCompletions({
-        model,
-        temperature: 0.45,
-        max_tokens: usage.maxTokens,
-        messages: buildAgentMessages(agentId, enrichedInput),
+      model,
+      temperature: 0.45,
+      max_tokens: usage.maxTokens,
+      messages: buildAgentMessages(agentId, enrichedInput),
     });
 
     if (!response.ok) {
@@ -1230,6 +1144,124 @@ app.post("/api/agents/run", authMiddleware, validateBody(validators.agentRun), a
       finalizeUsageLog(usage.logId, { type: req.body?.agentId || "agent", status: "failed", error: error.message, startedAt });
     }
     res.status(error.status || 500).json({ error: error.message || "Agent 执行失败。" });
+  }
+});
+
+app.post("/api/agents/run/stream", authMiddleware, validateBody(validators.agentRun), async (req, res) => {
+  const startedAt = Date.now();
+  let usage;
+  try {
+    if (!apiKey) {
+      return res.status(400).json({
+        error: `还没有配置 ${providerName} API Key。请在 .env 中设置 OPENCLAW_API_KEY。`,
+      });
+    }
+
+    const prepared = await prepareAgentRunInput(req.user, req.body, {
+      runPythonScraper,
+      pickStoreSnapshotSecret,
+    });
+    const { agentId, enrichedInput, scrapeResult, echotikContext } = prepared;
+    usage = prepared.usage;
+
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    let answer = "";
+    const stream = streamChatCompletions(
+      {
+        model,
+        temperature: 0.45,
+        max_tokens: usage.maxTokens,
+        messages: buildAgentMessages(agentId, enrichedInput),
+      },
+      { apiKey, baseUrl },
+    );
+
+    for await (const chunk of stream) {
+      if (chunk.type === "delta" && chunk.text) {
+        answer += chunk.text;
+        res.write(`event: delta\ndata: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      }
+      if (chunk.type === "done" && chunk.raw && chunk.raw.ok === false) {
+        finalizeUsageLog(usage.logId, {
+          type: agentId,
+          status: "failed",
+          inputLength: enrichedInput.length,
+          error: chunk.raw.data?.error?.message || chunk.raw.data?.message || "流式调用失败",
+          startedAt,
+        });
+        res.write(`event: error\ndata: ${JSON.stringify({ error: chunk.raw.data?.error?.message || "模型流式调用失败" })}\n\n`);
+        res.end();
+        return;
+      }
+    }
+
+    if (!answer.trim()) {
+      finalizeUsageLog(usage.logId, {
+        type: agentId,
+        status: "failed",
+        inputLength: enrichedInput.length,
+        error: "模型没有返回内容",
+        startedAt,
+      });
+      res.write(`event: error\ndata: ${JSON.stringify({ error: "模型没有返回内容。" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    finalizeUsageLog(usage.logId, {
+      type: agentId,
+      status: "success",
+      inputLength: enrichedInput.length,
+      outputLength: answer.length,
+      model,
+      startedAt,
+    });
+    const task = saveTask({
+      userId: req.user.id,
+      type: agentId,
+      title: agentSkills[agentId]?.name || "Agent 任务",
+      input: enrichedInput,
+      answer,
+      metadata: { usage, scrape: scrapeResult, echotik: echotikContext, streamed: true },
+    });
+
+    maybeRecordFirstAgentRun(req.user.id);
+    recordProductEvent({
+      event: "agent_run",
+      userId: req.user.id,
+      sessionId: `user:${req.user.id}`,
+      path: "/workspace",
+      properties: { agentId, streamed: true },
+    });
+
+    res.write(
+      `event: done\ndata: ${JSON.stringify({
+        ok: true,
+        provider: providerName,
+        model,
+        agentId,
+        answer,
+        task,
+        scrape: scrapeResult,
+        echotik: echotikContext,
+        usage,
+      })}\n\n`,
+    );
+    res.end();
+  } catch (error) {
+    if (usage?.logId) {
+      finalizeUsageLog(usage.logId, { type: req.body?.agentId || "agent", status: "failed", error: error.message, startedAt });
+    }
+    if (!res.headersSent) {
+      res.status(error.status || 500).json({ error: error.message || "Agent 流式执行失败。" });
+    } else {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: error.message || "Agent 流式执行失败。" })}\n\n`);
+      res.end();
+    }
   }
 });
 

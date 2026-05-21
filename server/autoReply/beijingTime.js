@@ -27,15 +27,16 @@ export function isBeijingRestHours(settings = {}, date = new Date()) {
   return hour >= start && hour < end;
 }
 
-export function getSlaText({ lang = "zh", beijingNight = false, settings = {} } = {}) {
-  if (lang === "zh") {
-    return beijingNight
-      ? String(settings.nightSlaZh || "9 小时内")
-      : String(settings.daySlaZh || "2 小时内");
+import { normalizeFaqLang } from "../../shared/tiktokShopLanguages.js";
+
+export function getSlaText({ lang = "en", beijingNight = false, settings = {} } = {}) {
+  const l = normalizeFaqLang(lang) || "en";
+  const dayMap = settings.slaDayByLang || {};
+  const nightMap = settings.slaNightByLang || {};
+  if (beijingNight) {
+    return nightMap[l] || nightMap.en || settings.nightSlaEn || "within 9 hours";
   }
-  return beijingNight
-    ? String(settings.nightSlaEn || "within 9 hours")
-    : String(settings.daySlaEn || "within 2 hours");
+  return dayMap[l] || dayMap.en || settings.daySlaEn || "within 2 hours";
 }
 
 export function applyTemplateVars(text, vars = {}) {
