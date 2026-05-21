@@ -1,0 +1,28 @@
+{
+  "source": "EchoTik",
+  "market": "ph",
+  "marketName": "菲律宾",
+  "updatedAt": "2026-05-20",
+  "items": [
+    { "rank": 1, "title": "Pet Grooming Brush Set", "titleZh": "宠物梳毛刷套装", "category": "宠物用品", "priceUsd": 8.9, "sales7d": 1840, "gmv7d": 16376, "growth": 0.31, "keywordTags": ["宠物", "狗", "猫", "梳毛"] },
+    { "rank": 2, "title": "Automatic Pet Feeder 4L", "titleZh": "自动宠物喂食器 4L", "category": "宠物用品", "priceUsd": 24.5, "sales7d": 920, "gmv7d": 22540, "growth": 0.22, "keywordTags": ["宠物", "喂食器", "狗"] },
+    { "rank": 3, "title": "Cat Litter Mat Waterproof", "titleZh": "猫砂垫防水", "category": "宠物用品", "priceUsd": 6.2, "sales7d": 1560, "gmv7d": 9672, "growth": 0.18, "keywordTags": ["猫", "猫砂", "宠物"] },
+    { "rank": 4, "title": "Dog Chew Toy Rope", "titleZh": "狗狗磨牙绳结玩具", "category": "宠物用品", "priceUsd": 4.5, "sales7d": 2100, "gmv7d": 9450, "growth": 0.27, "keywordTags": ["狗", "玩具", "宠物"] },
+    { "rank": 5, "title": "Pet Hair Remover Roller", "titleZh": "宠物粘毛滚筒", "category": "宠物用品", "priceUsd": 3.8, "sales7d": 1780, "gmv7d": 6764, "growth": 0.15, "keywordTags": ["宠物", "除毛", "猫", "狗"] },
+    { "rank": 6, "title": "Portable Pet Water Bottle", "titleZh": "便携宠物水壶", "category": "宠物用品", "priceUsd": 7.1, "sales7d": 1320, "gmv7d": 9372, "growth": 0.19, "keywordTags": ["宠物", "外出", "狗"] },
+    { "rank": 7, "title": "Cat Scratching Post", "titleZh": "猫抓柱", "category": "宠物用品", "priceUsd": 18.9, "sales7d": 640, "gmv7d": 12096, "growth": 0.12, "keywordTags": ["猫", "宠物", "家具"] },
+    { "rank": 8, "title": "Pet Nail Clipper LED", "titleZh": "宠物指甲剪 LED", "category": "宠物用品", "priceUsd": 5.6, "sales7d": 980, "gmv7d": 5488, "growth": 0.14, "keywordTags": ["宠物", "美容", "狗", "猫"] },
+    { "rank": 9, "title": "Dog Harness No Pull", "titleZh": "狗狗胸背带", "category": "宠物用品", "priceUsd": 11.2, "sales7d": 860, "gmv7d": 9632, "growth": 0.21, "keywordTags": ["狗", "牵引", "宠物"] },
+    { "rank": 10, "title": "Pet Bed Donut Cushion", "titleZh": "宠物甜甜圈窝垫", "category": "宠物用品", "priceUsd": 16.8, "sales7d": 720, "gmv7d": 12096, "growth": 0.17, "keywordTags": ["宠物", "猫", "狗", "窝"] },
+    { "rank": 11, "title": "Aquarium Air Pump Silent", "titleZh": "静音鱼缸氧气泵", "category": "宠物用品", "priceUsd": 9.4, "sales7d": 540, "gmv7d": 5076, "growth": 0.09, "keywordTags": ["水族", "宠物"] },
+    { "rank": 12, "title": "Pet Wipes Hypoallergenic", "titleZh": "宠物湿巾低敏", "category": "宠物用品", "priceUsd": 4.2, "sales7d": 1420, "gmv7d": 5964, "growth": 0.16, "keywordTags": ["宠物", "清洁", "猫", "狗"] },
+    { "rank": 13, "title": "Slow Feeder Dog Bowl", "titleZh": "慢食狗碗", "category": "宠物用品", "priceUsd": 6.8, "sales7d": 1180, "gmv7d": 8024, "growth": 0.24, "keywordTags": ["狗", "宠物", "喂食"] },
+    { "rank": 14, "title": "Cat Tunnel Play Tube", "titleZh": "猫隧道玩具", "category": "宠物用品", "priceUsd": 8.3, "sales7d": 890, "gmv7d": 7387, "growth": 0.2, "keywordTags": ["猫", "玩具", "宠物"] },
+    { "rank": 15, "title": "Pet Toothbrush Kit", "titleZh": "宠物牙刷套装", "category": "宠物用品", "priceUsd": 5.1, "sales7d": 760, "gmv7d": 3876, "growth": 0.11, "keywordTags": ["宠物", "口腔", "狗"] },
+    { "rank": 16, "title": "Wireless Beauty LED Mirror", "titleZh": "无线 LED 化妆镜", "category": "美妆", "priceUsd": 12.4, "sales7d": 1680, "gmv7d": 20832, "growth": 0.28, "keywordTags": ["美妆", "化妆镜"] },
+    { "rank": 17, "title": "Kitchen Storage Organizer", "titleZh": "厨房收纳架", "category": "家居", "priceUsd": 9.9, "sales7d": 1240, "gmv7d": 12276, "growth": 0.13, "keywordTags": ["家居", "收纳"] },
+    { "rank": 18, "title": "Phone Holder Car Mount", "titleZh": "车载手机支架", "category": "3C配件", "priceUsd": 4.6, "sales7d": 1920, "gmv7d": 8832, "growth": 0.19, "keywordTags": ["手机", "车载"] },
+    { "rank": 19, "title": "Fitness Resistance Bands", "titleZh": "健身阻力带", "category": "运动户外", "priceUsd": 7.5, "sales7d": 980, "gmv7d": 7350, "growth": 0.15, "keywordTags": ["健身", "运动"] },
+    { "rank": 20, "title": "Baby Silicone Bib Set", "titleZh": "婴儿硅胶围兜套装", "category": "母婴", "priceUsd": 6.3, "sales7d": 860, "gmv7d": 5418, "growth": 0.1, "keywordTags": ["母婴", "婴儿"] }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "source": "EchoTik",
+  "market": "th",
+  "marketName": "泰国",
+  "updatedAt": "2026-05-16",
+  "items": [
+    { "rank": 1, "title": "Skincare Sunscreen SPF50", "titleZh": "SPF50 防晒霜", "category": "美妆护肤", "priceUsd": 7.6, "sales7d": 2900, "gmv7d": 22040, "growth": 0.27, "keywordTags": ["护肤", "防晒", "美妆"] },
+    { "rank": 2, "title": "Thai Snack Spicy Chips", "titleZh": "泰式辣片零食", "category": "食品", "priceUsd": 3.1, "sales7d": 4100, "gmv7d": 12710, "growth": 0.2, "keywordTags": ["零食", "泰国"] },
+    { "rank": 3, "title": "Pet Dry Food Storage", "titleZh": "宠物干粮收纳桶", "category": "宠物用品", "priceUsd": 9.8, "sales7d": 760, "gmv7d": 7448, "growth": 0.14, "keywordTags": ["宠物", "收纳", "狗"] },
+    { "rank": 4, "title": "Massage Gun Mini", "titleZh": "迷你筋膜枪", "category": "运动户外", "priceUsd": 22.5, "sales7d": 680, "gmv7d": 15300, "growth": 0.13, "keywordTags": ["按摩", "健身"] },
+    { "rank": 5, "title": "Waterproof Makeup Bag", "titleZh": "防水化妆包", "category": "美妆", "priceUsd": 5.4, "sales7d": 1540, "gmv7d": 8316, "growth": 0.18, "keywordTags": ["美妆", "收纳"] }
+  ]
+}

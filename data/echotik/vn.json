@@ -1,0 +1,13 @@
+{
+  "source": "EchoTik",
+  "market": "vn",
+  "marketName": "越南",
+  "updatedAt": "2026-05-17",
+  "items": [
+    { "rank": 1, "title": "Ao Thun Basic Cotton", "titleZh": "基础款纯棉 T 恤", "category": "女装", "priceUsd": 5.2, "sales7d": 3600, "gmv7d": 18720, "growth": 0.25, "keywordTags": ["女装", "T恤"] },
+    { "rank": 2, "title": "Phone Case Cute Cartoon", "titleZh": "卡通手机壳", "category": "3C配件", "priceUsd": 2.8, "sales7d": 5200, "gmv7d": 14560, "growth": 0.19, "keywordTags": ["手机壳"] },
+    { "rank": 3, "title": "Pet Shampoo Gentle", "titleZh": "温和宠物香波", "category": "宠物用品", "priceUsd": 4.9, "sales7d": 1280, "gmv7d": 6272, "growth": 0.16, "keywordTags": ["宠物", "洗护", "狗"] },
+    { "rank": 4, "title": "Kitchen Knife Set", "titleZh": "厨房刀具套装", "category": "厨房", "priceUsd": 13.5, "sales7d": 860, "gmv7d": 11610, "growth": 0.11, "keywordTags": ["厨房", "刀具"] },
+    { "rank": 5, "title": "Mini Projector HD", "titleZh": "迷你投影仪", "category": "3C数码", "priceUsd": 38.0, "sales7d": 420, "gmv7d": 15960, "growth": 0.08, "keywordTags": ["投影", "3C"] }
+  ]
+}

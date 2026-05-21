@@ -1,0 +1,13 @@
+{
+  "source": "EchoTik",
+  "market": "us",
+  "marketName": "美国",
+  "updatedAt": "2026-05-18",
+  "items": [
+    { "rank": 1, "title": "Portable Blender USB", "titleZh": "便携 USB 榨汁杯", "category": "厨房小电", "priceUsd": 19.9, "sales7d": 3200, "gmv7d": 63680, "growth": 0.26, "keywordTags": ["厨房", "便携"] },
+    { "rank": 2, "title": "LED Strip Lights RGB", "titleZh": "RGB 灯带", "category": "家居照明", "priceUsd": 12.5, "sales7d": 4100, "gmv7d": 51250, "growth": 0.18, "keywordTags": ["家居", "灯带"] },
+    { "rank": 3, "title": "Wireless Earbuds ANC", "titleZh": "降噪无线耳机", "category": "3C数码", "priceUsd": 29.9, "sales7d": 2800, "gmv7d": 83720, "growth": 0.21, "keywordTags": ["耳机", "3C"] },
+    { "rank": 4, "title": "Pet Hair Vacuum Attachment", "titleZh": "宠物除毛吸尘器头", "category": "宠物用品", "priceUsd": 14.2, "sales7d": 1560, "gmv7d": 22152, "growth": 0.24, "keywordTags": ["宠物", "清洁", "狗"] },
+    { "rank": 5, "title": "Yoga Mat Thick Non Slip", "titleZh": "加厚防滑瑜伽垫", "category": "运动户外", "priceUsd": 16.8, "sales7d": 1900, "gmv7d": 31920, "growth": 0.14, "keywordTags": ["瑜伽", "健身"] }
+  ]
+}

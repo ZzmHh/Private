@@ -271,6 +271,127 @@ function parseCaseSlugFromHash(raw) {
   return slug || null;
 }
 
+function parseConfirmPaymentToken(routeHash) {
+  if (routeHash.startsWith("confirm-payment")) {
+    const query = routeHash.includes("?") ? routeHash.slice(routeHash.indexOf("?") + 1) : "";
+    return new URLSearchParams(query).get("token");
+  }
+  return new URLSearchParams(window.location.search).get("payment_confirm");
+}
+
+function useTypingReveal(fullText, enabled) {
+  const [display, setDisplay] = useState(enabled ? "" : fullText || "");
+
+  useEffect(() => {
+    if (!enabled) {
+      setDisplay(fullText || "");
+      return undefined;
+    }
+    if (!fullText) {
+      setDisplay("");
+      return undefined;
+    }
+
+    setDisplay("");
+    let index = 0;
+    const step = Math.max(1, Math.floor(fullText.length / 120));
+    const timer = window.setInterval(() => {
+      index = Math.min(fullText.length, index + step);
+      setDisplay(fullText.slice(0, index));
+      if (index >= fullText.length) window.clearInterval(timer);
+    }, 18);
+
+    return () => window.clearInterval(timer);
+  }, [fullText, enabled]);
+
+  return display;
+}
+
+function PaymentConfirmPage({ token }) {
+  const [preview, setPreview] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/billing/orders/confirm-preview/${encodeURIComponent(token)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.error) throw new Error(data.error);
+        setPreview(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || "链接无效");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  async function confirmNow() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/billing/orders/confirm-by-token/${encodeURIComponent(token)}`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setDone(true);
+    } catch (err) {
+      setError(err.message || "确认失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="payment-confirm-page">
+      <header className="payment-confirm-head">
+        <span className="brand-mark">凡</span>
+        <div>
+          <strong>凡梦AI · 收款确认</strong>
+          <small>管理员手机端页面</small>
+        </div>
+      </header>
+
+      {error ? <p className="payment-confirm-error">{error}</p> : null}
+
+      {!preview && !error ? <p className="payment-confirm-loading">正在加载订单…</p> : null}
+
+      {preview && !done ? (
+        <section className="payment-confirm-card">
+          <p className="payment-confirm-label">待确认订单</p>
+          <h1>{preview.orderNo}</h1>
+          <dl className="payment-confirm-meta">
+            <div><dt>套餐</dt><dd>{preview.planName}</dd></div>
+            <div><dt>金额</dt><dd>¥{preview.amount}</dd></div>
+            <div><dt>用户</dt><dd>{preview.userName} · {preview.userEmail}</dd></div>
+            <div><dt>状态</dt><dd>{preview.status === "paid" ? "已支付" : "待核实"}</dd></div>
+            {preview.payerNote ? <div><dt>备注</dt><dd>{preview.payerNote}</dd></div> : null}
+          </dl>
+          {preview.status === "paid" ? (
+            <p className="payment-confirm-done">该订单已确认，无需重复操作。</p>
+          ) : (
+            <button type="button" className="payment-confirm-btn" disabled={busy} onClick={confirmNow}>
+              {busy ? "确认中…" : "确认到账并开通套餐"}
+            </button>
+          )}
+        </section>
+      ) : null}
+
+      {done ? (
+        <section className="payment-confirm-card payment-confirm-card--success">
+          <h1>已开通</h1>
+          <p>用户套餐已正式生效，24 小时临时权限已转为订阅。</p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 function CaseStudyDetail({ study, onBack, onHome, onLoginClick, onRegisterClick }) {
   useEffect(() => {
     const prev = document.title;
@@ -1208,7 +1329,7 @@ function formatError(error) {
   if (msg.includes("Unexpected end of JSON input") || msg.includes("Failed to execute 'json'")) {
     return "无法连接后端 API。请另开终端运行 npm run dev:server，并确认 .env 的 PORT 与 npm run dev 代理一致（改 PORT 后需重启两个服务）。";
   }
-  return msg || "请求失败，请检查后端服务和 OpenClaw 配置。";
+  return msg || "请求失败，请检查后端服务与 AI 模型配置。";
 }
 
 function readFileAsText(file) {
@@ -1237,6 +1358,8 @@ function workspaceEmptyPanel() {
     csDrillText: "",
     csDrillResult: null,
     scrape: { enabled: false, platform: "", market: "", category: "", url: "" },
+    typingReveal: false,
+    echotikHint: null,
   };
 }
 
@@ -1245,7 +1368,7 @@ function workspaceBuildInitialPanels() {
   p[WORKSPACE_AUTOPILOT_ID] = {
     ...workspaceEmptyPanel(),
     answer:
-      "登录后为免费版（每日限额），并赠送 7 天专业版全功能体验。请在本模块输入要求后由 OpenClaw 生成结果。",
+      "登录后为免费版（每日限额），并赠送 7 天专业版全功能体验。请在本模块输入要求后由 AI 生成结果。",
   };
   for (const a of agents) {
     p[a.id] = workspaceEmptyPanel();
@@ -1773,8 +1896,9 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setCheckoutOrder(data.order);
+      if (data.user) onUserUpdate(data.user);
       trackEvent("order_claim_paid", { orderId: data.order?.id }, { token: localStorage.getItem("fanmeng_token") || "" });
-      showToast("已提交付款提醒，核实到账后将为你开通套餐。");
+      showToast("已提交付款提醒。已为你开通 24 小时临时套餐，核实后将转为正式订阅。");
     } catch (error) {
       showToast(formatError(error));
     } finally {
@@ -1927,7 +2051,9 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
                   )}
 
                   {checkoutOrder.status === "awaiting_confirm" && (
-                    <p className="awaiting-note">我们核实到账后会为你开通对应套餐，通常可在当日完成。</p>
+                    <p className="awaiting-note">
+                      已为你开通 <strong>24 小时临时套餐</strong>，可先体验对应功能；我们核实到账后将转为正式订阅（通常当日完成）。
+                    </p>
                   )}
 
                   {checkoutOrder.status === "paid" && (
@@ -2452,7 +2578,10 @@ function renderDocumentLines(lines) {
   });
 }
 
-function ResultDocument({ content, streaming }) {
+function ResultDocument({ content, streaming, typingReveal = false }) {
+  const revealed = useTypingReveal(content, typingReveal && !streaming);
+  const visibleContent = typingReveal && !streaming ? revealed : content;
+
   if (streaming && (!content || !String(content).trim())) {
     return (
       <article className="result-document is-generating" aria-busy="true">
@@ -2461,11 +2590,11 @@ function ResultDocument({ content, streaming }) {
     );
   }
 
-  if (!content) {
+  if (!visibleContent) {
     return <div className="result-empty">等待输入要求...</div>;
   }
 
-  const text = String(content);
+  const text = String(visibleContent);
   const rawLines = text.split("\n");
   const segments = [];
   let i = 0;
@@ -2483,7 +2612,7 @@ function ResultDocument({ content, streaming }) {
   }
 
   return (
-    <article className={`result-document ${streaming ? "is-generating" : ""}`} aria-busy={streaming ? "true" : undefined}>
+    <article className={`result-document ${streaming || (typingReveal && visibleContent !== content) ? "is-generating is-typing" : ""}`} aria-busy={streaming ? "true" : undefined}>
       {segments.map((seg, idx) => {
         if (seg.type === "table") {
           const rows = parseMarkdownTableLines(seg.lines);
@@ -2749,6 +2878,7 @@ function Workspace() {
   );
 
   const caseSlug = useMemo(() => parseCaseSlugFromHash(routeHash), [routeHash]);
+  const confirmPaymentToken = useMemo(() => parseConfirmPaymentToken(routeHash), [routeHash]);
   const authEntryMode = useMemo(() => {
     if (routeHash === "register") return "register";
     if (routeHash === "login") return "login";
@@ -2974,6 +3104,10 @@ function Workspace() {
 
   function goMarketingCases() {
     window.location.hash = "cases";
+  }
+
+  if (confirmPaymentToken) {
+    return <PaymentConfirmPage token={confirmPaymentToken} />;
   }
 
   if (!token) {
@@ -3252,9 +3386,8 @@ function Workspace() {
     const panelId = WORKSPACE_AUTOPILOT_ID;
     setIsRunning(true);
     setRunningPanelId(panelId);
-    patchPanel(panelId, {
-      answer: "OpenClaw 正在按 5 个运营模块生成结构化方案（单轮输出；不含客服自动应答）...",
-    });
+    patchPanel(panelId, { answer: "", typingReveal: false });
+    patchPanel(panelId, { answer: "正在生成结构化运营方案（单轮输出；不含客服自动应答）…" });
     try {
       const response = await fetch("/api/autopilot/run", {
         method: "POST",
@@ -3267,7 +3400,7 @@ function Workspace() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      patchPanel(panelId, { answer: data.answer });
+      patchPanel(panelId, { answer: data.answer, typingReveal: true });
       if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
       void refreshMeProfile();
     } catch (error) {
@@ -3275,7 +3408,8 @@ function Workspace() {
         if (!suppressNextAbortPanelPatchRef.current) {
           patchPanel(panelId, (cur) => ({
             ...cur,
-            answer: cur.answer.includes("正在按 5 个运营模块") ? "已取消生成。" : cur.answer,
+            answer: cur.answer.includes("正在生成结构化运营方案") ? "已取消生成。" : cur.answer,
+            typingReveal: false,
           }));
         } else {
           suppressNextAbortPanelPatchRef.current = false;
@@ -3354,7 +3488,7 @@ function Workspace() {
     fetchAbortRef.current = ac;
     setIsRunning(true);
     setRunningPanelId(panelId);
-    patchPanel(panelId, { answer: `${activeAgent.name} 正在由 OpenClaw 接管执行...` });
+    patchPanel(panelId, { answer: "正在生成，请稍候…", typingReveal: false });
     try {
       const response = await fetch("/api/agents/run", {
         method: "POST",
@@ -3373,7 +3507,7 @@ function Workspace() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      patchPanel(panelId, { answer: data.answer });
+      patchPanel(panelId, { answer: data.answer, typingReveal: true, echotikHint: data.echotik || null });
       if (data.task) setTasks((current) => [data.task, ...current].slice(0, user?.planFeatures?.historyLimit || 30));
       void refreshMeProfile();
     } catch (error) {
@@ -3381,7 +3515,8 @@ function Workspace() {
         if (!suppressNextAbortPanelPatchRef.current) {
           patchPanel(panelId, (cur) => ({
             ...cur,
-            answer: cur.answer.includes("正在由 OpenClaw 接管执行") ? "已取消生成。" : cur.answer,
+            answer: cur.answer.includes("正在生成，请稍候") ? "已取消生成。" : cur.answer,
+            typingReveal: false,
           }));
         } else {
           suppressNextAbortPanelPatchRef.current = false;
@@ -3528,7 +3663,9 @@ function Workspace() {
             <small>
               {isBetaMode
                 ? "内测版 · 全功能开放"
-                : user?.proTrialActive
+                : user?.paymentGraceActive
+                  ? `${user?.planName || "临时套餐"}`
+                  : user?.proTrialActive
                   ? "专业版 7 日体验中"
                   : user?.subscriptionActive && PAID_PLAN_IDS.has(user?.plan)
                     ? `已订阅 · ${user?.planName || ""}`
@@ -3652,13 +3789,13 @@ function Workspace() {
           ) : null}
           <div className="work-header-inner">
             <div>
-              <p>OpenClaw Agent Console</p>
+              <p>凡梦AI 工作台</p>
               <h2>{activeId === WORKSPACE_AUTOPILOT_ID ? "5 Agent 运营 · 一键生成" : activeAgent.name}</h2>
             </div>
             <div className="header-actions">
               <div className={isBetaMode ? "trial-pill beta" : "trial-pill"}>
                 <Zap size={16} />
-                {isBetaMode ? "内测版全功能开放" : user?.trialActive ? "免费试用中" : user?.planName || "订阅状态"}
+                {isBetaMode ? "内测版全功能开放" : user?.paymentGraceActive ? "24h 临时权限" : user?.trialActive ? "免费试用中" : user?.planName || "订阅状态"}
               </div>
               {isBetaMode && (
                 <button className="header-ghost" type="button" onClick={() => setShowFeedbackModal(true)}>
@@ -3756,8 +3893,15 @@ function Workspace() {
               />
             ) : null}
             {!isTikTokAgent ? <StructuredAgentPreview agentId={activeAgent?.id} /> : null}
+            {activeId === "trend" && panel.echotikHint?.detected ? (
+              <p className="echotik-hint">
+                {panel.echotikHint.marketFlag} 已识别 {panel.echotikHint.marketName}
+                {panel.echotikHint.keywords?.length ? ` · 关键词：${panel.echotikHint.keywords.join("、")}` : ""}
+                {panel.echotikHint.sampleCount ? ` · 已加载 TOP${panel.echotikHint.sampleCount} 样本` : ""}
+              </p>
+            ) : null}
             {!isTikTokAgent || panel.answer ? (
-              <ResultDocument content={panel.answer} streaming={isRunning && runningPanelId === activeId} />
+              <ResultDocument content={panel.answer} streaming={isRunning && runningPanelId === activeId} typingReveal={panel.typingReveal} />
             ) : null}
             </div>
           </section>
@@ -3765,6 +3909,11 @@ function Workspace() {
 
         {!isTikTokAgent ? (
         <section className="composer">
+          {activeId === "trend" ? (
+            <p className="echotik-catalog-hint">
+              EchoTik 五市场榜单：输入如「菲律宾宠物用品」将自动识别市场并加载对应 TOP 样本（美/马/越/泰/菲）。
+            </p>
+          ) : null}
           {canUseScraper && (
             <div className="scrape-config">
               <label className="scrape-toggle">

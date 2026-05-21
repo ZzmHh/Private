@@ -223,11 +223,20 @@ function isProTrialActive(user) {
   return Boolean(user?.proTrialEndsAt && Date.now() < new Date(user.proTrialEndsAt).getTime());
 }
 
+function isPaymentGraceActive(user) {
+  return Boolean(
+    user?.paymentGracePlanId &&
+      user?.paymentGraceEndsAt &&
+      Date.now() < new Date(user.paymentGraceEndsAt).getTime(),
+  );
+}
+
 function resolveEffectivePlanId(user) {
   if (isSubscriptionActive(user)) {
     const paid = user.plan;
     if (paid && plans[paid] && paid !== "free") return paid;
   }
+  if (isPaymentGraceActive(user)) return user.paymentGracePlanId;
   if (isProTrialActive(user)) return "pro";
   if (user?.plan === "trial" && isTrialActive(user)) return "pro";
   return "free";
@@ -370,6 +379,7 @@ export function sanitizeUser(user) {
   const legacyTrialPlan = plans.trial;
   const usageToday = user.usage?.[today] || {};
   const proTrialActive = isProTrialActive(user);
+  const paymentGraceActive = isPaymentGraceActive(user);
   const legacyTrialActive = user.plan === "trial" && isTrialActive(user);
   const trialEndingSoon =
     (proTrialActive || legacyTrialActive) &&
@@ -389,10 +399,17 @@ export function sanitizeUser(user) {
     emailVerified: user.emailVerified !== false,
     effectivePlanId,
     proTrialActive,
+    paymentGraceActive,
+    paymentGraceEndsAt: paymentGraceActive ? user.paymentGraceEndsAt : null,
+    paymentGracePlanId: paymentGraceActive ? user.paymentGracePlanId : null,
     trialActive: proTrialActive || legacyTrialActive,
     subscriptionActive: isSubscriptionActive(user),
     accessActive: true,
-    planName: proTrialActive ? "专业版体验" : plan.name,
+    planName: paymentGraceActive
+      ? `${plans[user.paymentGracePlanId]?.name || user.paymentGracePlanId}（24h 临时）`
+      : proTrialActive
+        ? "专业版体验"
+        : plan.name,
     planFeatures: plan.features,
     dailyLimit: plan.dailyLimit,
     minuteLimit: plan.minuteLimit,
@@ -870,6 +887,54 @@ export function simulatePayOrder({ userId, orderId }) {
   return { order, user: db.users.find((entry) => entry.id === userId) };
 }
 
+export function createOrderConfirmToken(orderId) {
+  const exp = Date.now() + 1000 * 60 * 60 * 24 * 7;
+  const payload = base64url(JSON.stringify({ orderId, exp }));
+  return `${payload}.${sign(payload)}`;
+}
+
+export function verifyOrderConfirmToken(token) {
+  if (!token || !token.includes(".")) return null;
+  const [payload, signature] = token.split(".");
+  if (sign(payload) !== signature) return null;
+
+  const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  if (decoded.exp < Date.now()) return null;
+  return decoded.orderId;
+}
+
+export function getOrderConfirmPreview(token) {
+  const orderId = verifyOrderConfirmToken(token);
+  if (!orderId) throw createError("确认链接无效或已过期。", 400);
+
+  const db = readDb();
+  const order = db.orders.find((entry) => entry.id === orderId);
+  if (!order) throw createError("订单不存在。", 404);
+
+  const user = db.users.find((entry) => entry.id === order.userId);
+  const plan = plans[order.planId];
+
+  return {
+    orderId: order.id,
+    orderNo: order.orderNo,
+    planId: order.planId,
+    planName: plan?.name || order.planId,
+    amount: order.amount,
+    status: order.status,
+    claimedAt: order.claimedAt,
+    payerNote: order.payerNote || "",
+    userEmail: user?.email || "",
+    userName: user?.name || "",
+    earlyBirdApplied: Boolean(order.earlyBirdApplied),
+  };
+}
+
+export function confirmOrderPaymentByToken(token) {
+  const orderId = verifyOrderConfirmToken(token);
+  if (!orderId) throw createError("确认链接无效或已过期。", 400);
+  return adminConfirmOrderPayment({ orderId });
+}
+
 export function claimOrderPaymentSubmitted({ userId, orderId, payerNote = "" }) {
   const db = readDb();
   const order = db.orders.find((entry) => entry.id === orderId && entry.userId === userId);
@@ -878,9 +943,22 @@ export function claimOrderPaymentSubmitted({ userId, orderId, payerNote = "" }) 
   if (order.status === "awaiting_confirm") throw createError("已收到您的付款提醒，请等待核实。", 409);
   if (order.status !== "pending") throw createError("当前订单不可提交付款提醒。", 400);
 
+  const now = new Date();
+  const graceEnds = new Date(now.getTime() + 1000 * 60 * 60 * 24);
+
   order.status = "awaiting_confirm";
-  order.claimedAt = new Date().toISOString();
+  order.claimedAt = now.toISOString();
   order.payerNote = String(payerNote || "").trim().slice(0, 500);
+  order.confirmToken = createOrderConfirmToken(order.id);
+  order.paymentGraceEndsAt = graceEnds.toISOString();
+
+  const user = db.users.find((entry) => entry.id === userId);
+  if (user) {
+    user.paymentGracePlanId = order.planId;
+    user.paymentGraceEndsAt = graceEnds.toISOString();
+    user.paymentGraceOrderId = order.id;
+  }
+
   writeDb(db);
   return order;
 }
@@ -916,6 +994,9 @@ function applyPaidOrderToUser(db, order, paymentTradeNo) {
   user.subscriptionStartedAt = now.toISOString();
   user.subscriptionEndsAt = subscriptionEndsAt.toISOString();
   user.lastPaidOrderId = order.id;
+  user.paymentGracePlanId = null;
+  user.paymentGraceEndsAt = null;
+  user.paymentGraceOrderId = null;
   if (order.earlyBirdApplied) {
     user.earlyBirdLocked ||= {};
     user.earlyBirdLocked[order.planId] = true;

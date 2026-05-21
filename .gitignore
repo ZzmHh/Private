@@ -1,6 +1,8 @@
 node_modules
 dist
-data
+data/*
+!data/echotik/
+!data/echotik/**
 .env
 .env.local
 .env.production

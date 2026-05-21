@@ -1,0 +1,13 @@
+{
+  "source": "EchoTik",
+  "market": "my",
+  "marketName": "马来西亚",
+  "updatedAt": "2026-05-19",
+  "items": [
+    { "rank": 1, "title": "Hijab Instant Magnetic", "titleZh": "磁吸即时头巾", "category": "穆斯林时尚", "priceUsd": 6.5, "sales7d": 2400, "gmv7d": 15600, "growth": 0.29, "keywordTags": ["头巾", "穆斯林"] },
+    { "rank": 2, "title": "Halal Snack Variety Box", "titleZh": "Halal 零食礼盒", "category": "食品", "priceUsd": 11.8, "sales7d": 1680, "gmv7d": 19824, "growth": 0.17, "keywordTags": ["零食", "halal"] },
+    { "rank": 3, "title": "Car Phone Holder Magnetic", "titleZh": "磁吸车载支架", "category": "3C配件", "priceUsd": 4.2, "sales7d": 2100, "gmv7d": 8820, "growth": 0.12, "keywordTags": ["车载", "手机"] },
+    { "rank": 4, "title": "Pet Cooling Mat", "titleZh": "宠物降温垫", "category": "宠物用品", "priceUsd": 8.7, "sales7d": 980, "gmv7d": 8526, "growth": 0.33, "keywordTags": ["宠物", "猫", "狗"] },
+    { "rank": 5, "title": "Portable Fan Neck", "titleZh": "挂脖小风扇", "category": "小家电", "priceUsd": 7.9, "sales7d": 1420, "gmv7d": 11218, "growth": 0.22, "keywordTags": ["风扇", "便携"] }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "source": "EchoTik",
+  "updatedAt": "2026-05-20",
+  "markets": {
+    "us": { "count": 1408, "updatedAt": "2026-05-18" },
+    "my": { "count": 2808, "updatedAt": "2026-05-19" },
+    "vn": { "count": 1368, "updatedAt": "2026-05-17" },
+    "th": { "count": 1327, "updatedAt": "2026-05-16" },
+    "ph": { "count": 1200, "updatedAt": "2026-05-20" }
+  },
+  "note": "将 EchoTik 导出的 JSON 按市场放入同目录 {code}.json，items 数组字段见 ph.json 示例。"
+}

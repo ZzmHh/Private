@@ -4,11 +4,12 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
-import { sendPasswordResetEmail, sendVerificationEmail } from "./email.js";
+import { sendPasswordResetEmail, sendVerificationEmail, sendPaymentClaimAdminEmail } from "./email.js";
 import {
   adminConfirmOrderPayment,
   adminGrantUserSubscription,
   claimOrderPaymentSubmitted,
+  confirmOrderPaymentByToken,
   completeRegistrationWithCode,
   createToken,
   createOrder,
@@ -16,6 +17,7 @@ import {
   ensureFeatureAccess,
   finalizeUsageLog,
   getAdminSummary,
+  getOrderConfirmPreview,
   getStoreConnectionSecret,
   getUserById,
   incrementUsage,
@@ -73,6 +75,7 @@ import { registerSeoRoutes } from "./routes/seo.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { startDbBackupScheduler } from "./jobs/dbBackup.js";
 import { maybeRecordFirstAgentRun, recordProductEvent } from "./productEvents.js";
+import { buildEchoTikContext, loadMarketCatalogMeta } from "./integrations/echotik/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -516,13 +519,19 @@ app.post("/api/billing/orders", authMiddleware, (req, res) => {
   }
 });
 
-app.post("/api/billing/orders/:orderId/claim-paid", authMiddleware, (req, res) => {
+app.post("/api/billing/orders/:orderId/claim-paid", authMiddleware, async (req, res) => {
   try {
     const { payerNote } = req.body || {};
     const order = claimOrderPaymentSubmitted({
       userId: req.user.id,
       orderId: req.params.orderId,
       payerNote,
+    });
+    const user = getUserById(req.user.id);
+    const base = process.env.APP_PUBLIC_URL?.trim().replace(/\/+$/, "") || `http://127.0.0.1:${port}`;
+    const confirmUrl = `${base}/#confirm-payment?token=${encodeURIComponent(order.confirmToken || "")}`;
+    sendPaymentClaimAdminEmail({ order, user, confirmUrl }).catch((err) => {
+      console.warn("[billing] admin notify email failed:", err?.message || err);
     });
     recordProductEvent({
       event: "order_claim_paid",
@@ -531,10 +540,36 @@ app.post("/api/billing/orders/:orderId/claim-paid", authMiddleware, (req, res) =
       path: "/#subscription",
       properties: { orderId: order.id },
     });
-    res.json({ order });
+    res.json({
+      order,
+      user: sanitizeUser(user),
+      paymentGraceHours: 24,
+      confirmUrl: effectiveIsAdmin(user) ? confirmUrl : undefined,
+    });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || "提交失败。" });
   }
+});
+
+app.get("/api/billing/orders/confirm-preview/:token", (req, res) => {
+  try {
+    res.json(getOrderConfirmPreview(req.params.token));
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "预览失败。" });
+  }
+});
+
+app.post("/api/billing/orders/confirm-by-token/:token", async (req, res) => {
+  try {
+    const { order, user } = confirmOrderPaymentByToken(req.params.token);
+    res.json({ ok: true, order, userEmail: user?.email, planName: user?.plan });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || "确认失败。" });
+  }
+});
+
+app.get("/api/echotik/catalog", (_req, res) => {
+  res.json(loadMarketCatalogMeta());
 });
 
 app.post("/api/billing/orders/:orderId/simulate-pay", authMiddleware, (req, res) => {
@@ -1049,7 +1084,20 @@ app.post("/api/agents/run", authMiddleware, validateBody(validators.agentRun), a
 
     usage = incrementUsage(req.user.id, agentId);
     let scrapeResult = null;
+    let echotikContext = null;
     let enrichedInput = input.trim();
+
+    if (agentId === "trend") {
+      echotikContext = buildEchoTikContext(enrichedInput);
+      if (echotikContext?.detected || echotikContext?.catalog) {
+        enrichedInput = [
+          enrichedInput,
+          "",
+          "## EchoTik 选品榜单样本（自动识别市场/类目关键词；第三方时点数据，非官方实时）",
+          JSON.stringify(echotikContext, null, 2),
+        ].join("\n");
+      }
+    }
 
     if (agentId === "trend" && scrape?.enabled) {
       ensureFeatureAccess(req.user, "scraper");
@@ -1155,7 +1203,7 @@ app.post("/api/agents/run", authMiddleware, validateBody(validators.agentRun), a
       title: agentSkills[agentId]?.name || "Agent 任务",
       input: enrichedInput,
       answer,
-      metadata: { usage, scrape: scrapeResult },
+      metadata: { usage, scrape: scrapeResult, echotik: echotikContext },
     });
 
     maybeRecordFirstAgentRun(req.user.id);
@@ -1172,6 +1220,7 @@ app.post("/api/agents/run", authMiddleware, validateBody(validators.agentRun), a
       model,
       agentId,
       scrape: scrapeResult,
+      echotik: echotikContext,
       answer,
       task,
       usage,
