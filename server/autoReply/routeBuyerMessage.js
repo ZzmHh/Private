@@ -23,11 +23,13 @@ import { generateBuyerReplyText } from "./generateBuyerReply.js";
  *   orderContext?: string,
  *   faqTemplates?: object[],
  *   settings?: object,
+ *   planAllowsAutoSend?: boolean,
  * }} input
  */
 export async function routeBuyerMessage(input) {
   const buyerText = String(input.buyerText || "").trim();
   const settings = { ...defaultCsAutomationSettings(), ...(input.settings || getCsSettings(input.userId)) };
+  const planAllowsAutoSend = input.planAllowsAutoSend !== false;
   const intent = classifyBuyerIntent(buyerText);
   const lang = detectBuyerLanguage(buyerText);
   const beijingNight = isBeijingRestHours(settings);
@@ -63,8 +65,9 @@ export async function routeBuyerMessage(input) {
       channel,
     });
     const autoSend =
-      channel === "webhook" ||
-      (channel === "extension" && settings.extensionAutoSendAfterSales !== false);
+      planAllowsAutoSend &&
+      (channel === "webhook" ||
+        (channel === "extension" && settings.extensionAutoSendAfterSales !== false));
     return {
       ok: true,
       ...base,
@@ -83,8 +86,9 @@ export async function routeBuyerMessage(input) {
   if (faqHit?.template?.text) {
     const replyText = applyTemplateVars(faqHit.template.text, { sla, shopName });
     const autoSend =
-      channel === "webhook" ||
-      (channel === "extension" && settings.extensionAutoSendFaq !== false);
+      planAllowsAutoSend &&
+      (channel === "webhook" ||
+        (channel === "extension" && settings.extensionAutoSendFaq !== false));
     return {
       ok: true,
       ...base,
@@ -104,8 +108,9 @@ export async function routeBuyerMessage(input) {
       { sla, shopName },
     );
     const autoSend =
-      channel === "webhook" ||
-      (channel === "extension" && settings.extensionAutoSendFaq !== false);
+      planAllowsAutoSend &&
+      (channel === "webhook" ||
+        (channel === "extension" && settings.extensionAutoSendFaq !== false));
     return {
       ok: true,
       ...base,
@@ -131,7 +136,7 @@ export async function routeBuyerMessage(input) {
         ok: true,
         ...base,
         tier: "night_ai",
-        action: "auto_send",
+        action: planAllowsAutoSend ? "auto_send" : "draft",
         replyText: gen.text,
         notifySeller: false,
         reason: "北京时间休息时段，AI 售前兜底（非售后）",

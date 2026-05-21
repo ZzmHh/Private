@@ -118,6 +118,12 @@ const FanmengApi = {
     return this.request("/api/extension/cs/settings");
   },
 
+  async getWorkspaceSummary(shopKey) {
+    const q = new URLSearchParams({ platform: FanmengTikTok.PLATFORM });
+    if (shopKey) q.set("shopKey", shopKey);
+    return this.request(`/api/extension/workspace-summary?${q.toString()}`);
+  },
+
   async analyze(agentId, input, shopKey) {
     return this.request("/api/extension/analyze", {
       method: "POST",

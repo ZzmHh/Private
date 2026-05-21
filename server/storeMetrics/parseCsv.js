@@ -85,10 +85,30 @@ const NUMERIC_KEYS = new Set([
 ]);
 
 function normalizeReportType(raw) {
-  const t = String(raw || "shop").trim().toLowerCase();
+  const original = String(raw || "shop").trim();
+  const t = original.toLowerCase();
   if (["shop", "store", "overview", "店铺", "店铺汇总", "summary"].includes(t)) return "shop";
   if (["sku", "product", "inventory", "商品", "sku库存", "库存"].includes(t)) return "sku";
   return t === "sku" ? "sku" : "shop";
+}
+
+function isSkippableCsvRow(cells) {
+  const first = String(cells[0] || "").trim();
+  if (!first) return true;
+  if (first.startsWith("#")) return true;
+  if (first === "说明" || first === "填写说明") return true;
+  return false;
+}
+
+function findHeaderRowIndex(matrix) {
+  for (let i = 0; i < matrix.length; i++) {
+    const cells = matrix[i];
+    if (!cells?.some((c) => String(c).trim())) continue;
+    if (isSkippableCsvRow(cells)) continue;
+    const mapped = cells.map((h) => resolveCanonicalKey(h)).filter(Boolean);
+    if (mapped.length >= 3) return i;
+  }
+  return 0;
 }
 
 /**
@@ -103,7 +123,8 @@ export function parseUniversalStoreMetricsCsv(csvText) {
     return { ok: false, errors: ["CSV 至少需要表头行和一行数据。"] };
   }
 
-  const headerRow = matrix[0];
+  const headerIdx = findHeaderRowIndex(matrix);
+  const headerRow = matrix[headerIdx];
   const colMap = headerRow.map((h) => resolveCanonicalKey(h));
   const unknown = headerRow.filter((h, i) => h.trim() && !colMap[i]);
   if (unknown.length) {
@@ -114,9 +135,10 @@ export function parseUniversalStoreMetricsCsv(csvText) {
   const shopRows = [];
   const skuRows = [];
 
-  for (let r = 1; r < matrix.length; r++) {
+  for (let r = headerIdx + 1; r < matrix.length; r++) {
     const cells = matrix[r];
     if (!cells.some((c) => String(c).trim())) continue;
+    if (isSkippableCsvRow(cells)) continue;
 
     /** @type {Record<string, unknown>} */
     const row = {};

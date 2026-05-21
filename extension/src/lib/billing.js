@@ -74,7 +74,7 @@ const FanmengBilling = {
 
   assertExtensionAllowed(ent) {
     if (ent?.extensionAllowed) return;
-    const reason = ent?.extensionBlockReason || "当前账号无法使用 TikTok 插件，请订阅标准版或更高套餐。";
+    const reason = ent?.extensionBlockReason || "当前账号无法使用 TikTok 插件，请登录后重试。";
     const err = new Error(reason);
     err.code = "EXTENSION_PAYWALL";
     err.billingUrl = ent?.billingUrl || "";

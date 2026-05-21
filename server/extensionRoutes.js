@@ -15,6 +15,7 @@ import {
 import {
   ensureFeatureAccess,
   finalizeUsageLog,
+  getPlan,
   incrementUsage,
   saveTask,
   sanitizeUser,
@@ -25,6 +26,7 @@ import {
   getMergedExtensionContext,
 } from "./extensionSync.js";
 import { getStoreMetricsAgentContext } from "./storeMetrics/store.js";
+import { buildExtensionWorkspaceSummary } from "./extensionWorkspace.js";
 import { validateBody, validators } from "./validate/index.js";
 import { asyncHandler } from "./middleware/asyncHandler.js";
 
@@ -46,13 +48,18 @@ function extensionEntitlements(rawUser) {
   return {
     accessActive: Boolean(user.accessActive),
     plan: user.plan,
+    effectivePlanId: user.effectivePlanId,
     planName: user.planName,
     trialActive: Boolean(user.trialActive),
+    proTrialActive: Boolean(user.proTrialActive),
     subscriptionActive: Boolean(user.subscriptionActive),
     storeApiAgents: Boolean(user.planFeatures?.storeApiAgents),
+    extensionAutoSend: Boolean(user.planFeatures?.extensionAutoSend),
+    csvImport: Boolean(user.planFeatures?.csvImport),
     extensionAllowed,
     extensionBlockReason,
     trialQuota: user.trialQuota || null,
+    earlyBird: user.earlyBird || null,
   };
 }
 
@@ -91,6 +98,26 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       latestAt: snaps[0]?.pulledAt || null,
       pageTypes: [...new Set(snaps.map((s) => s.pageType))],
     });
+  });
+
+  app.get("/api/extension/workspace-summary", authMiddleware, (req, res) => {
+    try {
+      const platform = String(req.query.platform || "tiktok").toLowerCase();
+      res.json({ ok: true, summary: buildExtensionWorkspaceSummary(req.user.id, platform) });
+    } catch (error) {
+      res.status(500).json({ error: error.message || "读取工作台摘要失败。" });
+    }
+  });
+
+  app.get("/api/extension/cs/faq", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const shopKey = String(req.query.shopKey || "");
+      const templates = listCsFaqTemplates(req.user.id, shopKey);
+      res.json({ ok: true, templates });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取 FAQ 失败。" });
+    }
   });
 
   app.post("/api/extension/snapshot", authMiddleware, validateBody(validators.extensionSnapshot), (req, res) => {
@@ -146,6 +173,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         orderContext: ctxText,
         faqTemplates: faqTemplates?.length ? faqTemplates : listCsFaqTemplates(req.user.id, sk),
         settings: getCsSettings(req.user.id),
+        planAllowsAutoSend: Boolean(getPlan(req.user).features.extensionAutoSend),
       });
 
       finalizeUsageLog(usage.logId, {
@@ -204,6 +232,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
           channel: "extension",
           orderContext: ctxText,
           settings: getCsSettings(req.user.id),
+          planAllowsAutoSend: Boolean(getPlan(req.user).features.extensionAutoSend),
         });
         finalizeUsageLog(usage.logId, {
           type: "service",
@@ -251,7 +280,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         ok: true,
         text: result.text,
         mode: "buyer-visible-draft",
-        hint: "请人工核对后再发送；插件不会自动代发。",
+        hint: "请人工核对后再发送；复杂问题为草稿，FAQ/夜间/售后安抚会尝试自动发送。",
         usage,
       });
     } catch (error) {

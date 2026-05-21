@@ -5,7 +5,7 @@ import {
   getLatestStoreMetricsImport,
   listStoreMetricsImports,
 } from "./storeMetrics/store.js";
-import { getTemplateCsv } from "./storeMetrics/templates.js";
+import { getTemplateCsv, getTemplateDownloadName } from "./storeMetrics/templates.js";
 import { ensureFeatureAccess } from "./db.js";
 
 /**
@@ -16,10 +16,12 @@ export function registerStoreMetricsRoutes(app, { authMiddleware }) {
   app.get("/api/store-metrics/template/:kind", authMiddleware, (req, res) => {
     const kind = req.params.kind || "combined";
     const csv = getTemplateCsv(kind);
-    const filename =
-      kind === "shop" ? "fanmeng-store-overview.csv" : kind === "sku" ? "fanmeng-sku-inventory-cost.csv" : "fanmeng-store-metrics-universal.csv";
+    const filename = getTemplateDownloadName(kind);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="fanmeng-template.csv"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
     res.send("\uFEFF" + csv);
   });
 
@@ -33,6 +35,7 @@ export function registerStoreMetricsRoutes(app, { authMiddleware }) {
   app.get("/api/store-metrics/latest", authMiddleware, (req, res) => {
     try {
       ensureFeatureAccess(req.user, "storeApiAgents");
+      ensureFeatureAccess(req.user, "csvImport");
       const latest = getLatestStoreMetricsImport(req.user.id);
       const history = listStoreMetricsImports(req.user.id, 5);
       res.json({ latest, history });
@@ -44,6 +47,7 @@ export function registerStoreMetricsRoutes(app, { authMiddleware }) {
   app.post("/api/store-metrics/import", authMiddleware, (req, res) => {
     try {
       ensureFeatureAccess(req.user, "storeApiAgents");
+      ensureFeatureAccess(req.user, "csvImport");
       const { csvText, label } = req.body || {};
       if (!csvText || !String(csvText).trim()) {
         return res.status(400).json({ error: "请提供 csvText。" });

@@ -12,66 +12,169 @@ if (!tokenSecret) {
   throw new Error("生产环境必须配置 JWT_SECRET，不能使用默认登录密钥。");
 }
 
+const EARLY_BIRD_END_MS = new Date(process.env.EARLY_BIRD_END || "2026-08-31T23:59:59.999Z").getTime();
+const EARLY_BIRD_MAX_SLOTS = Number(process.env.EARLY_BIRD_MAX_SLOTS || 100);
+const AGENTS_ALL = ["trend", "content", "listing", "growth", "service", "profit"];
+const AGENTS_BASIC = ["trend", "content", "listing"];
+const PURCHASABLE_PLAN_IDS = new Set(["growth", "pro", "team"]);
+
 const plans = {
-  trial: {
-    name: "3天免费试用",
-    /** 试用期内单日总调用上限（含各类 Agent / 全自动 / 爬虫计次） */
-    dailyLimit: 48,
-    minuteLimit: 10,
-    maxTokens: 1600,
-    /** 试用全程总调用上限（防刷成本） */
-    trialTotalCallCap: 100,
-    /** 重能力单日上限：全自动含 Playwright 时仍会另计 scrape */
-    trialAutopilotPerDay: 4,
-    trialScrapePerDay: 6,
+  free: {
+    name: "免费版",
+    price: 0,
+    purchasable: false,
+    dailyLimit: 8,
+    minuteLimit: 6,
+    maxTokens: 1200,
     features: {
-      agents: ["trend", "content", "listing", "growth", "service", "profit"],
-      autopilot: true,
-      scraper: true,
-      storeApiAgents: true,
-      historyLimit: 40,
-    },
-  },
-  starter: {
-    name: "尝鲜版",
-    price: 99,
-    dailyLimit: 100,
-    minuteLimit: 12,
-    maxTokens: 1400,
-    features: {
-      agents: ["trend", "content", "listing"],
+      agents: AGENTS_BASIC,
       autopilot: false,
       scraper: false,
-      storeApiAgents: false,
-      historyLimit: 30,
+      storeApiAgents: true,
+      extensionAutoSend: false,
+      csvImport: false,
+      historyLimit: 15,
+      shopLimit: 1,
     },
   },
-  standard: {
-    name: "标准版",
-    price: 299,
+  growth: {
+    name: "成长版",
+    price: 149,
+    purchasable: true,
+    dailyLimit: 120,
+    minuteLimit: 15,
+    maxTokens: 1600,
+    features: {
+      agents: AGENTS_ALL,
+      autopilot: false,
+      scraper: false,
+      storeApiAgents: true,
+      extensionAutoSend: true,
+      csvImport: false,
+      historyLimit: 50,
+      shopLimit: 1,
+    },
+  },
+  pro: {
+    name: "专业版",
+    price: 349,
+    priceEarlyBird: 299,
+    earlyBirdEligible: true,
+    purchasable: true,
     dailyLimit: 500,
     minuteLimit: 30,
     maxTokens: 2200,
     features: {
-      agents: ["trend", "content", "listing", "growth", "service", "profit"],
+      agents: AGENTS_ALL,
       autopilot: true,
       scraper: true,
       storeApiAgents: true,
+      extensionAutoSend: true,
+      csvImport: true,
       historyLimit: 100,
+      shopLimit: 3,
     },
   },
-  managed: {
-    name: "全托版",
-    price: 899,
+  team: {
+    name: "团队版",
+    price: 799,
+    priceEarlyBird: 699,
+    earlyBirdEligible: true,
+    purchasable: true,
     dailyLimit: 2000,
     minuteLimit: 80,
     maxTokens: 3200,
     features: {
-      agents: ["trend", "content", "listing", "growth", "service", "profit"],
+      agents: AGENTS_ALL,
       autopilot: true,
       scraper: true,
       storeApiAgents: true,
+      extensionAutoSend: true,
+      csvImport: true,
       historyLimit: 500,
+      shopLimit: 99,
+      multiStore: true,
+      weeklyReport: true,
+      prioritySupport: true,
+    },
+  },
+  /** @deprecated 旧账号 3 天试用（新注册已改为 free + 7 天专业体验） */
+  trial: {
+    name: "试用版",
+    price: 0,
+    purchasable: false,
+    dailyLimit: 48,
+    minuteLimit: 10,
+    maxTokens: 1600,
+    trialTotalCallCap: 100,
+    trialAutopilotPerDay: 4,
+    trialScrapePerDay: 6,
+    features: {
+      agents: AGENTS_ALL,
+      autopilot: true,
+      scraper: true,
+      storeApiAgents: true,
+      extensionAutoSend: true,
+      csvImport: true,
+      historyLimit: 40,
+      shopLimit: 1,
+    },
+  },
+  /** @deprecated 旧尝鲜版 */
+  starter: {
+    name: "尝鲜版",
+    price: 99,
+    purchasable: false,
+    dailyLimit: 100,
+    minuteLimit: 12,
+    maxTokens: 1400,
+    features: {
+      agents: AGENTS_BASIC,
+      autopilot: false,
+      scraper: false,
+      storeApiAgents: false,
+      extensionAutoSend: false,
+      csvImport: false,
+      historyLimit: 30,
+      shopLimit: 1,
+    },
+  },
+  /** @deprecated 旧标准版 */
+  standard: {
+    name: "标准版",
+    price: 299,
+    purchasable: false,
+    dailyLimit: 500,
+    minuteLimit: 30,
+    maxTokens: 2200,
+    features: {
+      agents: AGENTS_ALL,
+      autopilot: true,
+      scraper: true,
+      storeApiAgents: true,
+      extensionAutoSend: true,
+      csvImport: true,
+      historyLimit: 100,
+      shopLimit: 3,
+    },
+  },
+  /** @deprecated 旧全托版 */
+  managed: {
+    name: "全托版",
+    price: 899,
+    purchasable: false,
+    dailyLimit: 2000,
+    minuteLimit: 80,
+    maxTokens: 3200,
+    features: {
+      agents: AGENTS_ALL,
+      autopilot: true,
+      scraper: true,
+      storeApiAgents: true,
+      extensionAutoSend: true,
+      csvImport: true,
+      historyLimit: 500,
+      shopLimit: 99,
       multiStore: true,
       weeklyReport: true,
     },
@@ -79,21 +182,60 @@ const plans = {
   enterprise: {
     name: "企业版",
     price: "定制",
+    purchasable: false,
     dailyLimit: 10000,
     minuteLimit: 200,
     maxTokens: 5000,
     features: {
-      agents: ["trend", "content", "listing", "growth", "service", "profit"],
+      agents: AGENTS_ALL,
       autopilot: true,
       scraper: true,
       storeApiAgents: true,
+      extensionAutoSend: true,
+      csvImport: true,
       historyLimit: 2000,
+      shopLimit: 999,
       multiStore: true,
       weeklyReport: true,
       privateDeploy: true,
     },
   },
 };
+
+function countEarlyBirdLocks(db) {
+  return db.users.filter((u) => u.earlyBirdLocked?.pro || u.earlyBirdLocked?.team).length;
+}
+
+function isEarlyBirdOpen(db) {
+  if (Date.now() > EARLY_BIRD_END_MS) return false;
+  return countEarlyBirdLocks(db) < EARLY_BIRD_MAX_SLOTS;
+}
+
+export function resolvePlanCheckoutPrice(planId, user, db = readDb()) {
+  const plan = plans[planId];
+  if (!plan || typeof plan.price !== "number") throw createError("请选择有效套餐。", 400);
+  if (user?.earlyBirdLocked?.[planId] && plan.priceEarlyBird) return plan.priceEarlyBird;
+  if (plan.priceEarlyBird && plan.earlyBirdEligible && isEarlyBirdOpen(db)) return plan.priceEarlyBird;
+  return plan.price;
+}
+
+function isProTrialActive(user) {
+  return Boolean(user?.proTrialEndsAt && Date.now() < new Date(user.proTrialEndsAt).getTime());
+}
+
+function resolveEffectivePlanId(user) {
+  if (isSubscriptionActive(user)) {
+    const paid = user.plan;
+    if (paid && plans[paid] && paid !== "free") return paid;
+  }
+  if (isProTrialActive(user)) return "pro";
+  if (user?.plan === "trial" && isTrialActive(user)) return "pro";
+  return "free";
+}
+
+function newUserProTrialEndsAt(from = new Date()) {
+  return new Date(from.getTime() + 1000 * 60 * 60 * 24 * 7).toISOString();
+}
 
 function base64url(input) {
   return Buffer.from(input).toString("base64url");
@@ -180,15 +322,14 @@ function isSubscriptionActive(user) {
   return Boolean(user.subscriptionEndsAt && Date.now() < new Date(user.subscriptionEndsAt).getTime());
 }
 
-function getPlan(user) {
-  return plans[user?.plan] || plans.trial;
+export function getPlan(user) {
+  const key = resolveEffectivePlanId(user);
+  return plans[key] || plans.free;
 }
 
-function assertUserCanUsePlan(user) {
-  if (isTrialActive(user) || isSubscriptionActive(user)) return;
-
-  const message = user.plan === "trial" ? "3 天免费试用已结束，请订阅后继续使用。" : "当前套餐已到期，请续费后继续使用。";
-  throw createError(message, 402, "SUBSCRIPTION_EXPIRED");
+function assertUserCanUsePlan(_user) {
+  // 免费版永久可用（按日限额）；专业体验 / 付费在 getPlan 中体现更高额度
+  return;
 }
 
 function maskToken(token = "") {
@@ -223,42 +364,67 @@ export function verifyToken(token) {
 export function sanitizeUser(user) {
   if (!user) return null;
   const { passwordHash, emailVerification, passwordReset, loginSecurity, registrationPending, ...safeUser } = user;
+  const effectivePlanId = resolveEffectivePlanId(user);
   const plan = getPlan(user);
   const today = new Date().toISOString().slice(0, 10);
-  const trialPlan = plans.trial;
+  const legacyTrialPlan = plans.trial;
   const usageToday = user.usage?.[today] || {};
+  const proTrialActive = isProTrialActive(user);
+  const legacyTrialActive = user.plan === "trial" && isTrialActive(user);
   const trialEndingSoon =
-    user.plan === "trial" &&
-    isTrialActive(user) &&
-    user.trialEndsAt &&
-    new Date(user.trialEndsAt).getTime() - Date.now() < 24 * 60 * 60 * 1000;
+    (proTrialActive || legacyTrialActive) &&
+    (proTrialActive
+      ? new Date(user.proTrialEndsAt).getTime() - Date.now() < 24 * 60 * 60 * 1000
+      : user.trialEndsAt && new Date(user.trialEndsAt).getTime() - Date.now() < 24 * 60 * 60 * 1000);
+
+  const earlyBird = {
+    pro: { list: plans.pro.price, earlyBird: plans.pro.priceEarlyBird, locked: Boolean(user.earlyBirdLocked?.pro) },
+    team: { list: plans.team.price, earlyBird: plans.team.priceEarlyBird, locked: Boolean(user.earlyBirdLocked?.team) },
+    open: isEarlyBirdOpen(readDb()),
+    endsAt: new Date(EARLY_BIRD_END_MS).toISOString(),
+  };
 
   return {
     ...safeUser,
     emailVerified: user.emailVerified !== false,
-    trialActive: isTrialActive(user),
+    effectivePlanId,
+    proTrialActive,
+    trialActive: proTrialActive || legacyTrialActive,
     subscriptionActive: isSubscriptionActive(user),
-    accessActive: isTrialActive(user) || isSubscriptionActive(user),
-    planName: plan.name,
+    accessActive: true,
+    planName: proTrialActive ? "专业版体验" : plan.name,
     planFeatures: plan.features,
     dailyLimit: plan.dailyLimit,
     minuteLimit: plan.minuteLimit,
     maxTokens: plan.maxTokens,
     isAdmin: effectiveIsAdmin(user),
     trialEndingSoon,
+    earlyBird,
     trialQuota:
-      user.plan === "trial" && isTrialActive(user)
+      legacyTrialActive
         ? {
             lifetimeUsed: user.trialLifetimeTotal || 0,
-            lifetimeCap: trialPlan.trialTotalCallCap,
+            lifetimeCap: legacyTrialPlan.trialTotalCallCap,
             todayTotal: usageToday.total || 0,
-            todayDailyCap: trialPlan.dailyLimit,
+            todayDailyCap: legacyTrialPlan.dailyLimit,
             autopilotToday: usageToday.autopilot || 0,
-            autopilotCap: trialPlan.trialAutopilotPerDay,
+            autopilotCap: legacyTrialPlan.trialAutopilotPerDay,
             scrapeToday: usageToday.scrape || 0,
-            scrapeCap: trialPlan.trialScrapePerDay,
+            scrapeCap: legacyTrialPlan.trialScrapePerDay,
           }
-        : null,
+        : proTrialActive
+          ? {
+              todayTotal: usageToday.total || 0,
+              todayDailyCap: plan.dailyLimit,
+              label: "专业版 7 日体验",
+            }
+          : effectivePlanId === "free"
+            ? {
+                todayTotal: usageToday.total || 0,
+                todayDailyCap: plan.dailyLimit,
+                label: "免费版每日额度",
+              }
+            : null,
   };
 }
 
@@ -272,7 +438,6 @@ export function startRegistrationEmail(email) {
 
   const existingUser = db.users.find((user) => user.email === normalizedEmail);
   const now = new Date();
-  const trialEndsAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3);
 
   if (existingUser) {
     if (existingUser.emailVerified !== false) {
@@ -290,9 +455,11 @@ export function startRegistrationEmail(email) {
     email: normalizedEmail,
     passwordHash: "",
     registrationPending: true,
-    plan: "trial",
-    trialStartedAt: now.toISOString(),
-    trialEndsAt: trialEndsAt.toISOString(),
+    plan: "free",
+    proTrialStartedAt: now.toISOString(),
+    proTrialEndsAt: newUserProTrialEndsAt(now),
+    trialStartedAt: null,
+    trialEndsAt: null,
     subscriptionEndsAt: null,
     usage: {},
     trialLifetimeTotal: 0,
@@ -363,7 +530,6 @@ export function registerUser({ name, storeName, email, password }) {
   }
 
   const now = new Date();
-  const trialEndsAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3);
   if (existingUser) {
     existingUser.name = name || existingUser.name || "跨境卖家";
     existingUser.storeName = storeName || existingUser.storeName || "";
@@ -380,9 +546,11 @@ export function registerUser({ name, storeName, email, password }) {
     storeName: storeName || "",
     email: normalizedEmail,
     passwordHash: hashPassword(password),
-    plan: "trial",
-    trialStartedAt: now.toISOString(),
-    trialEndsAt: trialEndsAt.toISOString(),
+    plan: "free",
+    proTrialStartedAt: now.toISOString(),
+    proTrialEndsAt: newUserProTrialEndsAt(now),
+    trialStartedAt: null,
+    trialEndsAt: null,
     subscriptionEndsAt: null,
     usage: {},
     trialLifetimeTotal: 0,
@@ -632,31 +800,39 @@ export function ensureFeatureAccess(user, feature, detail) {
   const features = plan.features;
 
   if (feature === "agent" && !features.agents.includes(detail)) {
-    throw createError("当前套餐不支持该 Agent，请升级到标准版或更高套餐。", 403);
+    throw createError("当前套餐不支持该 Agent，请升级到成长版或专业版。", 403);
   }
 
   if (feature === "autopilot" && !features.autopilot) {
-    throw createError("当前套餐不支持 5 Agent 运营一键生成，请升级到标准版或更高套餐。", 403);
+    throw createError("当前套餐不支持 5 Agent 运营一键生成，请升级到专业版或更高套餐。", 403);
   }
 
   if (feature === "scraper" && !features.scraper) {
-    throw createError("当前套餐不支持实时抓取数据源，请升级到标准版或更高套餐。", 403);
+    throw createError("当前套餐不支持公开页参考抓取，请升级到专业版或更高套餐。", 403);
   }
 
   if (feature === "storeApiAgents" && !features.storeApiAgents) {
-    throw createError("当前套餐不支持店铺 API 强数据 Agent，请升级到标准版或更高套餐。", 403);
+    throw createError("当前套餐不支持 TikTok 插件与店铺 Agent，请升级到成长版或更高套餐。", 403);
+  }
+
+  if (feature === "csvImport" && !features.csvImport) {
+    throw createError("当前套餐不支持 CSV 经营数据导入，请升级到专业版或更高套餐。", 403);
+  }
+
+  if (feature === "extensionAutoSend" && !features.extensionAutoSend) {
+    throw createError("当前套餐不支持插件自动发送，请升级到成长版或更高套餐。", 403);
   }
 }
 
 export function createOrder({ userId, planId, paymentMethod = "wechat" }) {
-  if (!plans[planId] || planId === "trial") throw createError("请选择有效套餐。", 400);
+  if (!PURCHASABLE_PLAN_IDS.has(planId)) throw createError("请选择有效套餐（成长版 / 专业版 / 团队版）。", 400);
 
   const db = readDb();
   const user = db.users.find((entry) => entry.id === userId);
   if (!user) throw createError("用户不存在。", 401);
 
   const plan = plans[planId];
-  if (planId === "enterprise") throw createError("企业版需要提交联系信息。", 400);
+  const amount = resolvePlanCheckoutPrice(planId, user, db);
 
   const order = {
     id: crypto.randomUUID(),
@@ -665,7 +841,9 @@ export function createOrder({ userId, planId, paymentMethod = "wechat" }) {
     userEmail: user.email,
     planId,
     planName: plan.name,
-    amount: plan.price,
+    amount,
+    listPrice: plan.price,
+    earlyBirdApplied: amount !== plan.price,
     paymentMethod,
     status: "pending",
     createdAt: new Date().toISOString(),
@@ -738,6 +916,10 @@ function applyPaidOrderToUser(db, order, paymentTradeNo) {
   user.subscriptionStartedAt = now.toISOString();
   user.subscriptionEndsAt = subscriptionEndsAt.toISOString();
   user.lastPaidOrderId = order.id;
+  if (order.earlyBirdApplied) {
+    user.earlyBirdLocked ||= {};
+    user.earlyBirdLocked[order.planId] = true;
+  }
 
   return user;
 }
@@ -931,7 +1113,9 @@ export function syncAdminFlagsFromEnv() {
 
 export function adminGrantUserSubscription({ adminUser, targetUserId, planId, days = 30 }) {
   if (!effectiveIsAdmin(adminUser)) throw createError("需要管理员权限。", 403);
-  if (!plans[planId] || planId === "trial") throw createError("请选择有效套餐（starter / standard / managed / enterprise）。", 400);
+  if (!plans[planId] || planId === "free" || planId === "trial") {
+    throw createError("请选择有效套餐（free / growth / pro / team 或 legacy starter/standard/managed）。", 400);
+  }
 
   const n = Number(days);
   const grantDays = Number.isFinite(n) ? Math.min(730, Math.max(1, Math.floor(n))) : 30;
@@ -955,7 +1139,9 @@ export function getAdminSummary() {
   const db = readDb();
   const today = new Date().toISOString().slice(0, 10);
   const todaysLogs = db.usageLogs.filter((log) => log.createdAt?.startsWith(today));
-  const paidUsers = db.users.filter((user) => user.plan !== "trial" && isSubscriptionActive(user));
+  const paidUsers = db.users.filter(
+    (user) => PURCHASABLE_PLAN_IDS.has(user.plan) || ["starter", "standard", "managed", "enterprise"].includes(user.plan),
+  ).filter((user) => isSubscriptionActive(user));
   const analytics = getProductAnalytics({ days: 7 });
 
   return {
@@ -983,4 +1169,23 @@ export function getAdminSummary() {
 
 export function listPlans() {
   return plans;
+}
+
+export function listPublicPlans(user) {
+  const db = readDb();
+  return ["growth", "pro", "team"].map((id) => {
+    const plan = plans[id];
+    const checkoutPrice = resolvePlanCheckoutPrice(id, user, db);
+    return {
+      id,
+      name: plan.name,
+      price: plan.price,
+      checkoutPrice,
+      priceEarlyBird: plan.priceEarlyBird || null,
+      earlyBirdEligible: Boolean(plan.priceEarlyBird && (user?.earlyBirdLocked?.[id] || isEarlyBirdOpen(db))),
+      earlyBirdLocked: Boolean(user?.earlyBirdLocked?.[id]),
+      dailyLimit: plan.dailyLimit,
+      features: plan.features,
+    };
+  });
 }

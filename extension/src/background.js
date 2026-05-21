@@ -12,21 +12,34 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+function sendSuggestToActiveTab(text = "") {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (!tab?.id) return;
+    chrome.tabs
+      .sendMessage(tab.id, {
+        type: "fanmeng_suggest_from_selection",
+        text: String(text || ""),
+      })
+      .catch(() => {});
+  });
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== "fanmeng-suggest-reply" || !tab?.id) return;
+  if (info.menuItemId !== "fanmeng-suggest-reply") return;
   const text = String(info.selectionText || "").trim();
-  chrome.tabs.sendMessage(tab.id, {
-    type: "fanmeng_suggest_from_selection",
-    text,
-  }).catch(() => {});
+  if (tab?.id) {
+    chrome.tabs
+      .sendMessage(tab.id, { type: "fanmeng_suggest_from_selection", text })
+      .catch(() => {});
+    return;
+  }
+  sendSuggestToActiveTab(text);
 });
 
-chrome.commands.onCommand.addListener((command, tab) => {
-  if (command !== "fanmeng-suggest-reply" || !tab?.id) return;
-  chrome.tabs.sendMessage(tab.id, {
-    type: "fanmeng_suggest_from_selection",
-    text: "",
-  }).catch(() => {});
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== "fanmeng-suggest-reply") return;
+  sendSuggestToActiveTab("");
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

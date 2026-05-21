@@ -10,6 +10,13 @@
   let activeShop = null;
   let chatStop = null;
   let cachedEntitlements = null;
+  let cachedCsSettings = null;
+
+  const DEFAULT_CS_SETTINGS = {
+    extensionAutoSendFaq: true,
+    extensionAutoSendAfterSales: true,
+    extensionAutoClickSend: true,
+  };
 
   function handlePaidApiError(e) {
     const msg = e?.message || "请求失败";
@@ -73,6 +80,38 @@
 
   const RECOGNITION_FAIL_HINT = "未识别到买家消息，请选中一条消息后点「手动生成话术」";
 
+  async function getCsSettingsCached(force = false) {
+    if (!force && cachedCsSettings) return cachedCsSettings;
+    try {
+      const res = await FanmengApi.getCsSettings();
+      cachedCsSettings = { ...DEFAULT_CS_SETTINGS, ...(res.settings || {}) };
+    } catch {
+      cachedCsSettings = { ...DEFAULT_CS_SETTINGS };
+    }
+    return cachedCsSettings;
+  }
+
+  function dispatchInputEvents(node) {
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function setNativeInputValue(node, text) {
+    const proto =
+      node.tagName === "TEXTAREA"
+        ? window.HTMLTextAreaElement.prototype
+        : node.tagName === "INPUT"
+          ? window.HTMLInputElement.prototype
+          : null;
+    const setter = proto && Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    if (setter) {
+      setter.call(node, text);
+    } else if (node.isContentEditable) {
+      node.textContent = text;
+    } else {
+      node.value = text;
+    }
+  }
   function getSelectedChatText() {
     return FanmengMessageParser.getSelectedText();
   }
@@ -165,12 +204,13 @@
   async function refreshDiagnosisProgress() {
     const el = document.querySelector(`#${PANEL_ID} .fm-diag-progress`);
     if (!el || !activeShop) return;
-    const p = await FanmengDiagnosisPack.getProgress(activeShop.id);
+    const p = await FanmengDiagnosisPack.fetchProgress(activeShop.id, { force: true });
     const parts = FanmengDiagnosisPack.keys.map((k) => {
       const ok = !p.missing.includes(k);
       return `${ok ? "✓" : "○"}${FanmengDiagnosisPack.labelForKey(k)}`;
     });
-    el.textContent = `诊断包 ${p.done}/${p.total}：${parts.join(" ")}`;
+    const sourceHint = p.source === "server" ? "" : "（离线缓存）";
+    el.textContent = `诊断包 ${p.done}/${p.total}${sourceHint}：${parts.join(" ")}`;
   }
 
   async function refreshTemplateSelect() {
@@ -187,46 +227,95 @@
   }
 
   function findReplyInput() {
-    const selectors = ["textarea", "[contenteditable='true']", "input[type='text']", "[class*='editor']"];
+    const selectors = [
+      "textarea",
+      "[contenteditable='true']",
+      "[contenteditable='plaintext-only']",
+      "input[type='text']",
+      "[class*='editor']",
+      "[class*='Editor']",
+      "[role='textbox']",
+    ];
+    const scored = [];
     for (const sel of selectors) {
       for (const node of document.querySelectorAll(sel)) {
         if (!node.offsetParent && node.tagName !== "TEXTAREA") continue;
         const r = node.getBoundingClientRect?.();
-        if (r && r.width > 80 && r.height > 20) return node;
+        if (!r || r.width < 80 || r.height < 20) continue;
+        const nearBottom = r.top > window.innerHeight * 0.45 ? 10 : 0;
+        scored.push({ node, score: r.width * r.height + nearBottom });
       }
     }
-    return null;
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0]?.node || null;
   }
 
   function fillReplyInput(text) {
     const input = findReplyInput();
     if (!input) return false;
+    input.focus();
     if (input.tagName === "TEXTAREA" || input.tagName === "INPUT") {
-      input.focus();
-      input.value = text;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      setNativeInputValue(input, text);
+      dispatchInputEvents(input);
       return true;
     }
     if (input.isContentEditable) {
-      input.focus();
       input.textContent = text;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      dispatchInputEvents(input);
       return true;
     }
     return false;
   }
 
+  function findSendButtonNearInput(input) {
+    if (!input) return null;
+    let root = input.parentElement;
+    for (let depth = 0; depth < 6 && root; depth += 1) {
+      const local = root.querySelectorAll("button, [role='button'], a");
+      for (const btn of local) {
+        if (!btn.offsetParent) continue;
+        const t = (btn.innerText || btn.getAttribute("aria-label") || btn.title || "").trim();
+        if (/^(发送|send|reply|回复)$/i.test(t) || /send|发送|reply|回复/i.test(t)) {
+          const r = btn.getBoundingClientRect();
+          if (r.width >= 24 && r.height >= 16) return btn;
+        }
+      }
+      root = root.parentElement;
+    }
+    return null;
+  }
+
   function tryAutoClickSend() {
+    const input = findReplyInput();
+    const nearBtn = findSendButtonNearInput(input);
+    if (nearBtn) {
+      nearBtn.click();
+      return true;
+    }
     const labels = /^(发送|send|reply|回复)$/i;
-    const candidates = document.querySelectorAll("button, [role='button'], a");
+    const candidates = document.querySelectorAll(
+      "button, [role='button'], a, [data-e2e*='send'], [class*='send'], [class*='Send']",
+    );
     for (const btn of candidates) {
       if (!btn.offsetParent) continue;
-      const t = (btn.innerText || btn.getAttribute("aria-label") || "").trim();
-      if (!labels.test(t) && !/send/i.test(t)) continue;
+      const t = (btn.innerText || btn.getAttribute("aria-label") || btn.title || "").trim();
+      if (!labels.test(t) && !/send|发送|reply|回复/i.test(t)) continue;
       const r = btn.getBoundingClientRect();
       if (r.width < 24 || r.height < 16) continue;
       btn.click();
       return true;
+    }
+    return false;
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function tryAutoClickSendWithRetry(maxAttempts = 4) {
+    for (let i = 0; i < maxAttempts; i += 1) {
+      if (i > 0) await sleep(120 * i);
+      if (tryAutoClickSend()) return true;
     }
     return false;
   }
@@ -292,13 +381,24 @@
       manual: "人工草稿",
     }[routed.tier || res.tier] || routed.tier || "";
 
-    if (routed.action === "auto_send" || res.action === "auto_send") {
-      fillReplyInput(text);
-      const sent = tryAutoClickSend();
+    const shouldAutoSend = routed.action === "auto_send" || res.action === "auto_send";
+    if (shouldAutoSend) {
+      const csSettings = await getCsSettingsCached();
+      const filled = fillReplyInput(text);
+      if (!filled) {
+        setStatus(`已生成${tierLabel}${via}，但未找到聊天输入框，请复制后手动粘贴`, "busy");
+        return;
+      }
+      if (csSettings.extensionAutoClickSend === false) {
+        setStatus(`已填入聊天框（${tierLabel}），请人工点发送${via}`, "ok");
+        return;
+      }
+      await sleep(180);
+      const sent = await tryAutoClickSendWithRetry();
       setStatus(
         sent
           ? `已自动发送（${tierLabel}）${via}`
-          : `已填入聊天框（${tierLabel}），请点发送${via}`,
+          : `已填入聊天框（${tierLabel}），未找到发送按钮，请手动点发送${via}`,
         sent ? "ok" : "busy",
       );
     } else {
@@ -335,7 +435,7 @@
         shopName: shop.name,
         data: scraped.data,
       });
-      await FanmengDiagnosisPack.markFromScrape(shop.id, scraped);
+      FanmengDiagnosisPack.invalidateCache();
       await refreshDiagnosisProgress();
       if (!silent) {
         setStatus(`已同步 · ${shop.name} · ${scraped.pageType} · ${new Date().toLocaleTimeString()}`, "ok");
@@ -459,7 +559,7 @@
 
     const alertsBox = el("div", "fm-cs-alerts hidden");
     body.appendChild(alertsBox);
-    body.appendChild(el("p", "fm-hint fm-cs-tier-hint", "FAQ 命中自动发 · 售后转人工 · 北京23:00–09:00 AI 守店"));
+    body.appendChild(el("p", "fm-hint fm-cs-tier-hint", "FAQ/问候/夜间 AI 命中后自动填入并发送 · 售后发安抚模板并提醒人工跟进"));
 
     const tutBox = el("div", "fm-tutorial-box hidden");
     const tutHead = el("div", "fm-tutorial-head");
@@ -706,6 +806,7 @@
       const shop = await resolveActiveShop();
       const st = await FanmengApi.status(shop?.id);
       await refreshEntitlements();
+      await getCsSettingsCached(true);
       setStatus(`已登录 ${st.user?.email || ""} · ${shop?.name || "未绑定店铺"}`, "ok");
     } catch {
       setStatus("请打开插件弹窗登录凡梦账号", "err");

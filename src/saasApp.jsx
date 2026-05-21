@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowRight,
@@ -37,50 +37,96 @@ import {
   extensionInstallAvailable,
 } from "./extensionInstallConfig.js";
 import { initUmami, trackEvent, trackPageView, trackCtaRegister } from "./lib/analytics.js";
+import { fetchJson } from "./lib/fetchJson.js";
+import { downloadStoreMetricsTemplate } from "./lib/storeMetricsTemplates.js";
+import {
+  CsControlConsole,
+  GrowthDiagnosisPanel,
+  ProfitWorkbenchPanel,
+  TikTokAgentHint,
+  useExtensionWorkspaceSummary,
+} from "./workspace/tiktokPanels.jsx";
+
+const EARLY_BIRD_HINT = "早鸟价续费同价 · 限前 100 名或至 2026年8月31日";
 
 const pricingPlans = [
   {
-    id: "starter",
-    name: "尝鲜版",
-    price: "99",
-    desc: "适合个人卖家试用 AI 工作流。",
+    id: "free",
+    name: "免费版",
+    price: "0",
+    desc: "永久免费 · 试插件与基础 Agent。",
     features: [
-      "每日 100 次 Agent 调用",
-      "选品 / 内容 / Listing 三个 Agent（6 模块中的基础三件套）",
-      "本地文件导入",
-      "任务历史 30 条",
-      "社区/邮件支持",
+      "每日 8 次 Agent 调用",
+      "TikTok 插件：同步本页 + 手动生成话术",
+      "选品 / 内容 / Listing 三个 Agent",
+      "1 个店铺",
+      "不含插件自动发送与 CSV 导入",
     ],
-    access: "开放选品、内容、Listing 三个基础 Agent；不含一键运营串联、实时抓取和店铺 API 强数据类 Agent。",
+    access: "注册即享；7 日专业版全功能体验结束后自动回到免费版（账号保留）。",
+    purchasable: false,
   },
   {
-    id: "standard",
-    name: "标准版",
-    price: "299",
-    desc: "适合已有店铺、希望稳定提效的卖家。",
+    id: "growth",
+    name: "成长版",
+    price: "149",
+    desc: "单店卖家 · 插件自动客服入门。",
+    features: [
+      "每日 120 次 Agent 调用",
+      "TikTok 插件全开（FAQ/夜间自动发送）",
+      "6 个 Agent 全开",
+      "1 个店铺",
+      "业绩诊断框架模式（不含 CSV 利润精算）",
+    ],
+    access: "适合已开店、希望用插件自动回 FAQ 的卖家。",
+    purchasable: true,
+  },
+  {
+    id: "pro",
+    name: "专业版",
+    price: "349",
+    priceEarlyBird: "299",
+    desc: "主力套餐 · CSV 诊断 + 利润精算。",
     recommended: true,
-    features: ["每日 500 次 Agent 调用", "TikTok 卖家中心 Chrome 插件", "店铺 API / CSV 配置", "业绩诊断与利润分析", "AI 客服售后模板", "公开页参考抓取（Playwright）", "优先支持"],
-    access: "开放全部 6 个独立 Agent + TikTok 浏览器插件 +「5 Agent 运营一键生成」；含店铺相关 Agent 与诊断能力。",
+    features: [
+      "每日 500 次 Agent 调用",
+      "插件 + 中文 CSV 经营数据导入",
+      "6 Agent + 5 Agent 运营一键生成",
+      "Playwright 公开页参考抓取",
+      "3 个店铺 · 优先支持",
+    ],
+    access: "适合认真做 TikTok、需要诊断包与利润分析的单店/小团队。",
+    purchasable: true,
   },
   {
-    id: "managed",
-    name: "全托版",
-    price: "899",
-    desc: "适合希望让 Agent 接管日常运营的团队。",
-    features: ["每日 2,000 次 Agent 调用", "5 模块运营一键生成", "多店铺/多站点管理", "自动化运营周报", "专属配置协助", "1 对 1 运营建议"],
-    access: "开放全部能力，增加多店铺、自动化周报和高频调用额度。",
-  },
-  {
-    id: "enterprise",
-    name: "定制版",
-    price: "联系定价",
-    desc: "适合公司团队、私有化或深度数据集成。",
-    features: ["自定义调用量", "ERP/BI/客服系统集成", "企业权限与团队席位", "专属知识库", "私有化部署方案", "专属客户成功经理"],
-    access: "按企业需求定制调用量、权限、数据集成和私有化部署。",
+    id: "team",
+    name: "团队版",
+    price: "799",
+    priceEarlyBird: "699",
+    desc: "多店团队 · 高频调用与周报。",
+    features: [
+      "每日 2,000 次 Agent 调用",
+      "不限店铺（建议 ≤10）",
+      "专业版全部能力",
+      "自动化运营周报",
+      "专属配置协助 · 优先支持",
+    ],
+    access: "适合多店矩阵、代运营或小团队统一使用。",
+    purchasable: true,
   },
 ];
 
-const PAID_PLAN_IDS = new Set(["starter", "standard", "managed", "enterprise"]);
+const PAID_PLAN_IDS = new Set(["growth", "pro", "team"]);
+const CHECKOUT_PLAN_IDS = new Set(["growth", "pro", "team"]);
+
+function planDisplayPrice(plan, user) {
+  if (!plan?.purchasable || plan.price === "0") return { amount: plan.price, earlyBird: false };
+  const locked = Boolean(user?.earlyBird?.[plan.id]?.locked);
+  const open = Boolean(user?.earlyBird?.open);
+  if (plan.priceEarlyBird && (locked || open)) {
+    return { amount: plan.priceEarlyBird, list: plan.price, earlyBird: true };
+  }
+  return { amount: plan.price, earlyBird: false };
+}
 
 const agents = [
   {
@@ -106,27 +152,30 @@ const agents = [
   },
   {
     id: "growth",
-    name: "店铺业绩诊断",
+    name: "业绩诊断",
     icon: BarChart3,
-    desc: "诊断版：框架与指标建议；连接版：可基于你粘贴或 API 导出的真实数据深读。",
-    prompt: "我暂未粘贴后台数据，请用诊断版给出应监控的指标、常见下滑原因假设和下一步该导出的报表字段。",
+    desc: "基于插件诊断包或经营 CSV，输出 KPI 异常与 P0/P1 动作清单。",
+    prompt: "基于已同步的 TikTok 店铺数据，做连接版业绩诊断：KPI 摘要、异常假设、P0/P1 动作、仍缺的数据字段。",
     requiresStoreApi: true,
+    tiktokPanel: "growth",
   },
   {
     id: "service",
-    name: "AI 客服售后",
+    name: "客服控制台",
     icon: Headphones,
-    desc: "话术与处理清单；不代客执行后台操作；高风险项需人工或已接入系统确认。",
-    prompt: "客户咨询物流延迟并要求补偿，请给中文策略、英文回复草稿、内部 Checklist 及须人工确认项。",
+    desc: "配置 FAQ/自动化规则、处理售后告警；实时话术请在 TikTok 插件中使用。",
+    prompt: "",
     requiresStoreApi: true,
+    tiktokPanel: "cs",
   },
   {
     id: "profit",
     name: "广告库存利润",
     icon: LineChart,
-    desc: "利润与库存决策框架；有成本/广告数据时更可量化，无数据时列明待导入字段。",
-    prompt: "我只有大致售价区间，没有完整成本表，请按无数据与有数据两种情况给 SKU 分层与广告/库存原则。",
+    desc: "插件抓广告/库存样本；SKU 成本需 CSV 或手工表。支持趋势/精算/框架三种模式。",
+    prompt: "基于插件快照与已导入成本数据，输出广告效率、库存与 SKU 利润倾向；缺数据处列明待补字段。",
     requiresStoreApi: true,
+    tiktokPanel: "profit",
   },
 ];
 
@@ -552,7 +601,7 @@ function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
           <div className="pub-trust-card">
             <LockKeyhole size={22} aria-hidden />
             <h3>账号与试用</h3>
-            <p>新用户验证邮箱后可获得 <strong>3 天全功能试用</strong>（5 Agent 运营与爬虫等重能力另有日限额）。试用结束再选择订阅套餐。</p>
+            <p>新用户注册后享 <strong>永久免费版</strong>（每日限额）+ <strong>7 天专业版全功能体验</strong>；体验结束后自动回到免费版，账号与数据保留。</p>
           </div>
           <div className="pub-trust-card">
             <TrendingUp size={22} aria-hidden />
@@ -564,8 +613,8 @@ function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
 
       <section id="trial-explainer" className="pub-section pub-section-accent" aria-labelledby="trial-h">
         <div className="pub-section-head">
-          <h2 id="trial-h">试用与上手</h2>
-          <p>验证邮箱的新用户可开启 3 天试用；5 Agent 运营与爬虫等能力另计日限额，计费与额度以控制台订阅页为准。</p>
+          <h2 id="trial-h">注册与上手</h2>
+          <p>注册即免费版；自动赠送 7 天专业版体验。插件 + CSV 能力以订购页为准。</p>
         </div>
         <div className="pub-trial-grid">
           <div>
@@ -582,7 +631,7 @@ function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
           </div>
           <div>
             <h3>插件 · TikTok 卖家中心</h3>
-            <p>标准版含 Chrome 助手：工作台内按向导安装，在卖家后台生成客服话术与页面诊断。</p>
+            <p>专业版含 Chrome 助手：工作台内按向导安装，在卖家后台自动客服与页面诊断。</p>
           </div>
         </div>
       </section>
@@ -590,21 +639,22 @@ function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
       <section id="pricing-preview" className="pub-section" aria-labelledby="price-h">
         <div className="pub-section-head">
           <h2 id="price-h">订阅套餐预览</h2>
-          <p>以下为前台标价与权益摘要，实际结算以登录后订购页与协议为准。</p>
+          <p>以下为前台标价与权益摘要；专业版/团队版早鸟价见登录后订购页。实际结算以订单为准。</p>
         </div>
         <div className="pub-pricing-grid">
-          {pricingPlans.map((plan) => (
+          {pricingPlans.filter((p) => p.purchasable !== false || p.id === "free").map((plan) => (
             <article key={plan.id} className={plan.recommended ? "pub-price-card is-recommended" : "pub-price-card"}>
               {plan.recommended ? <span className="pub-rec-badge">推荐</span> : null}
               <h3>{plan.name}</h3>
               <p className="pub-price-line">
-                {plan.price === "联系定价" ? (
-                  <strong className="pub-price-custom">联系定价</strong>
+                {plan.price === "0" ? (
+                  <strong className="pub-price-custom">免费</strong>
                 ) : (
                   <>
                     <span className="pub-price-currency">¥</span>
-                    <strong className="pub-price-num">{plan.price}</strong>
+                    <strong className="pub-price-num">{plan.priceEarlyBird || plan.price}</strong>
                     <span className="pub-price-unit">/ 月起</span>
+                    {plan.priceEarlyBird ? <span className="pub-price-strike">¥{plan.price}</span> : null}
                   </>
                 )}
               </p>
@@ -617,7 +667,7 @@ function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
                 ))}
               </ul>
               <button type="button" className={plan.recommended ? "pub-btn pub-btn-primary pub-btn-block" : "pub-btn pub-btn-secondary pub-btn-block"} onClick={onRegisterClick}>
-                选择此档并注册
+                {plan.id === "free" ? "免费注册" : "选择此档并注册"}
               </button>
             </article>
           ))}
@@ -728,12 +778,11 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
     }
     setAuthLoading(true);
     try {
-      const response = await fetch("/api/auth/register/start", {
+      const { response, data } = await fetchJson("/api/auth/register/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: authForm.email }),
       });
-      const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setRegisterStep("complete");
       setRegisterSendInfo({ emailDelivered: data.emailDelivered, devCode: data.devCode });
@@ -756,7 +805,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
     }
     setAuthLoading(true);
     try {
-      const response = await fetch("/api/auth/register/complete", {
+      const { response, data } = await fetchJson("/api/auth/register/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -768,7 +817,6 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
           storeName: authForm.storeName,
         }),
       });
-      const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       trackEvent("register_complete", { email: authForm.email.trim() });
       resetRegisterFlow();
@@ -786,12 +834,11 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
 
     setAuthLoading(true);
     try {
-      const response = await fetch("/api/auth/login", {
+      const { response, data } = await fetchJson("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: authForm.email, password: authForm.password }),
       });
-      const data = await response.json();
 
       if (!response.ok) {
         if (data.registrationIncomplete) {
@@ -841,12 +888,11 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
     setAuthLoading(true);
 
     try {
-      const response = await fetch("/api/auth/verify-email", {
+      const { response, data } = await fetchJson("/api/auth/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: pendingVerification.email, code: verificationCode }),
       });
-      const data = await response.json();
 
       if (!response.ok) throw new Error(data.error);
       onLogin(data);
@@ -862,12 +908,11 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
     setAuthLoading(true);
 
     try {
-      const response = await fetch("/api/auth/resend-verification", {
+      const { response, data } = await fetchJson("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: pendingVerification.email }),
       });
-      const data = await response.json();
 
       if (!response.ok) throw new Error(data.error);
       setPendingVerification(data);
@@ -885,12 +930,11 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
     setAuthLoading(true);
 
     try {
-      const response = await fetch("/api/auth/request-password-reset", {
+      const { response, data } = await fetchJson("/api/auth/request-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: authForm.email }),
       });
-      const data = await response.json();
 
       if (!response.ok) throw new Error(data.error);
       setPasswordReset(data);
@@ -909,12 +953,11 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
     setAuthLoading(true);
 
     try {
-      const response = await fetch("/api/auth/reset-password", {
+      const { response, data } = await fetchJson("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: passwordReset.email, code: resetCode, password: newPassword }),
       });
-      const data = await response.json();
 
       if (!response.ok) throw new Error(data.error);
       onLogin(data);
@@ -930,7 +973,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
       <section className="auth-hero" aria-label="产品摘要">
         <div className="auth-badge">
           <ShieldCheck size={16} />
-          登录后 3 天试用 · 全功能体验（5 Agent 运营/抓取另计日限额）
+          注册即免费版 · 赠送 7 天专业版体验
         </div>
         <h1>跨境电商卖家的多 Agent AI 员工后台</h1>
         <p>
@@ -983,7 +1026,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
         ) : pendingVerification ? (
           <>
             <h2>验证邮箱</h2>
-            <p>验证码已发送到 {pendingVerification.email}，验证成功后会自动进入工作台并开启 3 天免费试用。</p>
+            <p>验证码已发送到 {pendingVerification.email}，验证成功后会进入工作台（免费版 + 7 天专业版体验）。</p>
             {!pendingVerification.emailDelivered && pendingVerification.devCode && (
               <div className="auth-info">
                 当前未配置 SMTP，开发测试验证码：<strong>{pendingVerification.devCode}</strong>
@@ -1097,7 +1140,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
           </>
         ) : isRegister && registerStep === "complete" ? (
           <>
-            <small>验证码 10 分钟内有效。完成注册后将进入工作台并开启 3 天免费试用。</small>
+            <small>验证码 10 分钟内有效。完成注册后进入工作台（免费版 + 7 天专业版体验）。</small>
             <button
               type="button"
               className="register-link"
@@ -1131,7 +1174,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
           </>
         ) : (
           <>
-            <small>{isRegister ? "注册即代表同意订阅服务条款，试用期内不会自动扣费。" : "3 天免费试用，试用期结束后再选择订阅套餐。"}</small>
+            <small>{isRegister ? "注册即代表同意订阅服务条款，不会自动扣费。" : "免费版永久可用；付费套餐在订购页开通。"}</small>
             <button
               type="button"
               className="register-link"
@@ -1161,7 +1204,11 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
 }
 
 function formatError(error) {
-  return error?.message || "请求失败，请检查后端服务和 OpenClaw 配置。";
+  const msg = error?.message || "";
+  if (msg.includes("Unexpected end of JSON input") || msg.includes("Failed to execute 'json'")) {
+    return "无法连接后端 API。请另开终端运行 npm run dev:server，并确认 .env 的 PORT 与 npm run dev 代理一致（改 PORT 后需重启两个服务）。";
+  }
+  return msg || "请求失败，请检查后端服务和 OpenClaw 配置。";
 }
 
 function readFileAsText(file) {
@@ -1180,9 +1227,15 @@ function workspaceEmptyPanel() {
     input: "",
     answer: "",
     attachments: [],
-    snapshotPlatform: "auto",
+    snapshotPlatform: "tiktok",
     attachStoreSnapshot: false,
     attachStoreMetrics: true,
+    useExtensionSnapshot: true,
+    tiktokNote: "",
+    manualCost: "",
+    profitMode: "framework",
+    csDrillText: "",
+    csDrillResult: null,
     scrape: { enabled: false, platform: "", market: "", category: "", url: "" },
   };
 }
@@ -1192,7 +1245,7 @@ function workspaceBuildInitialPanels() {
   p[WORKSPACE_AUTOPILOT_ID] = {
     ...workspaceEmptyPanel(),
     answer:
-      "登录后已开启 3 天免费试用（试用内可体验全部 Agent，5 Agent 运营与抓取另计每日额度）。请在本模块输入要求后由 OpenClaw 生成结果。",
+      "登录后为免费版（每日限额），并赠送 7 天专业版全功能体验。请在本模块输入要求后由 OpenClaw 生成结果。",
   };
   for (const a of agents) {
     p[a.id] = workspaceEmptyPanel();
@@ -1319,27 +1372,11 @@ function StoreMetricsImportSection({ authHeaders, showToast, onImported }) {
     loadLatest();
   }, []);
 
-  async function downloadTemplate(kind) {
+  function downloadTemplate(kind) {
     setBusy(`dl-${kind}`);
     try {
-      const response = await fetch(`/api/store-metrics/template/${kind}`, { headers: authHeaders() });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "下载失败");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download =
-        kind === "shop"
-          ? "fanmeng-store-overview.csv"
-          : kind === "sku"
-            ? "fanmeng-sku-inventory-cost.csv"
-            : "fanmeng-store-metrics-universal.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("模板已下载");
+      downloadStoreMetricsTemplate(kind);
+      showToast("中文模板已下载");
     } catch (error) {
       showToast(formatError(error));
     } finally {
@@ -1385,17 +1422,21 @@ function StoreMetricsImportSection({ authHeaders, showToast, onImported }) {
         <span className="store-metrics-badge">诊断 / 广告利润</span>
       </div>
       <p className="store-metrics-desc">
-        从 TikTok 卖家后台<strong>导出或按模板手工填入</strong>，无需 Open API。支持中英文列名；填两行店铺周期可自动算环比。
+        下载<strong>中文模板</strong>（含填写说明与示例行），用 Excel/WPS 打开后按列名填入 TikTok 后台数据，保存为 CSV 再上传。支持中英文列名。
       </p>
+      <ul className="store-metrics-field-hint">
+        <li><strong>店铺汇总</strong>：报表类型、平台、店铺名称、统计开始/结束、成交额、订单数、广告花费、广告回报率、退款率等</li>
+        <li><strong>SKU 库存/成本</strong>：商品SKU、可售库存、单位采购成本、单件头程、平台佣金比例等（填了成本才能算毛利）</li>
+      </ul>
       <div className="store-metrics-actions">
         <button type="button" className="header-ghost slim" disabled={busy != null} onClick={() => downloadTemplate("combined")}>
-          {busy === "dl-combined" ? "下载中…" : "下载通用模板"}
+          {busy === "dl-combined" ? "下载中…" : "下载通用模板（中文）"}
         </button>
         <button type="button" className="header-ghost slim" disabled={busy != null} onClick={() => downloadTemplate("shop")}>
-          店铺汇总
+          店铺汇总模板
         </button>
         <button type="button" className="header-ghost slim" disabled={busy != null} onClick={() => downloadTemplate("sku")}>
-          SKU 库存/成本
+          SKU 库存/成本模板
         </button>
         <label className="store-metrics-upload continue-checkout slim">
           {busy === "import" ? "导入中…" : "上传 CSV"}
@@ -1510,13 +1551,14 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
         <div className="store-api-callout" role="note">
           <strong>凡梦专注 TikTok Shop</strong>
           <span>
-            推荐路径：<strong>Chrome 插件</strong>（卖家中心浏览器内）+ 下方 <strong>经营 CSV</strong> 导入；可选 Open API / OAuth 补充。
+            日常使用只需：<strong>Chrome 插件</strong>（卖家中心内同步 + 客服自动发送）+ <strong>经营 CSV</strong>（诊断/利润）。
+            Open API / Webhook 为高级可选项，需 TikTok Partner 审核，见下方折叠区。
           </span>
         </div>
         <ExtensionInstallPanel compact />
         <StoreMetricsImportSection authHeaders={authHeaders} showToast={showToast} onImported={onMetricsImported} />
         <p className="store-api-intro">
-          配置 <strong>TikTok Shop</strong> 店铺凭据，或使用插件同步页面数据（无需 Partner 也可跑诊断/客服）。
+          安装插件并在卖家中心登录即可同步页面、自动回复 FAQ/夜间消息；CSV 导入后诊断与利润分析更准。
         </p>
         {STORE_PLATFORM_ORDER.length > 1 ? (
         <div className="store-platform-tabs" role="tablist" aria-label="选择店铺平台">
@@ -1554,8 +1596,14 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
               <div key={platform} className={`store-platform-block ${ready ? "is-ready" : ""}`}>
                 <div className="store-platform-block-head">
                   <h3>{STORE_PLATFORM_LABELS[platform]}</h3>
-                  <span className={ready ? "pill-ok" : "pill-warn"}>{ready ? "已填密钥" : "未配置"}</span>
+                  <span className={ready ? "pill-ok" : "pill-warn"}>{ready ? "已填 Open API" : "插件+CSV 即可用"}</span>
                 </div>
+                <details className="store-api-advanced">
+                  <summary>高级：Open API / Webhook（需 Partner，非主流程）</summary>
+                  <p className="store-field-hint store-api-advanced-note">
+                    无人值守 7×24 自动回复需 TikTok 官方 Webhook + Partner 应用，配置复杂且需平台审核。
+                    大多数卖家用上方插件在浏览器内自动发送 FAQ/夜间消息即可。
+                  </p>
                 <div className="store-api-form vertical">
                   <input
                     value={block.storeName}
@@ -1581,10 +1629,10 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
                         disabled={snapshotLoading === "oauth"}
                         onClick={startTiktokShopOAuth}
                       >
-                        {snapshotLoading === "oauth" ? "正在跳转授权…" : "使用 TikTok Shop OAuth 连接"}
+                        {snapshotLoading === "oauth" ? "正在跳转授权…" : "TikTok Shop OAuth（高级）"}
                       </button>
                       <span className="store-oauth-note">
-                        跳转 TikTok 授权后会回到站点并自动保存令牌（需服务端已配置回调 URL）。
+                        需服务端配置回调 URL 与 Partner 应用；日常推荐用 Chrome 插件，不必配置此项。
                       </span>
                     </div>
                   )}
@@ -1595,18 +1643,19 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
                         checked={Boolean(block.autoBuyerReply)}
                         onChange={(e) => updateBlock(platform, "autoBuyerReply", e.target.checked)}
                       />
-                      开启买家消息 Webhook 自动话术（<code>/webhooks/tiktok</code>）
+                      启用 Webhook 无人值守（<code>/webhooks/tiktok</code>，需 Partner + 公网回调）
                     </label>
                   )}
                 </div>
                 <div className="store-platform-block-actions">
                   <button type="button" className="header-ghost" disabled={snapshotLoading === platform} onClick={() => testSnapshot(platform)}>
-                    {snapshotLoading === platform ? "测试中…" : "测试本台快照"}
+                    {snapshotLoading === platform ? "测试中…" : "测试 Open API 快照"}
                   </button>
                   <button type="button" className="continue-checkout slim" onClick={() => saveStorePlatform(platform)}>
-                    保存配置
+                    保存 Open API 配置
                   </button>
                 </div>
+                </details>
               </div>
             );
           })()}
@@ -1619,7 +1668,7 @@ function StoreApiModal({ onClose, storeBlocks, setStoreBlocks, saveStorePlatform
 
 function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user, onSubscribed }) {
   const [selectedPlanId, setSelectedPlanId] = useState(() =>
-    user?.plan && PAID_PLAN_IDS.has(user.plan) ? user.plan : "standard",
+    user?.plan && PAID_PLAN_IDS.has(user.plan) ? user.plan : "pro",
   );
   const [checkoutPlan, setCheckoutPlan] = useState(null);
   const [checkoutOrder, setCheckoutOrder] = useState(null);
@@ -1647,7 +1696,7 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
   }, []);
 
   useEffect(() => {
-    if (!checkoutPlan || checkoutPlan.id === "enterprise") {
+    if (!checkoutPlan || !CHECKOUT_PLAN_IDS.has(checkoutPlan.id)) {
       setPaymentConfig(null);
       return;
     }
@@ -1775,7 +1824,12 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
             </div>
             <div>
               <span>价格</span>
-              <strong>{checkoutPlan.price === "联系定价" ? "联系定价" : `¥${checkoutPlan.price}/月`}</strong>
+              <strong>
+                {(() => {
+                  const p = planDisplayPrice(checkoutPlan, user);
+                  return p.earlyBird ? `¥${p.amount}/月（早鸟，正价 ¥${p.list}）` : `¥${p.amount}/月`;
+                })()}
+              </strong>
             </div>
             <div>
               <span>开通后权益</span>
@@ -1790,22 +1844,8 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
               <p>{checkoutPlan.access}</p>
             </div>
           </div>
-          {checkoutPlan.id === "enterprise" ? (
-            <div className="payment-box">
-              <h3>定制版需要联系我们</h3>
-              <p>请留下手机号、微信或邮箱。正式上线后，这里会接入表单通知、CRM 或企业微信客服。</p>
-              <div className="enterprise-form">
-                <input value={contactForm.name} onChange={(event) => updateContactForm("name", event.target.value)} placeholder="姓名 / 公司名" />
-                <input value={contactForm.phone} onChange={(event) => updateContactForm("phone", event.target.value)} placeholder="手机号" />
-                <input value={contactForm.wechat} onChange={(event) => updateContactForm("wechat", event.target.value)} placeholder="微信号" />
-                <input value={contactForm.email} onChange={(event) => updateContactForm("email", event.target.value)} placeholder="邮箱" />
-                <textarea value={contactForm.note} onChange={(event) => updateContactForm("note", event.target.value)} placeholder="需求说明：店铺数量、平台、是否需要私有化部署..." />
-              </div>
-              <button type="button" onClick={submitEnterpriseContact}>提交联系信息</button>
-            </div>
-          ) : (
-            <div className="payment-box">
-              <h3>扫码支付（个人收款）</h3>
+          <div className="payment-box">
+            <h3>扫码支付（个人收款）</h3>
               {!paymentConfig && <p className="payment-loading">正在加载收款配置…</p>}
               {paymentConfig?.provider === "personal_qr" ? (
                 <>
@@ -1902,7 +1942,6 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
                 </button>
               )}
             </div>
-          )}
           <button
             className="back-to-plans"
             type="button"
@@ -1926,10 +1965,12 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
           <div>
             <p>Subscription</p>
             <h2>选择适合你的凡梦AI套餐</h2>
-            {user?.plan === "trial" && user?.trialActive ? (
-              <p className="subscription-status-line">当前为试用账号 · 订阅后按所选套餐保留调用额度与能力边界。</p>
+            {user?.proTrialActive ? (
+              <p className="subscription-status-line">当前为 <strong>专业版 7 日体验</strong> · 结束后自动回到免费版（账号保留）。</p>
+            ) : user?.effectivePlanId === "free" ? (
+              <p className="subscription-status-line">当前为 <strong>免费版</strong> · 升级后可解锁插件自动发送、CSV 导入等能力。</p>
             ) : null}
-            {user?.plan && PAID_PLAN_IDS.has(user.plan) && user?.planName ? (
+            {user?.plan && PAID_PLAN_IDS.has(user.plan) && user?.subscriptionActive ? (
               <p className="subscription-status-line">
                 已订阅：<strong>{user.planName}</strong> · 可选择更高档位升级或续订同档。
               </p>
@@ -1938,16 +1979,19 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
           <button type="button" onClick={onClose}>关闭</button>
         </div>
         <div className="pricing-note">
-          这个价格结构是合理的：99 元降低尝试门槛，299 元适合作为主力套餐，899 元覆盖高频运营团队，定制版承接企业客户。
+          {EARLY_BIRD_HINT} · 免费版永久可用（每日限额）· 注册送 7 天专业版体验。
         </div>
         <div className="subscription-grid">
-          {pricingPlans.map((plan) => (
+          {pricingPlans.map((plan) => {
+            const priceInfo = planDisplayPrice(plan, user);
+            return (
             <article
               className={[
                 "sub-plan",
                 plan.recommended ? "recommended" : "",
                 selectedPlanId === plan.id ? "selected" : "",
                 user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") ? "is-current-plan" : "",
+                plan.id === "free" ? "sub-plan-free" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -1956,6 +2000,7 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
             >
               <div className="sub-plan-badges">
                 {plan.recommended ? <span className="sub-badge">推荐</span> : null}
+                {priceInfo.earlyBird ? <span className="sub-badge sub-badge-early">早鸟</span> : null}
                 {user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") ? (
                   <span className="sub-badge sub-badge-current">当前套餐</span>
                 ) : null}
@@ -1965,13 +2010,16 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
               <p>{plan.desc}</p>
               <p className="plan-access">{plan.access}</p>
               <div className="sub-price">
-                {plan.price === "联系定价" ? (
-                  <strong>联系定价</strong>
+                {plan.price === "0" ? (
+                  <strong>免费</strong>
                 ) : (
                   <>
                     <span>¥</span>
-                    <strong>{plan.price}</strong>
+                    <strong>{priceInfo.amount}</strong>
                     <em>/月</em>
+                    {priceInfo.earlyBird && priceInfo.list ? (
+                      <span className="sub-price-list">¥{priceInfo.list}</span>
+                    ) : null}
                   </>
                 )}
               </div>
@@ -1985,41 +2033,41 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
               <button
                 type="button"
                 disabled={
-                  plan.id !== "enterprise" &&
-                  user?.plan === plan.id &&
-                  PAID_PLAN_IDS.has(user.plan || "") &&
-                  user?.accessActive
+                  !CHECKOUT_PLAN_IDS.has(plan.id) ||
+                  (user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") && user?.subscriptionActive)
                 }
                 onClick={(event) => {
                   event.stopPropagation();
                   setSelectedPlanId(plan.id);
-                  setCheckoutPlan(plan);
+                  if (CHECKOUT_PLAN_IDS.has(plan.id)) setCheckoutPlan(plan);
                 }}
               >
-                {plan.id === "enterprise"
-                  ? "联系我们"
-                  : user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") && user?.accessActive
+                {plan.id === "free"
+                  ? "注册即享"
+                  : user?.plan === plan.id && PAID_PLAN_IDS.has(user.plan || "") && user?.subscriptionActive
                     ? "当前使用中"
-                    : "选择套餐"}
+                    : CHECKOUT_PLAN_IDS.has(plan.id)
+                      ? "选择套餐"
+                      : "—"}
               </button>
             </article>
-          ))}
+          );
+          })}
         </div>
-        {selectedPlan && (
+        {selectedPlan && CHECKOUT_PLAN_IDS.has(selectedPlan.id) && (
           <button
             className="continue-checkout"
             type="button"
             disabled={
-              selectedPlan.id !== "enterprise" &&
               user?.plan === selectedPlan.id &&
               PAID_PLAN_IDS.has(user.plan || "") &&
-              user?.accessActive
+              user?.subscriptionActive
             }
             onClick={() => setCheckoutPlan(selectedPlan)}
           >
             {user?.plan === selectedPlan.id &&
             PAID_PLAN_IDS.has(user.plan || "") &&
-            user?.accessActive
+            user?.subscriptionActive
               ? `已开通 ${selectedPlan.name}（去选择其他档位可升级）`
               : `继续开通 ${selectedPlan.name}`}
           </button>
@@ -2185,7 +2233,7 @@ function StoreDataNudgeModal({ agentId, onClose, onOpenStoreApi }) {
 }
 
 function AdminGrantRow({ user, authHeaders, onReloadSummary, showToast }) {
-  const [planId, setPlanId] = useState(() => (user.plan && user.plan !== "trial" ? user.plan : "standard"));
+  const [planId, setPlanId] = useState(() => (user.plan && PAID_PLAN_IDS.has(user.plan) ? user.plan : "pro"));
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState(false);
 
@@ -2215,10 +2263,13 @@ function AdminGrantRow({ user, authHeaders, onReloadSummary, showToast }) {
         <span>{user.planName} · {user.accessActive ? "当前可访问" : "未订阅或已过期"}</span>
       </div>
       <select className="admin-grant-select" value={planId} onChange={(e) => setPlanId(e.target.value)} aria-label="套餐">
-        <option value="starter">尝鲜版 starter</option>
-        <option value="standard">标准版 standard</option>
-        <option value="managed">全托版 managed</option>
-        <option value="enterprise">企业版 enterprise</option>
+        <option value="free">免费版 free</option>
+        <option value="growth">成长版 growth</option>
+        <option value="pro">专业版 pro</option>
+        <option value="team">团队版 team</option>
+        <option value="starter">旧·尝鲜版 starter</option>
+        <option value="standard">旧·标准版 standard</option>
+        <option value="managed">旧·全托版 managed</option>
       </select>
       <label className="admin-grant-days">
         天数
@@ -2682,7 +2733,20 @@ function Workspace() {
   const [storeBlocks, setStoreBlocks] = useState(defaultStoreBlocks);
   const [routeHash, setRouteHash] = useState(readRouteHash);
   const [storeMetricsReady, setStoreMetricsReady] = useState(false);
+  const [csDrillBusy, setCsDrillBusy] = useState(false);
   const tiktokOAuthReturnHandledRef = useRef(false);
+
+  const extSummaryAuthHeaders = useCallback(
+    () => ({
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    }),
+    [token],
+  );
+  const { summary: extSummary, reload: reloadExtSummary } = useExtensionWorkspaceSummary(
+    extSummaryAuthHeaders,
+    Boolean(token),
+  );
 
   const caseSlug = useMemo(() => parseCaseSlugFromHash(routeHash), [routeHash]);
   const authEntryMode = useMemo(() => {
@@ -2734,16 +2798,7 @@ function Workspace() {
       setStoreDataNudge(null);
       return;
     }
-    const key = `fanmeng_store_data_intro_v2_${activeId}`;
-    try {
-      if (localStorage.getItem(key)) {
-        setStoreDataNudge(null);
-        return;
-      }
-    } catch {
-      /* continue */
-    }
-    setStoreDataNudge(activeId);
+    setStoreDataNudge(null);
   }, [activeId]);
 
   useEffect(() => {
@@ -3030,9 +3085,11 @@ function Workspace() {
     if (!hasFeature("agent", id)) {
       const name = agents.find((a) => a.id === id)?.name || "该模块";
       showToast(
-        user?.plan === "starter"
-          ? `「${name}」需标准版及以上。尝鲜版包含选品、内容、Listing 三个模块。`
-          : `「${name}」未包含在当前套餐中，请升级以解锁。`,
+        user?.plan === "growth"
+          ? `「${name}」需专业版及以上（CSV / 一键运营 / 抓取）。成长版含插件自动客服与 6 Agent。`
+          : user?.effectivePlanId === "free"
+            ? `「${name}」需成长版及以上。免费版含选品/内容/Listing 与插件基础同步。`
+            : `「${name}」未包含在当前套餐中，请升级以解锁。`,
       );
       setShowSubscription(true);
       return;
@@ -3171,20 +3228,20 @@ function Workspace() {
 
   async function runAutopilot() {
     if (!accessActive) {
-      showToast(user?.plan === "trial" ? "3 天免费试用已结束，请先订阅套餐后继续使用。" : "当前套餐已到期，请续费后继续使用。");
+      showToast("今日免费额度已用完，请明日再试或升级套餐。");
       setShowSubscription(true);
       return;
     }
 
     if (!hasFeature("autopilot")) {
-      showToast("「5 Agent 运营一键生成」需标准版及以上；尝鲜版不包含。");
+      showToast("「5 Agent 运营一键生成」需专业版及以上；成长版不包含。");
       setShowSubscription(true);
       return;
     }
 
     const p = panelsRef.current[WORKSPACE_AUTOPILOT_ID] || workspaceEmptyPanel();
     if (p.scrape.enabled && !hasFeature("scraper")) {
-      showToast("公开页参考抓取（Playwright）需标准版及以上套餐。");
+      showToast("公开页参考抓取（Playwright）需专业版及以上套餐。");
       setShowSubscription(true);
       return;
     }
@@ -3233,9 +3290,9 @@ function Workspace() {
     }
   }
 
-  async function runAgent() {
+  async function runAgent(overrides = {}) {
     if (!accessActive) {
-      showToast(user?.plan === "trial" ? "3 天免费试用已结束，请先订阅套餐后继续使用。" : "当前套餐已到期，请续费后继续使用。");
+      showToast("今日免费额度已用完，请明日再试或升级套餐。");
       setShowSubscription(true);
       return;
     }
@@ -3243,9 +3300,11 @@ function Workspace() {
     if (!hasFeature("agent", activeAgent.id)) {
       const name = activeAgent.name;
       showToast(
-        user?.plan === "starter"
-          ? `「${name}」需标准版及以上。尝鲜版包含选品、内容、Listing 三个模块。`
-          : `「${name}」未包含在当前套餐中，请升级以解锁。`,
+        user?.plan === "growth"
+          ? `「${name}」需专业版及以上（CSV / 一键运营 / 抓取）。成长版含插件自动客服与 6 Agent。`
+          : user?.effectivePlanId === "free"
+            ? `「${name}」需成长版及以上。免费版含选品/内容/Listing 与插件基础同步。`
+            : `「${name}」未包含在当前套餐中，请升级以解锁。`,
       );
       setShowSubscription(true);
       return;
@@ -3254,10 +3313,41 @@ function Workspace() {
     const panelId = activeAgent.id;
     const p = panelsRef.current[panelId] || workspaceEmptyPanel();
     if (p.scrape.enabled && !hasFeature("scraper")) {
-      showToast("公开页参考抓取（Playwright）需标准版及以上套餐。");
+      showToast("公开页参考抓取（Playwright）需专业版及以上套餐。");
       setShowSubscription(true);
       return;
     }
+
+    const useExtension =
+      overrides.useExtensionSnapshot ??
+      (p.useExtensionSnapshot !== false && ["growth", "service", "profit"].includes(activeAgent.id));
+    const useMetrics =
+      overrides.useStoreMetrics ?? (p.attachStoreMetrics && ["growth", "profit"].includes(activeAgent.id));
+
+    const extraBlocks = [];
+    if (overrides.manualCost || p.manualCost?.trim()) {
+      extraBlocks.push("## 手工补充 SKU 成本表\n" + (overrides.manualCost || p.manualCost).trim());
+    }
+    const profitMode = overrides.profitMode || p.profitMode;
+    if (profitMode && activeAgent.id === "profit") {
+      const modeHint =
+        profitMode === "precise"
+          ? "精算模式：结合插件广告/库存快照与 SKU 成本，尽量给 SKU 级利润与停投/补货建议。"
+          : profitMode === "trend"
+            ? "趋势模式：仅基于插件广告/库存/订单页样本，给花费效率与库存风险，不编造精确毛利。"
+            : "框架模式：列原则、待导入字段与下一步数据动作。";
+      extraBlocks.push("## 分析模式\n" + modeHint);
+    }
+
+    const inputText = [
+      overrides.input ?? (p.input || activeAgent.prompt),
+      p.tiktokNote?.trim() ? `\n补充说明：${p.tiktokNote.trim()}` : "",
+      extraBlocks.join("\n\n"),
+      buildAttachmentContextFromList(p.attachments),
+      storeConnected ? `\n店铺 API 已分平台配置：${storeApiSummary}。` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const ac = new AbortController();
     fetchAbortRef.current?.abort();
@@ -3272,17 +3362,13 @@ function Workspace() {
         signal: ac.signal,
         body: JSON.stringify({
           agentId: activeAgent.id,
-          input: [
-            p.input,
-            buildAttachmentContextFromList(p.attachments),
-            storeConnected ? `\n店铺 API 已分平台配置：${storeApiSummary}。` : "",
-          ].join(""),
+          input: inputText,
           scrape: activeAgent.id === "trend" && p.scrape.enabled ? p.scrape : { enabled: false },
           useStoreSnapshot:
             p.attachStoreSnapshot && ["growth", "service", "profit"].includes(activeAgent.id) && storeConnected,
-          useStoreMetrics:
-            p.attachStoreMetrics && ["growth", "profit"].includes(activeAgent.id),
-          storeSnapshotPlatform: p.snapshotPlatform === "auto" ? undefined : p.snapshotPlatform,
+          useExtensionSnapshot: useExtension,
+          useStoreMetrics: useMetrics,
+          storeSnapshotPlatform: p.snapshotPlatform === "auto" ? "tiktok" : p.snapshotPlatform,
         }),
       });
       const data = await response.json();
@@ -3325,6 +3411,40 @@ function Workspace() {
       /* ignore */
     }
   }
+
+  async function runCsDrill() {
+    const text = panel.csDrillText?.trim();
+    if (!text) return;
+    setCsDrillBusy(true);
+    patchPanel(activeId, { csDrillResult: null });
+    try {
+      const response = await fetch("/api/extension/cs/route", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ buyerText: text }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      patchPanel(activeId, { csDrillResult: data });
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setCsDrillBusy(false);
+    }
+  }
+
+  const metricsImportBlock = (
+    <StoreMetricsImportSection
+      authHeaders={authHeaders}
+      showToast={showToast}
+      onImported={() => {
+        setStoreMetricsReady(true);
+        reloadExtSummary();
+      }}
+    />
+  );
+
+  const isTikTokAgent = ["growth", "service", "profit"].includes(activeId);
 
   const ActiveIcon = activeAgent?.icon || Rocket;
   const canUseScraper = activeId === WORKSPACE_AUTOPILOT_ID || activeAgent?.id === "trend";
@@ -3405,7 +3525,17 @@ function Workspace() {
           </span>
           <div>
             <strong>凡梦AI</strong>
-            <small>{isBetaMode ? "内测版 · 全功能开放" : user?.trialActive ? "试用中 · 全功能体验（额度和重能力限次）" : user?.planName || "订阅状态"}</small>
+            <small>
+              {isBetaMode
+                ? "内测版 · 全功能开放"
+                : user?.proTrialActive
+                  ? "专业版 7 日体验中"
+                  : user?.subscriptionActive && PAID_PLAN_IDS.has(user?.plan)
+                    ? `已订阅 · ${user?.planName || ""}`
+                    : user?.effectivePlanId === "free"
+                      ? "免费版 · 每日限额"
+                      : user?.planName || "订阅状态"}
+            </small>
           </div>
         </div>
 
@@ -3413,14 +3543,28 @@ function Workspace() {
           <strong>{user?.storeName || user?.name || "跨境卖家"}</strong>
           <span>{user?.email}</span>
           {isBetaMode && <em>内测版已开放全部功能</em>}
-          {!isBetaMode && user?.trialActive && user?.trialQuota && (
+          {!isBetaMode && user?.trialQuota ? (
             <div className="trial-quota">
-              <span>试用额度 今日 {user.trialQuota.todayTotal}/{user.trialQuota.todayDailyCap} · 累计 {user.trialQuota.lifetimeUsed}/{user.trialQuota.lifetimeCap}</span>
-              <span>5 Agent 运营 {user.trialQuota.autopilotToday}/{user.trialQuota.autopilotCap}/日 · 抓取 {user.trialQuota.scrapeToday}/{user.trialQuota.scrapeCap}/日</span>
+              <span>
+                {user.trialQuota.label || "今日额度"} {user.trialQuota.todayTotal}/{user.trialQuota.todayDailyCap}
+                {user.trialQuota.lifetimeCap != null
+                  ? ` · 累计 ${user.trialQuota.lifetimeUsed}/${user.trialQuota.lifetimeCap}`
+                  : ""}
+              </span>
+              {user.trialQuota.autopilotCap != null ? (
+                <span>
+                  5 Agent 运营 {user.trialQuota.autopilotToday}/{user.trialQuota.autopilotCap}/日 · 抓取{" "}
+                  {user.trialQuota.scrapeToday}/{user.trialQuota.scrapeCap}/日
+                </span>
+              ) : null}
             </div>
+          ) : null}
+          {!isBetaMode && user?.proTrialActive === false && user?.effectivePlanId === "free" && !user?.subscriptionActive && (
+            <em>免费版每日 {user?.dailyLimit || 8} 次 · 升级成长版解锁插件自动发送</em>
           )}
-          {!isBetaMode && !user?.trialActive && user?.plan === "trial" && <em>试用期结束，请订阅后继续使用</em>}
-          {!isBetaMode && !storeConnected && !(user?.plan === "trial" && user?.trialActive) && <em>建议配置店铺 API 以便付费套餐深度接入</em>}
+          {!isBetaMode && !storeConnected && user?.effectivePlanId !== "free" && (
+            <em>建议安装 Chrome 插件并导入经营 CSV</em>
+          )}
           <button type="button" onClick={() => setShowSubscription(true)}>查看/升级订阅</button>
           {extensionInstallAvailable(user, isBetaMode) ? (
             <button type="button" onClick={openExtensionInstallGuide}>安装 TikTok 插件</button>
@@ -3444,8 +3588,24 @@ function Workspace() {
           </div>
         </button>
 
-        <div className="side-label">专业 Agent</div>
-        {agents.map((agent) => {
+        <div className="side-label">内容生产</div>
+        {agents.filter((agent) => !agent.tiktokPanel).map((agent) => {
+          const Icon = agent.icon;
+          return (
+            <button key={agent.id} className={activeId === agent.id ? "side-item active" : "side-item"} onClick={() => selectAgent(agent.id)}>
+              <span>
+                <Icon size={18} />
+              </span>
+              <div>
+                <strong>{agent.name}</strong>
+                <small>{agent.desc}</small>
+              </div>
+            </button>
+          );
+        })}
+
+        <div className="side-label">TikTok 店铺 · 插件 / CSV</div>
+        {agents.filter((agent) => agent.tiktokPanel).map((agent) => {
           const Icon = agent.icon;
           return (
             <button key={agent.id} className={activeId === agent.id ? "side-item active" : "side-item"} onClick={() => selectAgent(agent.id)}>
@@ -3541,6 +3701,7 @@ function Workspace() {
               <div>
                 <h3>{activeId === WORKSPACE_AUTOPILOT_ID ? "自动生成结果" : `${activeAgent.name} 输出`}</h3>
                 <p>{activeId === WORKSPACE_AUTOPILOT_ID ? "单轮回复内依次输出：选品、内容、Listing、业绩诊断、广告库存利润；不含「AI 客服自动应答」（请在左侧单独使用客服 Agent 生成话术）。适合需要表格时请模型输出 Markdown 表格。" : activeAgent.desc}</p>
+                <TikTokAgentHint agentId={activeId} />
               </div>
               <div className="output-actions">
                 <button type="button" onClick={copyAnswer}>复制</button>
@@ -3548,11 +3709,61 @@ function Workspace() {
                 <button type="button" onClick={() => downloadAnswer("html")}>导出 HTML</button>
               </div>
             </div>
-            <StructuredAgentPreview agentId={activeAgent?.id} />
-            <ResultDocument content={panel.answer} streaming={isRunning && runningPanelId === activeId} />
+            <div className="output-body">
+            {activeId === "growth" ? (
+              <GrowthDiagnosisPanel
+                summary={extSummary}
+                running={isRunning && runningPanelId === "growth"}
+                note={panel.tiktokNote}
+                onNoteChange={(v) => patchPanel("growth", { tiktokNote: v })}
+                metricsSection={metricsImportBlock}
+                onRun={() => runAgent({ input: agents.find((a) => a.id === "growth")?.prompt })}
+              />
+            ) : null}
+            {activeId === "profit" ? (
+              <ProfitWorkbenchPanel
+                summary={extSummary}
+                running={isRunning && runningPanelId === "profit"}
+                note={panel.tiktokNote}
+                onNoteChange={(v) => patchPanel("profit", { tiktokNote: v })}
+                manualCost={panel.manualCost}
+                onManualCostChange={(v) => patchPanel("profit", { manualCost: v })}
+                profitMode={panel.profitMode}
+                onProfitModeChange={(v) => patchPanel("profit", { profitMode: v })}
+                metricsSection={metricsImportBlock}
+                onRun={(mode) =>
+                  runAgent({
+                    profitMode: mode,
+                    useStoreMetrics: mode === "precise" || panel.attachStoreMetrics,
+                    input: agents.find((a) => a.id === "profit")?.prompt,
+                  })
+                }
+              />
+            ) : null}
+            {activeId === "service" ? (
+              <CsControlConsole
+                authHeaders={authHeaders}
+                showToast={showToast}
+                formatError={formatError}
+                summary={extSummary}
+                onRefreshSummary={reloadExtSummary}
+                onOpenExtensionGuide={openExtensionInstallGuide}
+                drillText={panel.csDrillText}
+                onDrillTextChange={(v) => patchPanel("service", { csDrillText: v })}
+                onDrillRun={runCsDrill}
+                drillResult={panel.csDrillResult}
+                drillBusy={csDrillBusy}
+              />
+            ) : null}
+            {!isTikTokAgent ? <StructuredAgentPreview agentId={activeAgent?.id} /> : null}
+            {!isTikTokAgent || panel.answer ? (
+              <ResultDocument content={panel.answer} streaming={isRunning && runningPanelId === activeId} />
+            ) : null}
+            </div>
           </section>
         </div>
 
+        {!isTikTokAgent ? (
         <section className="composer">
           {canUseScraper && (
             <div className="scrape-config">
@@ -3743,6 +3954,7 @@ function Workspace() {
             </div>
           )}
         </section>
+        ) : null}
       </section>
     </main>
   );

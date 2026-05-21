@@ -20,6 +20,7 @@ import {
   getUserById,
   incrementUsage,
   listPlans,
+  listPublicPlans,
   listStoreConnections,
   listTasks,
   loginUser,
@@ -488,6 +489,7 @@ app.get("/api/me", authMiddleware, (req, res) => {
     user: sanitizeUser(req.user),
     tasks: listTasks(req.user.id),
     plans: listPlans(),
+    publicPlans: listPublicPlans(req.user),
     storeConnections: connections,
     storeConnection: connections[0] || null,
   });
