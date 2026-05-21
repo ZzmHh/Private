@@ -1,6 +1,11 @@
 import React from "react";
-import { Chrome, Download, ExternalLink, ShieldCheck, X } from "lucide-react";
+import { Globe, Download, ExternalLink, ShieldCheck, X } from "lucide-react";
 import { extensionInstallConfig } from "./extensionInstallConfig.js";
+import { trackEvent } from "./lib/analytics.js";
+
+function trackExtensionInstall(source) {
+  trackEvent("extension_install_click", { source }, { token: localStorage.getItem("fanmeng_token") || "" });
+}
 
 const STEPS = [
   {
@@ -47,14 +52,20 @@ export function ExtensionInstallPanel({ compact = false, onDismiss }) {
 
       <div className="extension-install-actions">
         {hasStore ? (
-          <a className="continue-checkout slim extension-install-primary" href={chromeStoreUrl} target="_blank" rel="noreferrer">
-            <Chrome size={16} />
+          <a
+            className="continue-checkout slim extension-install-primary"
+            href={chromeStoreUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => trackExtensionInstall("chrome_store")}
+          >
+            <Globe size={16} />
             从 Chrome 应用商店安装
           </a>
         ) : (
           <span className="extension-install-note">Chrome 商店链接未配置，请先用下方 ZIP 安装（运营可在 .env 填 VITE_EXTENSION_CWS_URL）。</span>
         )}
-        <a className="header-ghost slim" href={zipDownloadUrl} download="fanmeng-tiktok-extension.zip">
+        <a className="header-ghost slim" href={zipDownloadUrl} download="fanmeng-tiktok-extension.zip" onClick={() => trackExtensionInstall("zip_download")}>
           <Download size={16} />
           下载 ZIP（离线 / 开发者模式）
         </a>

@@ -11,7 +11,8 @@
     "build:all": "npm run build:extension && npm run build",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "migrate:db": "node scripts/migrate-json-to-sqlite.mjs"
+    "migrate:db": "node scripts/migrate-json-to-sqlite.mjs",
+    "release:extension": "node scripts/release-extension.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.9.1",

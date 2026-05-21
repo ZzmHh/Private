@@ -2095,6 +2095,96 @@ footer a {
   font-size: 26px;
 }
 
+.admin-analytics-section {
+  margin: 0 0 22px;
+  padding: 20px;
+  border: 1px solid #edf1f7;
+  border-radius: 18px;
+  background: #fbfcff;
+}
+
+.admin-analytics-section h3 {
+  margin: 0 0 8px;
+}
+
+.admin-funnel {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.admin-funnel-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-funnel-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #344054;
+}
+
+.admin-funnel-bar-wrap {
+  height: 8px;
+  border-radius: 999px;
+  background: #eaecf0;
+  overflow: hidden;
+}
+
+.admin-funnel-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #155eef, #7c3aed);
+  min-width: 2px;
+}
+
+.admin-funnel-stat {
+  font-size: 12px;
+  color: #667085;
+  white-space: nowrap;
+}
+
+.admin-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-analytics-card {
+  padding: 14px;
+  border: 1px solid #edf1f7;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.admin-analytics-card h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.admin-daily-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-daily-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #667085;
+}
+
+.admin-daily-list strong {
+  color: #101828;
+  font-size: 13px;
+}
+
 .admin-sections {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -36,6 +36,7 @@ import {
   EXTENSION_INSTALL_DISMISS_KEY,
   extensionInstallAvailable,
 } from "./extensionInstallConfig.js";
+import { initUmami, trackEvent, trackPageView, trackCtaRegister } from "./lib/analytics.js";
 
 const pricingPlans = [
   {
@@ -738,6 +739,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
       setRegisterSendInfo({ emailDelivered: data.emailDelivered, devCode: data.devCode });
       setVerificationCode(data.devCode ? String(data.devCode) : "");
       setResendCooldownUntil(Date.now() + 60_000);
+      trackEvent("register_start", { email: authForm.email.trim() });
     } catch (error) {
       setAuthError(formatError(error));
     } finally {
@@ -768,6 +770,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      trackEvent("register_complete", { email: authForm.email.trim() });
       resetRegisterFlow();
       onLogin(data);
     } catch (error) {
@@ -1640,6 +1643,10 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
   }, [user?.plan]);
 
   useEffect(() => {
+    trackEvent("subscription_view", { plan: user?.plan || "trial" }, { token: localStorage.getItem("fanmeng_token") || "" });
+  }, []);
+
+  useEffect(() => {
     if (!checkoutPlan || checkoutPlan.id === "enterprise") {
       setPaymentConfig(null);
       return;
@@ -1696,6 +1703,7 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setCheckoutOrder(data.order);
+      trackEvent("order_create", { planId: plan.id, orderId: data.order?.id }, { token: localStorage.getItem("fanmeng_token") || "" });
       showToast("订单已创建，请按下方金额扫码付款，并备注订单号。");
     } catch (error) {
       showToast(formatError(error));
@@ -1716,6 +1724,7 @@ function SubscriptionModal({ onClose, showToast, authHeaders, onUserUpdate, user
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setCheckoutOrder(data.order);
+      trackEvent("order_claim_paid", { orderId: data.order?.id }, { token: localStorage.getItem("fanmeng_token") || "" });
       showToast("已提交付款提醒，核实到账后将为你开通套餐。");
     } catch (error) {
       showToast(formatError(error));
@@ -2526,6 +2535,55 @@ function AdminModal({ summary, onClose, authHeaders, onReloadSummary, showToast 
             </div>
           ))}
         </div>
+        {summary.analytics ? (
+          <section className="admin-analytics-section">
+            <h3>转化漏斗（近 {summary.analytics.days} 天）</h3>
+            <p className="admin-hint">基于会话去重；Umami 看页面 PV，此处看注册/订阅/插件等业务事件。</p>
+            <div className="admin-funnel">
+              {(summary.analytics.funnel || []).map((step) => (
+                <div key={step.event} className="admin-funnel-row">
+                  <span className="admin-funnel-label">{step.label}</span>
+                  <div className="admin-funnel-bar-wrap">
+                    <div className="admin-funnel-bar" style={{ width: `${Math.min(100, step.rate || 0)}%` }} />
+                  </div>
+                  <span className="admin-funnel-stat">{step.count} · {step.rate}%</span>
+                </div>
+              ))}
+            </div>
+            <div className="admin-analytics-grid">
+              <div className="admin-analytics-card">
+                <h4>每日事件量</h4>
+                {(summary.analytics.daily || []).length ? (
+                  <ul className="admin-daily-list">
+                    {summary.analytics.daily.map((row) => (
+                      <li key={row.date}>
+                        <span>{row.date}</span>
+                        <strong>{row.total}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="admin-hint">暂无数据</p>
+                )}
+              </div>
+              <div className="admin-analytics-card">
+                <h4>热门页面</h4>
+                {(summary.analytics.topPages || []).length ? (
+                  <ul className="admin-daily-list">
+                    {summary.analytics.topPages.map((row) => (
+                      <li key={row.path}>
+                        <span>{row.path}</span>
+                        <strong>{row.views}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="admin-hint">暂无数据</p>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : null}
         <div className="admin-sections">
           <section className="admin-grant-section">
             <h3>手动授权套餐（线下收款 / 对公确认后）</h3>
@@ -2603,6 +2661,7 @@ function Workspace() {
   const [tasks, setTasks] = useState([]);
   const [showSubscription, setShowSubscription] = useState(false);
   const [showStoreApiModal, setShowStoreApiModal] = useState(false);
+  const [storeDataNudge, setStoreDataNudge] = useState(null);
   const [showExtensionInstall, setShowExtensionInstall] = useState(false);
   const [extensionInstallDismissed, setExtensionInstallDismissed] = useState(
     () => localStorage.getItem(EXTENSION_INSTALL_DISMISS_KEY) === "1",
@@ -2782,6 +2841,15 @@ function Workspace() {
   }, [token, user?.trialEndingSoon, isBetaMode]);
 
   useEffect(() => {
+    initUmami();
+  }, []);
+
+  useEffect(() => {
+    if (token) return;
+    trackPageView(routeHash || "home");
+  }, [token, routeHash]);
+
+  useEffect(() => {
     const handler = () => setRouteHash(readRouteHash());
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
@@ -2797,6 +2865,7 @@ function Workspace() {
     setToken(data.token);
     setUser(data.user);
     setTasks(data.tasks || []);
+    trackEvent("login_success", {}, { token: data.token });
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
     setRouteHash(readRouteHash());
   }
@@ -2838,6 +2907,7 @@ function Workspace() {
   }
 
   function goPublicRegister() {
+    trackCtaRegister();
     window.location.hash = "register";
     window.scrollTo(0, 0);
   }

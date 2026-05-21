@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { readDb, writeDb } from "./repositories/index.js";
+import { getProductAnalytics } from "./productEvents.js";
 import { createError } from "./lib/errors.js";
 
 export { createError };
@@ -955,18 +956,24 @@ export function getAdminSummary() {
   const today = new Date().toISOString().slice(0, 10);
   const todaysLogs = db.usageLogs.filter((log) => log.createdAt?.startsWith(today));
   const paidUsers = db.users.filter((user) => user.plan !== "trial" && isSubscriptionActive(user));
+  const analytics = getProductAnalytics({ days: 7 });
 
   return {
     metrics: {
-      users: db.users.length,
-      paidUsers: paidUsers.length,
-      orders: db.orders.length,
-      pendingOrders: db.orders.filter((order) => order.status === "pending").length,
-      awaitingConfirmOrders: db.orders.filter((order) => order.status === "awaiting_confirm").length,
-      callsToday: todaysLogs.length,
-      failedCallsToday: todaysLogs.filter((log) => log.status === "failed").length,
-      feedback: db.feedback.length,
+      用户总数: db.users.length,
+      付费用户: paidUsers.length,
+      订单总数: db.orders.length,
+      待付款订单: db.orders.filter((order) => order.status === "pending").length,
+      待确认收款: db.orders.filter((order) => order.status === "awaiting_confirm").length,
+      今日API调用: todaysLogs.length,
+      今日失败调用: todaysLogs.filter((log) => log.status === "failed").length,
+      反馈条数: db.feedback.length,
+      今日埋点事件: analytics.highlights.eventsToday,
+      今日新注册: analytics.highlights.registrationsToday,
+      今日创建订单: analytics.highlights.ordersToday,
+      今日插件安装点击: analytics.highlights.extensionClicksToday,
     },
+    analytics,
     users: db.users.slice(0, 120).map(sanitizeUser),
     orders: db.orders.slice(0, 50),
     usageLogs: db.usageLogs.slice(0, 80),

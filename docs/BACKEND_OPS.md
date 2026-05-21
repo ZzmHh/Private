@@ -72,3 +72,18 @@ pm2 logs fanmeng-api
 cp data/backups/app-db-YYYY-MM-DD-HH-mm-ss.json data/app-db.json
 # 重启服务
 ```
+
+## 访问统计与转化漏斗
+
+- **Umami**（页面 PV/来源）：见 [docs/UMAMI_SETUP.md](UMAMI_SETUP.md)
+- **业务埋点**：`POST /api/track` · 运营后台「转化漏斗」面板
+- **SEO**：`/sitemap.xml`、`/robots.txt`（生产请设 `APP_PUBLIC_URL`）
+
+插件发版：
+
+```bash
+npm run release:extension        # patch 版本 + 构建 ZIP + 打 tag
+git push origin master && git push origin extension-vX.Y.Z
+```
+
+GitHub Actions 会在收到 `extension-v*` 标签后自动发 Release（需配置仓库 Variables/Secrets）。

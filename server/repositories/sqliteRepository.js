@@ -87,6 +87,15 @@ function initSchema(database) {
       user_id TEXT PRIMARY KEY,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS product_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      event TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      data TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_product_events_created ON product_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_product_events_event ON product_events(event);
     CREATE INDEX IF NOT EXISTS idx_usage_logs_user_created ON usage_logs(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
@@ -173,6 +182,11 @@ export function readDb() {
     db.csAutomationSettings[row.user_id] = JSON.parse(row.data);
   }
 
+  db.productEvents = database
+    .prepare("SELECT data FROM product_events ORDER BY created_at DESC")
+    .all()
+    .map((r) => JSON.parse(r.data));
+
   return normalizeDb(db);
 }
 
@@ -239,6 +253,14 @@ export function writeDb(data) {
     for (const [userId, settings] of Object.entries(normalized.csAutomationSettings)) {
       upsertSettings.run(userId, JSON.stringify(settings));
     }
+
+    replaceTable(database, "product_events", normalized.productEvents, (e) => [
+      e.id,
+      e.userId || null,
+      e.event,
+      e.createdAt,
+      JSON.stringify(e),
+    ]);
   });
 
   tx();

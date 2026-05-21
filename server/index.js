@@ -68,7 +68,10 @@ import { errorHandler, apiNotFoundHandler } from "./middleware/errorHandler.js";
 import { asyncHandler } from "./middleware/asyncHandler.js";
 import { validateBody, validators } from "./validate/index.js";
 import { registerHealthRoutes } from "./routes/health.js";
+import { registerSeoRoutes } from "./routes/seo.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { startDbBackupScheduler } from "./jobs/dbBackup.js";
+import { maybeRecordFirstAgentRun, recordProductEvent } from "./productEvents.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -196,6 +199,8 @@ app.use("/api/extension", extensionLimiter);
 app.use("/api/agents/run", agentRunLimiter);
 app.use("/api/autopilot/run", agentRunLimiter);
 
+registerSeoRoutes(app);
+
 app.use("/payment", express.static(path.join(__dirname, "../public/payment")));
 app.use("/downloads", express.static(path.join(__dirname, "../public/downloads")));
 app.use(express.static(path.join(__dirname, "../public")));
@@ -211,6 +216,13 @@ registerExtensionRoutes(app, {
 registerStoreMetricsRoutes(app, { authMiddleware });
 
 registerHealthRoutes(app, { providerName, model, apiKey });
+
+registerAnalyticsRoutes(app, {
+  authMiddleware,
+  adminMiddleware,
+  verifyToken,
+  getUserById,
+});
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -489,6 +501,13 @@ app.post("/api/billing/orders", authMiddleware, (req, res) => {
   try {
     const { planId, paymentMethod } = req.body || {};
     const order = createOrder({ userId: req.user.id, planId, paymentMethod });
+    recordProductEvent({
+      event: "order_create",
+      userId: req.user.id,
+      sessionId: `user:${req.user.id}`,
+      path: "/#subscription",
+      properties: { planId, orderId: order.id },
+    });
     res.json({ order });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || "订单创建失败。" });
@@ -502,6 +521,13 @@ app.post("/api/billing/orders/:orderId/claim-paid", authMiddleware, (req, res) =
       userId: req.user.id,
       orderId: req.params.orderId,
       payerNote,
+    });
+    recordProductEvent({
+      event: "order_claim_paid",
+      userId: req.user.id,
+      sessionId: `user:${req.user.id}`,
+      path: "/#subscription",
+      properties: { orderId: order.id },
     });
     res.json({ order });
   } catch (error) {
@@ -1128,6 +1154,15 @@ app.post("/api/agents/run", authMiddleware, validateBody(validators.agentRun), a
       input: enrichedInput,
       answer,
       metadata: { usage, scrape: scrapeResult },
+    });
+
+    maybeRecordFirstAgentRun(req.user.id);
+    recordProductEvent({
+      event: "agent_run",
+      userId: req.user.id,
+      sessionId: `user:${req.user.id}`,
+      path: "/workspace",
+      properties: { agentId },
     });
 
     res.json({
