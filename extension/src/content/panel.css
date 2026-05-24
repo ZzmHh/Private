@@ -53,6 +53,148 @@
   gap: 8px;
 }
 
+#fanmeng-ai-panel-root .fm-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+#fanmeng-ai-panel-root .fm-version-tag {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
+  letter-spacing: 0.04em;
+}
+
+#fanmeng-ai-panel-root .fm-plan-line[data-kind="warn"] {
+  color: #b45309;
+}
+
+#fanmeng-ai-panel-root .fm-upgrade-hint {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  line-height: 1.45;
+}
+
+#fanmeng-ai-panel-root .fm-upgrade-hint.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-info-bar {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+}
+
+#fanmeng-ai-panel-root .fm-route-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+#fanmeng-ai-panel-root .fm-route-chip.is-neutral {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+#fanmeng-ai-panel-root .fm-route-chip.is-pending {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+#fanmeng-ai-panel-root .fm-route-chip.is-auto {
+  color: #166534;
+  background: #dcfce7;
+}
+
+#fanmeng-ai-panel-root .fm-route-chip.is-draft {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+#fanmeng-ai-panel-root .fm-route-explainer {
+  margin: -2px 0 0;
+}
+
+#fanmeng-ai-panel-root .fm-pack-block {
+  display: grid;
+  gap: 6px;
+}
+
+#fanmeng-ai-panel-root .fm-pack-summary {
+  margin: 0;
+  font-weight: 700;
+}
+
+#fanmeng-ai-panel-root .fm-pack-summary[data-ready="1"] {
+  color: #15803d;
+}
+
+#fanmeng-ai-panel-root .fm-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+#fanmeng-ai-panel-root .fm-pack-cell {
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px dashed rgba(15, 23, 42, 0.18);
+  background: #f8fafc;
+  font-size: 10px;
+  text-align: center;
+  line-height: 1.25;
+  color: #64748b;
+}
+
+#fanmeng-ai-panel-root .fm-pack-cell.is-done {
+  border-style: solid;
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+  font-weight: 700;
+}
+
+#fanmeng-ai-panel-root .fm-section-label {
+  margin: 4px 0 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.45);
+}
+
+#fanmeng-ai-panel-root .fm-draft-row {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+#fanmeng-ai-panel-root .fm-draft-row.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-draft-hint {
+  margin: 0;
+  color: #1e40af;
+}
+
+#fanmeng-ai-panel-root .fm-draft-send {
+  width: 100%;
+}
+
 #fanmeng-ai-panel-root .fm-status {
   margin: 0;
   font-size: 12px;

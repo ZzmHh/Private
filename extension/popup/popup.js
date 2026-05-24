@@ -154,30 +154,6 @@ document.getElementById("openFaqWeb").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("openMockCs").addEventListener("click", () => {
-  const apiBase = document.getElementById("apiBase").value.trim() || "http://127.0.0.1:8787";
-  let mockUrl = "http://127.0.0.1:8787/mock/tiktok-shop/index.html";
-  try {
-    const u = new URL(apiBase.includes("://") ? apiBase : `http://${apiBase}`);
-    mockUrl = `${u.origin}/mock/tiktok-shop/index.html`;
-  } catch {
-    /* keep default */
-  }
-  chrome.tabs.create({ url: mockUrl });
-});
-
-document.getElementById("openMockChat").addEventListener("click", () => {
-  const apiBase = document.getElementById("apiBase").value.trim() || "http://127.0.0.1:8787";
-  let mockUrl = "http://127.0.0.1:8787/mock/tiktok-shop/chat.html";
-  try {
-    const u = new URL(apiBase.includes("://") ? apiBase : `http://${apiBase}`);
-    mockUrl = `${u.origin}/mock/tiktok-shop/chat.html`;
-  } catch {
-    /* keep default */
-  }
-  chrome.tabs.create({ url: mockUrl });
-});
-
 document.getElementById("openSeller").addEventListener("click", () => {
   chrome.tabs.create({ url: FanmengTikTok.DEFAULT_SELLER_URL });
 });

@@ -1,5 +1,5 @@
 /**
- * TikTok 卖家中心 · 凡梦 AI 浮动面板 v0.3
+ * TikTok 卖家中心 · 凡梦 AI 浮动面板
  */
 (function initFanmengPanel() {
   if (window.__fanmengPanelLoaded) return;
@@ -47,6 +47,90 @@
     return cachedEntitlements;
   }
 
+  function panelVersion() {
+    return (typeof FanmengExtensionConfig !== "undefined" && FanmengExtensionConfig.VERSION) || "dev";
+  }
+
+  function hasServiceAgent(ent) {
+    return (ent?.agents || []).includes("service");
+  }
+
+  const ROUTE_TIER_LABELS = {
+    faq: "FAQ 模板",
+    aftersales: "售后安抚",
+    night_ai: "夜间 AI",
+    night_fallback: "夜间等候",
+    day_ai: "白天 AI",
+    product_ai: "商品 AI",
+    manual: "人工草稿",
+  };
+
+  const ROUTE_ACTION_LABELS = {
+    auto_send: "已自动发送",
+    pending_confirm: "待您确认",
+    draft: "草稿待发送",
+  };
+
+  function setRouteChip(routed = {}) {
+    const chip = document.querySelector(`#${PANEL_ID} .fm-route-chip`);
+    const explain = document.querySelector(`#${PANEL_ID} .fm-route-explainer`);
+    if (!chip) return;
+
+    const tier = routed.tier || "";
+    const action = routed.action || "";
+    const tierLabel = ROUTE_TIER_LABELS[tier] || tier || "—";
+    const actionLabel = ROUTE_ACTION_LABELS[action] || action || "";
+
+    chip.className = "fm-route-chip";
+    if (action === "pending_confirm") chip.classList.add("is-pending");
+    else if (action === "auto_send") chip.classList.add("is-auto");
+    else if (action === "draft") chip.classList.add("is-draft");
+    else chip.classList.add("is-neutral");
+
+    chip.textContent = actionLabel ? `${tierLabel} · ${actionLabel}` : tierLabel;
+
+    if (explain) {
+      let text = routed.reason || "";
+      if (action === "pending_confirm") {
+        text = text || "AI 已生成回复，请确认后发送给买家。";
+      } else if (action === "draft") {
+        text =
+          text ||
+          (tier === "faq"
+            ? "FAQ 模板命中：请核对草稿，点下方「填入并发送」。"
+            : "已生成草稿，请核对后点「填入并发送」。");
+      } else if (action === "auto_send") {
+        text = text || "系统已自动填入聊天框或已发送。";
+      }
+      explain.textContent = text;
+      explain.classList.toggle("hidden", !text);
+    }
+  }
+
+  function clearRouteChip() {
+    const chip = document.querySelector(`#${PANEL_ID} .fm-route-chip`);
+    const explain = document.querySelector(`#${PANEL_ID} .fm-route-explainer`);
+    if (chip) {
+      chip.className = "fm-route-chip is-neutral";
+      chip.textContent = "等待操作";
+    }
+    if (explain) {
+      explain.textContent = "";
+      explain.classList.add("hidden");
+    }
+  }
+
+  function showUpgradeHint(message) {
+    const box = document.querySelector(`#${PANEL_ID} .fm-upgrade-hint`);
+    if (!box) return;
+    box.textContent = message;
+    box.classList.remove("hidden");
+  }
+
+  function hideUpgradeHint() {
+    document.querySelector(`#${PANEL_ID} .fm-upgrade-hint`)?.classList.add("hidden");
+  }
+
   function applyPaywallUI(ent) {
     const paywall = document.querySelector(`#${PANEL_ID} .fm-paywall`);
     const text = document.querySelector(`#${PANEL_ID} .fm-paywall-text`);
@@ -54,6 +138,7 @@
     if (!paywall) return;
 
     const allowed = Boolean(ent?.extensionAllowed);
+    const serviceOk = hasServiceAgent(ent);
     paywall.classList.toggle("hidden", allowed);
 
     if (text) {
@@ -64,13 +149,34 @@
 
     if (planLine) {
       planLine.textContent = allowed ? FanmengBilling.planStatusLine(ent) : "";
-      planLine.dataset.kind = ent?.trialActive ? "warn" : allowed ? "ok" : "err";
+      planLine.dataset.kind = ent?.trialActive ? "warn" : allowed ? (serviceOk ? "ok" : "warn") : "err";
     }
 
     document.querySelectorAll(`#${PANEL_ID} .fm-paid-action`).forEach((btn) => {
-      btn.disabled = !allowed;
-      btn.title = allowed ? "" : "需要有效订阅";
+      const needsService = btn.classList.contains("fm-cs-action");
+      const blocked = !allowed || (needsService && !serviceOk);
+      btn.disabled = blocked;
+      if (!allowed) btn.title = "需要有效订阅";
+      else if (needsService && !serviceOk) btn.title = "智能客服需成长版及以上";
+      else btn.title = btn.dataset.defaultTitle || "";
     });
+
+    if (allowed && !serviceOk) {
+      showUpgradeHint("当前套餐可同步页面；智能客服（手动生成话术）需升级成长版。");
+    } else {
+      hideUpgradeHint();
+    }
+  }
+
+  async function requireCsAgent(fromAuto = false) {
+    await requireExtensionAccess(fromAuto);
+    const ent = cachedEntitlements || (await refreshEntitlements());
+    if (hasServiceAgent(ent)) return ent;
+    if (!fromAuto) {
+      setStatus("当前套餐不含智能客服 Agent，请升级成长版及以上", "err");
+      showUpgradeHint("升级成长版后可使用：FAQ 自动回复、商品 AI 待确认、多语言话术。");
+    }
+    throw new Error("NO_SERVICE_AGENT");
   }
 
   async function requireExtensionAccess(fromAuto = false) {
@@ -270,15 +376,20 @@
   }
 
   async function refreshDiagnosisProgress(force = false) {
-    const el = document.querySelector(`#${PANEL_ID} .fm-diag-progress`);
-    if (!el || !activeShop) return;
+    const grid = document.querySelector(`#${PANEL_ID} .fm-pack-grid`);
+    const summaryEl = document.querySelector(`#${PANEL_ID} .fm-pack-summary`);
+    if (!grid || !activeShop) return;
     const p = await FanmengDiagnosisPack.fetchProgress(activeShop.id, { force });
-    const parts = FanmengDiagnosisPack.keys.map((k) => {
+    grid.innerHTML = "";
+    for (const k of FanmengDiagnosisPack.keys) {
       const ok = !p.missing.includes(k);
-      return `${ok ? "✓" : "○"}${FanmengDiagnosisPack.labelForKey(k)}`;
-    });
-    const sourceHint = p.source === "server" ? "" : "（离线缓存）";
-    el.textContent = `诊断包 ${p.done}/${p.total}${sourceHint}：${parts.join(" ")}`;
+      grid.appendChild(el("div", ok ? "fm-pack-cell is-done" : "fm-pack-cell", FanmengDiagnosisPack.labelForKey(k)));
+    }
+    if (summaryEl) {
+      const sourceHint = p.source === "server" ? "" : " · 离线缓存";
+      summaryEl.textContent = `诊断包 ${p.done}/${p.total}${sourceHint}`;
+      summaryEl.dataset.ready = p.done >= 2 ? "1" : "0";
+    }
   }
 
   async function refreshTemplateSelect() {
@@ -473,34 +584,46 @@
     document.querySelector(`#${PANEL_ID} .fm-pending-row`)?.classList.add("hidden");
   }
 
-  function showRouteBadge(routed = {}) {
-    const badge = document.querySelector(`#${PANEL_ID} .fm-route-badge`);
-    if (!badge) return;
-    const tier = routed.tier || "";
-    const tierLabel = {
-      faq: "FAQ 模板",
-      aftersales: "售后安抚",
-      night_ai: "夜间 AI",
-      night_fallback: "夜间等候模板",
-      day_ai: "白天 AI",
-      product_ai: "商品 AI",
-      manual: "人工草稿",
-    }[tier] || tier || "—";
-    const action = routed.action || "";
-    const actionLabel = {
-      auto_send: "已/将自动发送",
-      pending_confirm: "待您确认",
-      draft: "草稿",
-    }[action] || action || "";
-    const product = routed.productMatch?.name ? ` · 商品：${routed.productMatch.name}` : "";
-    const conf = routed.aiConfidence ? ` · 置信度：${routed.aiConfidence}` : "";
-    badge.textContent = `${tierLabel} · ${actionLabel}${product}${conf}`;
-    badge.classList.remove("hidden");
+  function hideDraftActionRow() {
+    document.querySelector(`#${PANEL_ID} .fm-draft-row`)?.classList.add("hidden");
   }
 
   function ensurePendingConfirmRow() {
-    const row = document.querySelector(`#${PANEL_ID} .fm-pending-row`);
-    if (row) row.classList.remove("hidden");
+    hideDraftActionRow();
+    document.querySelector(`#${PANEL_ID} .fm-pending-row`)?.classList.remove("hidden");
+  }
+
+  function ensureDraftActionRow(routed = {}) {
+    hidePendingConfirmRow();
+    const row = document.querySelector(`#${PANEL_ID} .fm-draft-row`);
+    const hint = document.querySelector(`#${PANEL_ID} .fm-draft-hint`);
+    if (!row) return;
+    row.classList.remove("hidden");
+    if (hint) {
+      hint.textContent =
+        routed.reason ||
+        (routed.tier === "faq"
+          ? "FAQ 模板已生成草稿，请核对后发送。"
+          : "回复草稿已生成，请核对后发送。");
+    }
+  }
+
+  async function sendReplyDraftFromPanel() {
+    const text = document.querySelector(`#${PANEL_ID} .fm-reply-text`)?.value?.trim();
+    if (!text) {
+      setStatus("没有可发送的内容", "err");
+      return;
+    }
+    const filled = fillReplyInput(text);
+    if (!filled) {
+      setStatus("未找到聊天输入框，请手动复制", "err");
+      return;
+    }
+    await sleep(180);
+    const sent = await tryAutoClickSendWithRetry();
+    hideDraftActionRow();
+    hidePendingConfirmRow();
+    setStatus(sent ? "已填入并发送给买家" : "已填入聊天框，请手动点发送", sent ? "ok" : "busy");
   }
 
   async function applyRoutedCsResult(res, opts = {}) {
@@ -510,22 +633,15 @@
     const box = document.querySelector(`#${PANEL_ID} .fm-reply-text`);
     if (box) box.value = text;
 
-    const tierLabel = {
-      faq: "FAQ 模板",
-      aftersales: "售后安抚",
-      night_ai: "夜间 AI",
-      night_fallback: "夜间等候",
-      day_ai: "白天 AI",
-      product_ai: "商品 AI",
-      manual: "人工草稿",
-    }[routed.tier || res.tier] || routed.tier || "";
+    const tierLabel = ROUTE_TIER_LABELS[routed.tier || res.tier] || routed.tier || "";
+    const action = routed.action || res.action || "";
+    const shouldAutoSend = action === "auto_send";
+    const shouldPending = action === "pending_confirm";
+    const shouldDraft = action === "draft";
 
-    const shouldAutoSend = routed.action === "auto_send" || res.action === "auto_send";
-    const shouldPending =
-      routed.action === "pending_confirm" || res.action === "pending_confirm";
+    setRouteChip(routed);
 
     if (shouldPending) {
-      showRouteBadge(routed);
       ensurePendingConfirmRow();
       setStatus(
         routed.productMatch?.name
@@ -542,8 +658,24 @@
 
     hidePendingConfirmRow();
 
+    if (shouldDraft) {
+      ensureDraftActionRow(routed);
+      setStatus(
+        fromAuto
+          ? `${tierLabel}草稿已生成${via}，请点「填入并发送」`
+          : `${tierLabel}：${routed.reason || "请核对草稿后发送"}${via}`,
+        routed.notifySeller ? "err" : "ok",
+      );
+      if (routed.notifySeller && routed.sellerMessage) {
+        setStatus(routed.sellerMessage, "err");
+        await refreshCsAlerts();
+      }
+      return;
+    }
+
+    hideDraftActionRow();
+
     if (shouldAutoSend) {
-      showRouteBadge(routed);
       const csSettings = await getCsSettingsCached();
       const filled = fillReplyInput(text);
       if (!filled) {
@@ -563,7 +695,6 @@
         sent ? "ok" : "busy",
       );
     } else {
-      showRouteBadge(routed);
       setStatus(
         fromAuto
           ? `已生成${tierLabel}${via}（${routed.reason || "请核对后发送"}）`
@@ -818,7 +949,7 @@
   async function suggestForLatestMessage(buyerTextOverride, opts = {}) {
     const { fromAuto = false, fromSelection = false } = opts;
     try {
-      await requireExtensionAccess(fromAuto);
+      await requireCsAgent(fromAuto);
     } catch {
       return;
     }
@@ -879,9 +1010,8 @@
     await suggestForLatestMessage(text, { fromSelection: true });
   }
 
-  function showResult(text) {
-    const box = document.querySelector(`#${PANEL_ID} .fm-result`);
-    if (box) box.value = text;
+  function showResult(_text) {
+    /* v0.4.12+ 业绩/利润结果在网站展示 */
   }
 
   function buildPanel() {
@@ -891,7 +1021,10 @@
     root.id = PANEL_ID;
 
     const head = el("div", "fm-head");
-    head.appendChild(el("strong", "fm-title", "凡梦AI"));
+    const titleWrap = el("div", "fm-title-wrap");
+    titleWrap.appendChild(el("strong", "fm-title", "凡梦AI"));
+    titleWrap.appendChild(el("span", "fm-version-tag", `v${panelVersion()}`));
+    head.appendChild(titleWrap);
     const headActions = el("div", "fm-head-actions");
     const tutBtn = el("button", "fm-icon-btn fm-tut-btn", "?");
     tutBtn.type = "button";
@@ -914,9 +1047,21 @@
     const planLine = el("p", "fm-plan-line fm-hint", "");
     body.appendChild(planLine);
 
+    const upgradeHint = el("p", "fm-upgrade-hint fm-hint hidden", "");
+    body.appendChild(upgradeHint);
+
+    const infoBar = el("div", "fm-info-bar");
+    infoBar.appendChild(el("span", "fm-route-chip is-neutral", "等待操作"));
+    body.appendChild(infoBar);
+    body.appendChild(el("p", "fm-route-explainer fm-hint hidden", ""));
+
+    const packBlock = el("div", "fm-pack-block");
+    packBlock.appendChild(el("p", "fm-pack-summary fm-hint", "诊断包 0/4"));
+    packBlock.appendChild(el("div", "fm-pack-grid"));
+    body.appendChild(packBlock);
+
     const alertsBox = el("div", "fm-cs-alerts hidden");
     body.appendChild(alertsBox);
-    body.appendChild(el("p", "fm-hint fm-cs-tier-hint", "FAQ 命中自动发 · 白天 AI 需您确认 · 夜间需商品资料+AI评估通过才全自动"));
 
     const tutBox = el("div", "fm-tutorial-box hidden");
     const tutHead = el("div", "fm-tutorial-head");
@@ -938,7 +1083,6 @@
     shopRow.append(shopSelect, bindShopBtn);
 
     body.appendChild(shopRow);
-    body.appendChild(el("p", "fm-diag-progress fm-hint", "诊断包 0/4"));
 
     const guideBox = el("div", "fm-analyze-guide hidden");
     guideBox.appendChild(el("strong", "fm-analyze-guide-title", "分析引导"));
@@ -966,34 +1110,49 @@
     );
     body.appendChild(chatSection);
 
+    body.appendChild(chatSection);
+
+    body.appendChild(el("p", "fm-section-label", "数据同步"));
     const btnRow1 = el("div", "fm-row");
     const syncBtn = el("button", "fm-btn primary fm-paid-action", "同步本页");
     syncBtn.type = "button";
-    const faqSyncBtn = el("button", "fm-btn fm-paid-action", "同步到 FAQ 素材");
+    syncBtn.dataset.defaultTitle = "上传当前页面 KPI / 表格到凡梦";
+    const faqSyncBtn = el("button", "fm-btn fm-paid-action", "同步 FAQ 素材");
     faqSyncBtn.type = "button";
-    faqSyncBtn.title = "抓取本页商品/物流等信息，供网站 AI 生成 FAQ";
-    const csBtn = el("button", "fm-btn fm-paid-action", "手动生成话术");
+    faqSyncBtn.dataset.defaultTitle = "抓取本页商品/物流等信息，供网站 AI 生成 FAQ";
+    btnRow1.append(syncBtn, faqSyncBtn);
+
+    body.appendChild(btnRow1);
+
+    body.appendChild(el("p", "fm-section-label", "智能客服"));
+    const btnRowCs = el("div", "fm-row");
+    const csBtn = el("button", "fm-btn primary fm-paid-action fm-cs-action", "手动生成话术");
     csBtn.type = "button";
+    csBtn.dataset.defaultTitle = "识别买家消息并智能路由 FAQ / AI 回复";
     const faqWebBtn = el("button", "fm-btn fm-paid-action", "网站 · FAQ 生成");
     faqWebBtn.type = "button";
-    faqWebBtn.title = "打开凡梦网站客服控制台，AI 生成 FAQ 模板";
-    btnRow1.append(syncBtn, faqSyncBtn, csBtn);
+    faqWebBtn.dataset.defaultTitle = "打开凡梦网站客服控制台，AI 生成 FAQ 模板";
+    btnRowCs.append(csBtn, faqWebBtn);
+    body.appendChild(btnRowCs);
+    body.appendChild(
+      el("p", "fm-hint fm-cs-tier-hint", "FAQ → 草稿或自动发 · 商品 AI → 待确认 · 复杂问题见上方状态标签"),
+    );
 
-    const btnRowFaq = el("div", "fm-row");
-    btnRowFaq.append(faqWebBtn);
-
+    body.appendChild(el("p", "fm-section-label", "业绩分析（结果在网站）"));
     const btnRow2 = el("div", "fm-row");
-    const growthBtn = el("button", "fm-btn fm-paid-action", "业绩诊断");
+    const growthBtn = el("button", "fm-btn fm-paid-action", "业绩诊断 →");
     growthBtn.type = "button";
-    const profitBtn = el("button", "fm-btn fm-paid-action", "广告库存利润");
+    growthBtn.dataset.defaultTitle = "检查诊断包后打开网站生成结果";
+    const profitBtn = el("button", "fm-btn fm-paid-action", "广告库存利润 →");
     profitBtn.type = "button";
+    profitBtn.dataset.defaultTitle = "检查数据就绪后打开网站分析";
     btnRow2.append(growthBtn, profitBtn);
+    body.appendChild(btnRow2);
 
     const replyLabel = el("label", "fm-label", "客服回复草稿");
-    const routeBadge = el("p", "fm-route-badge fm-hint hidden", "");
     const replyArea = el("textarea", "fm-reply-text");
     replyArea.rows = 4;
-    replyArea.placeholder = "FAQ 命中自动发 · 商品问题 AI 生成后需确认 · 见下方按钮";
+    replyArea.placeholder = "生成的话术会出现在这里；FAQ 为草稿，商品 AI 需确认";
 
     const pendingRow = el("div", "fm-pending-row fm-row hidden");
     const confirmSendBtn = el("button", "fm-btn primary fm-confirm-send", "✓ 确认发送");
@@ -1002,27 +1161,20 @@
     dismissAiBtn.type = "button";
     pendingRow.append(confirmSendBtn, dismissAiBtn);
 
-    confirmSendBtn.addEventListener("click", async () => {
-      const text = document.querySelector(`#${PANEL_ID} .fm-reply-text`)?.value?.trim();
-      if (!text) {
-        setStatus("没有可发送的内容", "err");
-        return;
-      }
-      const filled = fillReplyInput(text);
-      if (!filled) {
-        setStatus("未找到聊天输入框，请手动复制", "err");
-        return;
-      }
-      await sleep(180);
-      const sent = await tryAutoClickSendWithRetry();
-      hidePendingConfirmRow();
-      setStatus(sent ? "已确认并发送给买家" : "已填入聊天框，请手动点发送", sent ? "ok" : "busy");
-    });
+    const draftRow = el("div", "fm-draft-row hidden");
+    draftRow.appendChild(el("p", "fm-draft-hint fm-hint", ""));
+    const draftSendBtn = el("button", "fm-btn primary fm-draft-send", "填入并发送");
+    draftSendBtn.type = "button";
+    draftRow.appendChild(draftSendBtn);
+
+    confirmSendBtn.addEventListener("click", () => sendReplyDraftFromPanel());
 
     dismissAiBtn.addEventListener("click", () => {
       hidePendingConfirmRow();
       setStatus("已取消 AI 发送，请您自行回复买家", "ok");
     });
+
+    draftSendBtn.addEventListener("click", () => sendReplyDraftFromPanel());
 
     const tplRow = el("div", "fm-row");
     const tplSelect = el("select", "fm-template-select");
@@ -1031,14 +1183,10 @@
     saveTplBtn.type = "button";
     tplRow.append(tplSelect, saveTplBtn);
 
-    const fillBtn = el("button", "fm-btn", "填入聊天框");
+    const fillBtn = el("button", "fm-btn", "仅填入聊天框");
     fillBtn.type = "button";
 
-    const resultArea = el("textarea", "fm-result");
-    resultArea.rows = 5;
-    resultArea.placeholder = "业绩/利润分析结果…";
-
-    body.append(btnRow1, btnRowFaq, btnRow2, replyLabel, routeBadge, replyArea, pendingRow, tplRow, fillBtn, resultArea);
+    body.append(replyLabel, replyArea, pendingRow, draftRow, tplRow, fillBtn);
     root.append(head, body);
     document.documentElement.appendChild(root);
 

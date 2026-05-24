@@ -66,10 +66,15 @@ const FanmengBilling = {
 
   planStatusLine(ent) {
     if (!ent) return "";
+    const agents = ent.agents || [];
+    const hasService = agents.includes("service");
     if (ent.extensionAllowed) {
-      if (ent.trialActive) return `试用中 · ${ent.planName}`;
-      if (ent.subscriptionActive) return `已订阅 · ${ent.planName}`;
-      return ent.planName;
+      let base = "";
+      if (ent.trialActive) base = `试用中 · ${ent.planName}`;
+      else if (ent.subscriptionActive) base = `已订阅 · ${ent.planName}`;
+      else base = ent.planName || "—";
+      if (!hasService) base += " · 智能客服需成长版";
+      return base;
     }
     return ent.extensionBlockReason || "需要订阅后使用插件";
   },
