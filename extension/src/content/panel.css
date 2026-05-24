@@ -162,6 +162,26 @@
   border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
+#fanmeng-ai-panel-root .fm-chat-layout-row {
+  margin-bottom: 2px;
+}
+
+#fanmeng-ai-panel-root .fm-chat-layout-select {
+  flex: 1;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  font-size: 11px;
+  background: #fff;
+}
+
+#fanmeng-ai-panel-root .fm-chat-layout-detail {
+  margin: 0;
+  font-size: 10px;
+  color: rgba(15, 23, 42, 0.45);
+}
+
 #fanmeng-ai-panel-root .fm-chat-meta[data-kind="ok"] {
   color: #15803d;
 }

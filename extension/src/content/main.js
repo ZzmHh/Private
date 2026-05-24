@@ -11,6 +11,7 @@
   let chatStop = null;
   let cachedEntitlements = null;
   let cachedCsSettings = null;
+  let lastChatProfileId = null;
 
   const DEFAULT_CS_SETTINGS = {
     extensionAutoSendFaq: true,
@@ -141,22 +142,79 @@
     }
   }
 
-  function refreshChatPreview() {
+  function isMockCsPage() {
+    try {
+      const h = location.hostname.toLowerCase();
+      return (h === "127.0.0.1" || h === "localhost") && /\/mock\/tiktok/i.test(location.pathname);
+    } catch {
+      return false;
+    }
+  }
+
+  function formatConfidence(conf) {
+    return `${Math.round(Math.max(0, Math.min(1, Number(conf) || 0)) * 100)}%`;
+  }
+
+  function formatChatMeta(parsed) {
+    const profile = parsed.profileLabel || parsed.profileId || "—";
+    const conf = formatConfidence(parsed.confidence);
+    const region = FanmengTikTok.regionLabel(parsed.region || FanmengTikTok.detectRegion());
+    const mockTag = isMockCsPage() ? " · 模拟页" : "";
+    const modeTag =
+      parsed.layoutMode === "manual"
+        ? " · 手动布局"
+        : parsed.layoutMode === "learned"
+          ? " · 已记忆"
+          : "";
+    if (parsed.recognized) {
+      return `✓ ${profile} · 置信 ${conf} · ${region}${modeTag}${mockTag} · 买家消息就绪`;
+    }
+    return `✗ ${profile} · 置信 ${conf} · ${region}${modeTag}${mockTag} · ${RECOGNITION_FAIL_HINT}`;
+  }
+
+  async function parseChatForPanel() {
+    const parsed = FanmengScrape.parseChatWithPrefs(document.body, activeShop?.id);
+    lastChatProfileId = parsed.profileId || lastChatProfileId;
+    return parsed;
+  }
+
+  async function refreshChatPreview() {
     const pt = FanmengScrape.detectPageType(location.href, document.title);
     const section = document.querySelector(`#${PANEL_ID} .fm-chat-section`);
     if (section) section.style.display = pt === "chat" ? "" : "none";
     if (pt !== "chat") return;
 
-    const parsed = FanmengScrape.parseChat(document.body);
+    const parsed = await parseChatForPanel();
     renderMessageList(parsed.messages);
 
     const meta = document.querySelector(`#${PANEL_ID} .fm-chat-meta`);
     if (meta) {
-      const profile = parsed.profileLabel || parsed.profileId || "—";
-      meta.textContent = parsed.recognized
-        ? `已识别 · ${profile} · 最后买家消息已就绪`
-        : `布局 ${profile} · ${RECOGNITION_FAIL_HINT}`;
+      meta.textContent = formatChatMeta(parsed);
       meta.dataset.kind = parsed.recognized ? "ok" : "err";
+    }
+
+    const detail = document.querySelector(`#${PANEL_ID} .fm-chat-layout-detail`);
+    if (detail) {
+      const buyers = (parsed.messages || []).filter((m) => m.role === "buyer").length;
+      const sellers = (parsed.messages || []).filter((m) => m.role === "seller").length;
+      detail.textContent = `解析 ${parsed.messages?.length || 0} 条（买家 ${buyers} / 卖家 ${sellers}）· 方法 ${parsed.method || "—"}`;
+    }
+  }
+
+  async function refreshChatLayoutSelect() {
+    const sel = document.querySelector(`#${PANEL_ID} .fm-chat-layout-select`);
+    if (!sel) return;
+    const cache = await FanmengStorage.loadChatLayoutCache();
+    const includeMock = isMockCsPage();
+    const options = FanmengChatSelectors.listLayoutOptions(includeMock);
+    const current = cache.override || "auto";
+    sel.innerHTML = "";
+    for (const opt of options) {
+      const o = document.createElement("option");
+      o.value = opt.id;
+      o.textContent = opt.label;
+      if (opt.id === current) o.selected = true;
+      sel.appendChild(o);
     }
   }
 
@@ -226,7 +284,7 @@
     }
   }
 
-  function findReplyInput() {
+  function findReplyInput(profileId = lastChatProfileId) {
     const selectors = [
       "textarea",
       "[contenteditable='true']",
@@ -236,15 +294,25 @@
       "[class*='Editor']",
       "[role='textbox']",
     ];
+    const scopes = [];
+    const chatRoot = FanmengChatSelectors.findChatPanelRoot(profileId, document.body);
+    if (chatRoot) scopes.push(chatRoot);
+    scopes.push(document.body);
+
     const scored = [];
-    for (const sel of selectors) {
-      for (const node of document.querySelectorAll(sel)) {
-        if (!node.offsetParent && node.tagName !== "TEXTAREA") continue;
-        const r = node.getBoundingClientRect?.();
-        if (!r || r.width < 80 || r.height < 20) continue;
-        const nearBottom = r.top > window.innerHeight * 0.45 ? 10 : 0;
-        scored.push({ node, score: r.width * r.height + nearBottom });
+    for (const scope of scopes) {
+      const scopeBonus = scope === chatRoot ? 50000 : 0;
+      for (const sel of selectors) {
+        for (const node of scope.querySelectorAll(sel)) {
+          if (node.closest(`#${PANEL_ID}`)) continue;
+          if (!node.offsetParent && node.tagName !== "TEXTAREA") continue;
+          const r = node.getBoundingClientRect?.();
+          if (!r || r.width < 80 || r.height < 20) continue;
+          const nearBottom = r.top > window.innerHeight * 0.45 ? 10 : 0;
+          scored.push({ node, score: scopeBonus + r.width * r.height + nearBottom });
+        }
       }
+      if (scope === chatRoot && scored.length) break;
     }
     scored.sort((a, b) => b.score - a.score);
     return scored[0]?.node || null;
@@ -440,6 +508,54 @@
     }
   }
 
+  async function openFaqWorkspace() {
+    try {
+      const settings = await FanmengStorage.getSettings();
+      const base = FanmengApi.normalizeBase(settings.apiBase);
+      if (!base) {
+        setStatus("请先在插件弹窗配置凡梦 API 地址", "err");
+        return;
+      }
+      const url = `${base}/#cs-faq`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      setStatus("已打开 FAQ 生成页面", "ok");
+    } catch (e) {
+      setStatus(e.message || "无法打开网站", "err");
+    }
+  }
+
+  async function syncPageForFaqMaterial() {
+    try {
+      await requireExtensionAccess();
+    } catch {
+      return;
+    }
+    setStatus("正在同步本页作为 FAQ 素材…", "busy");
+    try {
+      const scraped = FanmengScrape.scrapePage();
+      const shop = await resolveActiveShop(scraped);
+      await FanmengApi.pushSnapshot({
+        pageType: scraped.pageType,
+        pageUrl: scraped.pageUrl,
+        title: scraped.title,
+        shopKey: shop.id,
+        shopName: shop.name,
+        data: scraped.data,
+      });
+      FanmengDiagnosisPack.invalidateCache();
+      await refreshDiagnosisProgress();
+      const ctx = await FanmengApi.getFaqGenerateContext(shop.id);
+      const n = ctx.snapshotCount || 0;
+      const hint =
+        n >= 2
+          ? `FAQ 素材 ${n} 页 · 点下方「网站 · AI 生成 FAQ」`
+          : `已同步 ${scraped.pageType} · 建议再同步商品/订单页，然后点「网站 · AI 生成 FAQ」`;
+      setStatus(hint, "ok");
+    } catch (e) {
+      handlePaidApiError(e);
+    }
+  }
+
   async function syncCurrentPage(opts = {}) {
     const { silent = false } = opts;
     try {
@@ -610,7 +726,13 @@
     const chatSection = el("div", "fm-chat-section");
     chatSection.style.display = "none";
     chatSection.appendChild(el("p", "fm-label", "消息识别（买家 / 卖家 / 系统）"));
+    const layoutRow = el("div", "fm-row fm-chat-layout-row");
+    const layoutSelect = el("select", "fm-chat-layout-select");
+    layoutSelect.title = "识别失败时可手动切换跨境/区域布局";
+    layoutRow.appendChild(layoutSelect);
+    chatSection.appendChild(layoutRow);
     chatSection.appendChild(el("p", "fm-chat-meta fm-hint", "进入聊天页后自动识别"));
+    chatSection.appendChild(el("p", "fm-chat-layout-detail fm-hint", ""));
     chatSection.appendChild(el("div", "fm-msg-list"));
     chatSection.appendChild(
       el("p", "fm-hint fm-shortcut-hint", "选中买家文字 → 右键「凡梦生成回复」或 Ctrl+Shift+Y"),
@@ -620,9 +742,18 @@
     const btnRow1 = el("div", "fm-row");
     const syncBtn = el("button", "fm-btn primary fm-paid-action", "同步本页");
     syncBtn.type = "button";
+    const faqSyncBtn = el("button", "fm-btn fm-paid-action", "同步到 FAQ 素材");
+    faqSyncBtn.type = "button";
+    faqSyncBtn.title = "抓取本页商品/物流等信息，供网站 AI 生成 FAQ";
     const csBtn = el("button", "fm-btn fm-paid-action", "手动生成话术");
     csBtn.type = "button";
-    btnRow1.append(syncBtn, csBtn);
+    const faqWebBtn = el("button", "fm-btn fm-paid-action", "网站 · FAQ 生成");
+    faqWebBtn.type = "button";
+    faqWebBtn.title = "打开凡梦网站客服控制台，AI 生成 FAQ 模板";
+    btnRow1.append(syncBtn, faqSyncBtn, csBtn);
+
+    const btnRowFaq = el("div", "fm-row");
+    btnRowFaq.append(faqWebBtn);
 
     const btnRow2 = el("div", "fm-row");
     const growthBtn = el("button", "fm-btn fm-paid-action", "业绩诊断");
@@ -650,7 +781,7 @@
     resultArea.rows = 5;
     resultArea.placeholder = "业绩/利润分析结果…";
 
-    body.append(btnRow1, btnRow2, replyLabel, replyArea, tplRow, fillBtn, resultArea);
+    body.append(btnRow1, btnRowFaq, btnRow2, replyLabel, replyArea, tplRow, fillBtn, resultArea);
     root.append(head, body);
     document.documentElement.appendChild(root);
 
@@ -677,6 +808,8 @@
     });
 
     syncBtn.addEventListener("click", () => syncCurrentPage());
+    faqSyncBtn.addEventListener("click", () => syncPageForFaqMaterial());
+    faqWebBtn.addEventListener("click", () => openFaqWorkspace());
     csBtn.addEventListener("click", () => suggestForLatestMessage());
     growthBtn.addEventListener("click", () => runAnalyze("growth"));
     profitBtn.addEventListener("click", () => runAnalyze("profit"));
@@ -692,7 +825,19 @@
       activeShop = (await FanmengStorage.getShops()).find((s) => s.id === shopSelect.value) || null;
       await refreshDiagnosisProgress();
       await refreshTemplateSelect();
+      await refreshChatLayoutSelect();
+      await refreshChatPreview();
       setStatus(`已切换店铺：${activeShop?.name || ""}`, "ok");
+    });
+
+    layoutSelect.addEventListener("change", async () => {
+      await FanmengStorage.setChatLayoutOverride(layoutSelect.value);
+      await refreshChatLayoutSelect();
+      await refreshChatPreview();
+      setStatus(
+        layoutSelect.value === "auto" ? "已恢复自动布局识别" : `已切换布局：${layoutSelect.selectedOptions[0]?.textContent || layoutSelect.value}`,
+        "ok",
+      );
     });
 
     bindShopBtn.addEventListener("click", async () => {
@@ -831,12 +976,16 @@
       const st = await FanmengApi.status(shop?.id);
       await refreshEntitlements();
       await getCsSettingsCached(true);
-      setStatus(`已登录 ${st.user?.email || ""} · ${shop?.name || "未绑定店铺"}`, "ok");
+      const mockHint = isMockCsPage() ? " · 模拟客服页" : "";
+      setStatus(`已登录 ${st.user?.email || ""} · ${shop?.name || "未绑定店铺"}${mockHint}`, "ok");
     } catch {
-      setStatus("请打开插件弹窗登录凡梦账号", "err");
+      setStatus(isMockCsPage() ? "模拟页已加载 · 请打开插件弹窗登录凡梦账号" : "请打开插件弹窗登录凡梦账号", "err");
     }
     await refreshDiagnosisProgress();
     await refreshTemplateSelect();
+    await FanmengStorage.loadChatLayoutCache();
+    await refreshChatLayoutSelect();
+    await refreshChatPreview();
     await setupAutoSync();
     await syncFaqToServer();
     setupChatWatcher();
@@ -856,6 +1005,12 @@
     document.addEventListener("DOMContentLoaded", boot);
   } else {
     boot();
+  }
+
+  if (isMockCsPage()) {
+    const ver =
+      (typeof FanmengExtensionConfig !== "undefined" && FanmengExtensionConfig.VERSION) || "?";
+    console.info(`[凡梦AI] 模拟客服页已注入 · v${ver} · ${location.href}`);
   }
 
   chrome.storage.onChanged.addListener((changes) => {

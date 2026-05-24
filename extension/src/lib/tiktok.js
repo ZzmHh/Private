@@ -19,7 +19,11 @@ const FanmengTikTok = {
   /** @returns {boolean} */
   isSellerUrl(url = location.href) {
     try {
-      const host = new URL(String(url)).hostname.toLowerCase();
+      const u = new URL(String(url));
+      const host = u.hostname.toLowerCase();
+      if ((host === "127.0.0.1" || host === "localhost") && /\/mock\/tiktok/i.test(u.pathname)) {
+        return true;
+      }
       return (
         host === "seller.tiktok.com" ||
         host === "seller-us.tiktok.com" ||
@@ -35,6 +39,7 @@ const FanmengTikTok = {
   /** 卖家中心区域（用于店铺 metadata / 消息 layout profile 顺序） */
   detectRegion(hostname = location.hostname) {
     const h = String(hostname).toLowerCase();
+    if (h === "127.0.0.1" || h === "localhost") return "mock";
     if (/seller-us\.tiktokglobalshop/.test(h)) return "us_global";
     if (/seller-us\.tiktok/.test(h)) return "us";
     if (/tiktokglobalshop/.test(h)) return "global_cb";
@@ -46,6 +51,7 @@ const FanmengTikTok = {
   /** 聊天 DOM profile 尝试顺序（见 chatSelectors.js） */
   chatProfileOrder(hostname = location.hostname) {
     const h = String(hostname).toLowerCase();
+    if (h === "127.0.0.1" || h === "localhost") return ["sea", "generic"];
     if (/seller-us\.tiktokglobalshop/.test(h)) return ["us_global", "global_cb", "us", "generic"];
     if (/seller-us\.tiktok/.test(h)) return ["us", "us_global", "generic"];
     if (/tiktokglobalshop/.test(h)) return ["global_cb", "sea", "generic"];
@@ -61,6 +67,7 @@ const FanmengTikTok = {
       global_cb: "跨境 Global",
       sea: "东南亚",
       tiktokshop: "TikTok Shop",
+      mock: "本地模拟",
       unknown: "未知区域",
     };
     return map[region] || region;

@@ -1,4 +1,9 @@
 async function loadUi() {
+  const ver =
+    (typeof FanmengExtensionConfig !== "undefined" && FanmengExtensionConfig.VERSION) || "dev";
+  const versionLine = document.getElementById("versionLine");
+  if (versionLine) versionLine.textContent = `TikTok Shop 专用助手 v${ver}`;
+
   const s = await FanmengStorage.getSettings();
   const defaultApi =
     (typeof FanmengExtensionConfig !== "undefined" && FanmengExtensionConfig.DEFAULT_API_BASE) ||
@@ -120,6 +125,55 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
 
 ["apiBase", "autoSync", "autoSyncMinutes", "autoCsListen", "autoDiagnosisSync"].forEach((id) => {
   document.getElementById(id).addEventListener("change", persistSettings);
+});
+
+document.getElementById("apiBase").addEventListener("blur", async () => {
+  const base = document.getElementById("apiBase").value.trim();
+  if (!base) return;
+  try {
+    await FanmengPermissions.ensureHostPermission(base);
+    showMsg("API 域名已授权", true);
+  } catch (e) {
+    showMsg(e.message || "未能授权 API 域名");
+  }
+});
+
+document.getElementById("openFaqWeb").addEventListener("click", async () => {
+  const base = FanmengApi.normalizeBase(document.getElementById("apiBase").value.trim());
+  if (!base) {
+    showMsg("请先填写 API 地址");
+    return;
+  }
+  try {
+    await FanmengPermissions.ensureHostPermission(base);
+    chrome.tabs.create({ url: `${base}/#cs-faq` });
+  } catch (e) {
+    showMsg(e.message || "无法打开");
+  }
+});
+
+document.getElementById("openMockCs").addEventListener("click", () => {
+  const apiBase = document.getElementById("apiBase").value.trim() || "http://127.0.0.1:8787";
+  let mockUrl = "http://127.0.0.1:8787/mock/tiktok-shop/index.html";
+  try {
+    const u = new URL(apiBase.includes("://") ? apiBase : `http://${apiBase}`);
+    mockUrl = `${u.origin}/mock/tiktok-shop/index.html`;
+  } catch {
+    /* keep default */
+  }
+  chrome.tabs.create({ url: mockUrl });
+});
+
+document.getElementById("openMockChat").addEventListener("click", () => {
+  const apiBase = document.getElementById("apiBase").value.trim() || "http://127.0.0.1:8787";
+  let mockUrl = "http://127.0.0.1:8787/mock/tiktok-shop/chat.html";
+  try {
+    const u = new URL(apiBase.includes("://") ? apiBase : `http://${apiBase}`);
+    mockUrl = `${u.origin}/mock/tiktok-shop/chat.html`;
+  } catch {
+    /* keep default */
+  }
+  chrome.tabs.create({ url: mockUrl });
 });
 
 document.getElementById("openSeller").addEventListener("click", () => {

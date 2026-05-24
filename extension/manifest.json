@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "凡梦AI · TikTok Shop 助手",
-  "version": "0.4.1",
+  "version": "0.4.8",
   "description": "在 TikTok 卖家中心同步页面数据、AI 客服话术建议、业绩与广告库存分析（无需 Open API）。",
   "permissions": ["storage", "activeTab", "contextMenus"],
   "commands": {
@@ -19,6 +19,13 @@
     "https://seller.tiktokglobalshop.com/*",
     "https://seller-us.tiktokglobalshop.com/*",
     "https://*.tiktokshop.com/*",
+    "https://www.fanmengai.com.cn/*",
+    "https://fanmengai.com.cn/*",
+    "http://127.0.0.1:*/*",
+    "http://localhost:*/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
     "http://127.0.0.1:*/*",
     "http://localhost:*/*"
   ],
@@ -36,10 +43,17 @@
         "https://seller-us.tiktok.com/*",
         "https://seller.tiktokglobalshop.com/*",
         "https://seller-us.tiktokglobalshop.com/*",
-        "https://*.tiktokshop.com/*"
+        "https://*.tiktokshop.com/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://localhost:8787/*",
+        "http://127.0.0.1:8787/*",
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
       ],
       "js": [
         "src/lib/config.js",
+        "src/lib/permissions.js",
         "src/lib/tiktok.js",
         "src/lib/billing.js",
         "src/lib/tutorial.js",

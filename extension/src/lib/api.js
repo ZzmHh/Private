@@ -2,10 +2,25 @@ const FanmengApi = {
   platform: () => FanmengTikTok.PLATFORM,
   platformLabel: () => FanmengTikTok.PLATFORM_LABEL,
 
+  normalizeBase(raw) {
+    return FanmengPermissions.normalizeApiBase(raw);
+  },
+
+  wrapFetchError(error, base) {
+    const msg = error?.message || String(error);
+    if (/failed to fetch|networkerror|network error|load failed/i.test(msg)) {
+      throw new Error(
+        `无法连接 ${base || "API"}（Failed to fetch）。请检查：① API 地址是否正确（勿多余路径）；② 网络/VPN；③ chrome://extensions 重新加载插件并允许访问该域名。`,
+      );
+    }
+    throw error;
+  },
+
   async request(path, options = {}) {
     const settings = await FanmengStorage.getSettings();
-    const base = String(settings.apiBase || "").replace(/\/+$/, "");
+    const base = this.normalizeBase(settings.apiBase);
     if (!base) throw new Error("请先在插件弹窗配置凡梦 API 地址。");
+    await FanmengPermissions.ensureHostPermission(base);
     if (!settings.token && !path.includes("/auth/login")) {
       throw new Error("请先在插件中登录凡梦账号。");
     }
@@ -18,10 +33,15 @@ const FanmengApi = {
       headers.Authorization = `Bearer ${settings.token}`;
     }
 
-    const res = await fetch(`${base}${path}`, {
-      ...options,
-      headers,
-    });
+    let res;
+    try {
+      res = await fetch(`${base}${path}`, {
+        ...options,
+        headers,
+      });
+    } catch (error) {
+      this.wrapFetchError(error, base);
+    }
 
     const text = await res.text();
     let data;
@@ -43,12 +63,20 @@ const FanmengApi = {
 
   async login(email, password) {
     const settings = await FanmengStorage.getSettings();
-    const base = String(settings.apiBase || "").replace(/\/+$/, "");
-    const res = await fetch(`${base}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    const base = this.normalizeBase(settings.apiBase);
+    if (!base) throw new Error("请填写凡梦 API 地址。");
+    await FanmengPermissions.ensureHostPermission(base);
+
+    let res;
+    try {
+      res = await fetch(`${base}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+    } catch (error) {
+      this.wrapFetchError(error, base);
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "登录失败");
     await FanmengStorage.saveSettings({ token: data.token });
@@ -114,6 +142,26 @@ const FanmengApi = {
     return this.request("/api/extension/cs/faq/sync", {
       method: "POST",
       body: JSON.stringify({ shopKey, templates }),
+    });
+  },
+
+  async getFaqGenerateContext(shopKey = "") {
+    const q = new URLSearchParams();
+    if (shopKey) q.set("shopKey", shopKey);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return this.request(`/api/extension/cs/faq/context${suffix}`);
+  },
+
+  async generateFaqDrafts({ shopKey, shopName, primaryLang, pages } = {}) {
+    return this.request("/api/extension/cs/faq/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        shopKey: shopKey || "",
+        shopName: shopName || "",
+        primaryLang: primaryLang || "",
+        pages: pages || [],
+        useSnapshots: true,
+      }),
     });
   },
 

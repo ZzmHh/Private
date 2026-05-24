@@ -60,8 +60,23 @@ const FanmengScrape = {
   },
 
   /** @returns {{ messages: object[], lastBuyer: object|null, recognized: boolean, profileId: string|null }} */
-  parseChat(root = document.body) {
-    return FanmengMessageParser.parse(root);
+  parseChat(root = document.body, options = null) {
+    return FanmengMessageParser.parse(root, options || {});
+  },
+
+  /** 读取 storage 缓存的布局偏好（由面板 init 时 loadChatLayoutCache） */
+  parseChatWithPrefs(root = document.body, shopId = "") {
+    const opts = FanmengStorage.getChatParseOptions(shopId, location.hostname);
+    const parsed = this.parseChat(root, opts);
+    if (parsed.recognized && parsed.profileId) {
+      FanmengStorage.rememberChatLayoutSuccess(
+        shopId,
+        location.hostname,
+        parsed.profileId,
+        parsed.confidence,
+      ).catch(() => {});
+    }
+    return parsed;
   },
 
   extractChatMessages(root) {
@@ -130,8 +145,11 @@ const FanmengScrape = {
       textSample: bodyText.slice(0, 6000),
     };
 
+    const shopHint = this.detectShopContext();
+    data.shopHint = shopHint;
+
     if (pageType === "chat") {
-      const chatParse = this.parseChat(document.body);
+      const chatParse = this.parseChatWithPrefs(document.body, shopHint.id);
       data.chatParse = {
         profileId: chatParse.profileId,
         profileLabel: chatParse.profileLabel,
@@ -139,13 +157,12 @@ const FanmengScrape = {
         recognized: chatParse.recognized,
         method: chatParse.method,
         confidence: chatParse.confidence,
+        layoutMode: chatParse.layoutMode,
       };
       data.messagesWithRoles = chatParse.messages;
       data.recentMessages = chatParse.messages.map((m) => m.text);
       data.latestBuyerMessage = chatParse.lastBuyer?.text || "";
     }
-
-    data.shopHint = this.detectShopContext();
 
     return { pageType, pageUrl: url, title, data };
   },

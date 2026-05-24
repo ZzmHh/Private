@@ -167,6 +167,19 @@ const FanmengChatSelectors = {
       systemClass: /system|notice|auto|tip|center/i,
     },
 
+    /** 凡梦本地 TikTok 客服模拟页 */
+    mock: {
+      id: "mock",
+      label: "Fanmeng Mock Seller Center",
+      chatPanel: [".chat-room", ".ChatRoom", ".conversation-panel", "[data-fanmeng-mock='tiktok-cs']"],
+      messageList: [".message-list", ".MessageList", ".chat-content"],
+      messageItem: [".message-list > .message-item", ".message-item[data-role]"],
+      textNode: [".message-text", ".bubble-content", "p"],
+      buyerClass: /buyer|incoming|customer|left/i,
+      sellerClass: /seller|outgoing|shop|merchant|right|self/i,
+      systemClass: /system|notice|tip|divider|center/i,
+    },
+
     /** 通用兜底：最宽匹配 */
     generic: {
       id: "generic",
@@ -210,8 +223,30 @@ const FanmengChatSelectors = {
     { role: "buyer", re: /^(buyer|customer|user|买家|用户|客户)/i },
   ],
 
-  getProfileChain(hostname) {
-    const order = this.regionProfileOrder(hostname);
+  getProfileChain(hostname, options = {}) {
+    const { preferredId, forcedId } = options;
+    if (forcedId && this.profiles[forcedId]) {
+      const forced = this.profiles[forcedId];
+      const generic = this.profiles.generic;
+      return generic && forced.id !== generic.id ? [forced, generic] : [forced];
+    }
+
+    const order = [];
+    try {
+      const path = typeof location !== "undefined" ? String(location.pathname || "") : "";
+      const h = String(hostname || (typeof location !== "undefined" ? location.hostname : "")).toLowerCase();
+      if ((h === "127.0.0.1" || h === "localhost") && /\/mock\/tiktok/i.test(path)) {
+        order.push("mock");
+      }
+    } catch {
+      /* ignore */
+    }
+    if (preferredId && this.profiles[preferredId] && !order.includes(preferredId)) {
+      order.unshift(preferredId);
+    }
+    for (const id of this.regionProfileOrder(hostname)) {
+      if (!order.includes(id)) order.push(id);
+    }
     const seen = new Set();
     const chain = [];
     for (const id of order) {
@@ -221,6 +256,31 @@ const FanmengChatSelectors = {
       if (p) chain.push(p);
     }
     return chain;
+  },
+
+  /** 面板「聊天布局」下拉选项 */
+  listLayoutOptions(includeMock = false) {
+    const ids = ["auto", "us", "us_global", "sea", "global_cb", "generic"];
+    if (includeMock) ids.splice(1, 0, "mock");
+    return ids.map((id) => {
+      if (id === "auto") return { id, label: "自动（域名 + 记忆布局）" };
+      const p = this.profiles[id];
+      return { id, label: p?.label || id };
+    });
+  },
+
+  getProfileById(id) {
+    return this.profiles[id] || null;
+  },
+
+  findChatPanelRoot(profileId, root = document.body) {
+    const profile = this.getProfileById(profileId);
+    if (!profile) return null;
+    for (const sel of profile.chatPanel || []) {
+      const el = root.querySelector(sel);
+      if (el?.getBoundingClientRect?.().width > 0 && el.getBoundingClientRect().height > 0) return el;
+    }
+    return null;
   },
 };
 

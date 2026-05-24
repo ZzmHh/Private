@@ -13,7 +13,11 @@ const DEFAULT_SETTINGS = {
   autoDiagnosisSync: true,
   shopName: "",
   activeShopId: "",
+  chatLayoutOverride: "auto",
 };
+
+/** @type {{ override: string, learned: Record<string, { profileId: string, confidence: number, updatedAt: string }> }} */
+const chatLayoutCache = { override: "auto", learned: {} };
 
 function uid() {
   return `fm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -103,6 +107,43 @@ const FanmengStorage = {
     packs[shopId] = cur;
     await chrome.storage.local.set({ fanmeng_diagnosis_packs: packs });
     return cur;
+  },
+
+  async loadChatLayoutCache() {
+    const s = await this.getSettings();
+    const data = await chrome.storage.local.get(["fanmeng_chat_layout_learned"]);
+    chatLayoutCache.override = s.chatLayoutOverride || "auto";
+    chatLayoutCache.learned = data.fanmeng_chat_layout_learned || {};
+    return chatLayoutCache;
+  },
+
+  getChatParseOptions(shopId, hostname = "") {
+    const host = String(hostname || (typeof location !== "undefined" ? location.hostname : "")).toLowerCase();
+    const forced =
+      chatLayoutCache.override && chatLayoutCache.override !== "auto" ? chatLayoutCache.override : null;
+    const key = `${shopId || "_"}::${host}`;
+    const learned = chatLayoutCache.learned[key];
+    const preferred = !forced && learned?.profileId ? learned.profileId : null;
+    return { forcedProfileId: forced, preferredProfileId: preferred, learnedProfileId: learned?.profileId || null };
+  },
+
+  async setChatLayoutOverride(value) {
+    const mode = String(value || "auto").trim() || "auto";
+    chatLayoutCache.override = mode;
+    await this.saveSettings({ chatLayoutOverride: mode });
+    return mode;
+  },
+
+  async rememberChatLayoutSuccess(shopId, hostname, profileId, confidence) {
+    if (!profileId || Number(confidence) < 0.4) return;
+    const host = String(hostname || (typeof location !== "undefined" ? location.hostname : "")).toLowerCase();
+    const key = `${shopId || "_"}::${host}`;
+    chatLayoutCache.learned[key] = {
+      profileId,
+      confidence: Number(confidence) || 0,
+      updatedAt: new Date().toISOString(),
+    };
+    await chrome.storage.local.set({ fanmeng_chat_layout_learned: chatLayoutCache.learned });
   },
 };
 

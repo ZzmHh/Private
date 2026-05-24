@@ -5,14 +5,23 @@ const FanmengMessageParser = {
   MAX_MESSAGES: 30,
   MAX_TEXT_LEN: 500,
 
-  parse(root = document.body) {
+  parse(root = document.body, options = {}) {
     const hostname = location.hostname;
-    const chain = FanmengChatSelectors.getProfileChain(hostname);
-    let best = { messages: [], profileId: null, profileLabel: null, method: "none" };
+    const chain = FanmengChatSelectors.getProfileChain(hostname, {
+      preferredId: options.preferredProfileId || null,
+      forcedId: options.forcedProfileId || null,
+    });
+    let best = {
+      messages: [],
+      profileId: null,
+      profileLabel: null,
+      method: "none",
+      confidence: 0,
+    };
 
     for (const profile of chain) {
       const result = this._extractWithProfile(root, profile);
-      if (result.messages.length > best.messages.length) {
+      if (result.messages.length > best.messages.length || result.confidence > best.confidence) {
         best = result;
       }
       if (result.messages.length >= 2 && result.confidence >= 0.5) break;
@@ -25,8 +34,14 @@ const FanmengMessageParser = {
 
     best.messages = this._dedupeMessages(best.messages).slice(-this.MAX_MESSAGES);
     best.lastBuyer = this.getLastBuyer(best.messages);
-    best.region = FanmengChatSelectors.regionProfileOrder(hostname)[0] || "generic";
+    best.region = FanmengTikTok.detectRegion(hostname);
+    best.confidence = best.confidence ?? this._scoreConfidence(best.messages);
     best.recognized = Boolean(best.lastBuyer?.text?.trim());
+    best.layoutMode = options.forcedProfileId
+      ? "manual"
+      : options.preferredProfileId
+        ? "learned"
+        : "auto";
 
     return best;
   },

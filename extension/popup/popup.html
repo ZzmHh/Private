@@ -8,7 +8,7 @@
   </head>
   <body>
     <h1>凡梦AI</h1>
-    <p class="sub">TikTok Shop 专用助手 v0.4.1</p>
+    <p class="sub" id="versionLine">TikTok Shop 专用助手</p>
 
     <details id="tutorialShell" class="tutorial-shell">
       <summary class="tutorial-shell-summary">📖 5 分钟上手教程</summary>
@@ -18,7 +18,7 @@
 
     <label>
       凡梦 API 地址
-      <input id="apiBase" type="url" placeholder="http://127.0.0.1:8787" />
+      <input id="apiBase" type="url" placeholder="https://www.fanmengai.com.cn" />
     </label>
 
     <div id="loginBlock">
@@ -71,10 +71,14 @@
 
     <p id="msg" class="msg"></p>
 
+    <button type="button" id="openFaqWeb" class="secondary">网站 · FAQ 生成</button>
+    <button type="button" id="openMockCs" class="secondary">打开模拟卖家中心</button>
+    <button type="button" id="openMockChat" class="secondary">模拟客服聊天页</button>
     <button type="button" id="openSeller" class="secondary">打开 TikTok 卖家中心</button>
-    <p class="hint">更新插件后请刷新卖家中心页面。</p>
+    <p class="hint">更新插件后请在 chrome://extensions 点「重新加载」，并刷新测试页。</p>
 
     <script src="../src/lib/config.js"></script>
+    <script src="../src/lib/permissions.js"></script>
     <script src="../src/lib/tiktok.js"></script>
     <script src="../src/lib/billing.js"></script>
     <script src="../src/lib/tutorial.js"></script>
