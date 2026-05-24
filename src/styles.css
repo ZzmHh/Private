@@ -6145,6 +6145,92 @@ footer a {
   font-weight: 800;
 }
 
+.vc-panel-preview {
+  position: relative;
+}
+
+.vc-preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #fde68a;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fffbeb, #fef9c3);
+  color: #854d0e;
+}
+
+.vc-preview-banner > svg {
+  flex-shrink: 0;
+  color: #b45309;
+}
+
+.vc-preview-banner strong {
+  display: block;
+  font-size: 14px;
+  color: #713f12;
+}
+
+.vc-preview-banner span {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.vc-preview-banner-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  background: #fff;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.vc-soon-modal {
+  width: min(520px, 100%);
+  padding: 24px;
+  border: 1px solid #e5ebf3;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 34px 100px rgba(15, 23, 42, 0.22);
+}
+
+.vc-soon-modal .modal-head {
+  align-items: flex-start;
+}
+
+.vc-soon-kicker {
+  margin: 0 0 4px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vc-soon-list {
+  margin: 0 0 18px;
+  padding-left: 20px;
+  color: #344054;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.vc-soon-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.vc-soon-actions .vc-primary {
+  width: auto;
+  min-width: 200px;
+}
+
 @media (max-width: 960px) {
   .vc-grid,
   .vc-result,
