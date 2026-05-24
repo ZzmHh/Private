@@ -52,6 +52,26 @@ const FanmengPermissions = {
     }
     return true;
   },
+
+  /** 工作台前端地址（本地 API 8787 → 前端 5173；生产通常与 API 同域） */
+  resolveWorkspaceUrl(apiBase) {
+    const cfg = typeof FanmengExtensionConfig !== "undefined" ? FanmengExtensionConfig : {};
+    const configured = String(cfg.WEBSITE_URL || "").trim();
+    if (configured) return this.normalizeApiBase(configured);
+
+    const origin = this.normalizeApiBase(apiBase);
+    if (!origin) return "";
+    try {
+      const u = new URL(origin);
+      const host = u.hostname.toLowerCase();
+      if ((host === "127.0.0.1" || host === "localhost") && u.port === "8787") {
+        return `${u.protocol}//${host}:5173`;
+      }
+    } catch {
+      /* ignore */
+    }
+    return origin;
+  },
 };
 
 if (typeof globalThis !== "undefined") {

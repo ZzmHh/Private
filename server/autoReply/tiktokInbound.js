@@ -8,6 +8,7 @@ import { sendTiktokCustomerServiceText } from "../integrations/storeApi/tiktok/t
 import { routeBuyerMessage, dispatchAutoSend } from "./routeBuyerMessage.js";
 import { getCsSettings } from "./csStore.js";
 import { recordCsRouteEvent } from "./csAnalytics.js";
+import { getMergedExtensionContext } from "../extensionSync.js";
 
 const processedMessageIds = new Map();
 const DEDUPE_TTL_MS = 1000 * 60 * 30;
@@ -98,14 +99,17 @@ export async function handleTiktokBuyerMessageWebhook(payload, options = {}) {
   }
 
   const settings = getCsSettings(connection.userId);
+  const shopKey = connection.storeName || "";
+  const merged = getMergedExtensionContext(connection.userId, "tiktok", 12, shopKey || undefined);
   const routed = await routeBuyerMessage({
     buyerText: inbound.buyerText,
     userId: connection.userId,
-    shopKey: connection.storeName,
+    shopKey,
     shopName: connection.storeName || "",
     channel: "webhook",
     settings,
     orderContext: options.orderContext || "",
+    mergedContext: merged,
   });
 
   recordCsRouteEvent({

@@ -5,6 +5,7 @@ import {
   DEFAULT_SLA_DAY_BY_LANG,
   DEFAULT_SLA_NIGHT_BY_LANG,
 } from "./csBuiltinTemplates.js";
+import { DEFAULT_UNCERTAIN_REPLY_TEMPLATES } from "./csUncertainTemplates.js";
 import { normalizeFaqLang } from "../../shared/tiktokShopLanguages.js";
 
 function copyTemplateMap(defaults, overrides = {}) {
@@ -21,14 +22,17 @@ export function defaultCsAutomationSettings() {
   return {
     restStartHour: 23,
     restEndHour: 9,
-    nightAiEnabled: true,
+    nightAiEnabled: false,
+    daytimeAiTrustedAutoSend: false,
     extensionAutoSendFaq: true,
     extensionAutoSendAfterSales: true,
     extensionAutoClickSend: true,
     afterSalesTemplates: { ...DEFAULT_AFTER_SALES_TEMPLATES },
     greetingTemplates: { ...DEFAULT_GREETING_TEMPLATES },
+    uncertainReplyTemplates: { ...DEFAULT_UNCERTAIN_REPLY_TEMPLATES },
     slaDayByLang: { ...DEFAULT_SLA_DAY_BY_LANG },
     slaNightByLang: { ...DEFAULT_SLA_NIGHT_BY_LANG },
+    nightReadinessByShop: {},
   };
 }
 
@@ -38,8 +42,16 @@ export function normalizeCsAutomationSettings(raw = {}) {
 
   merged.afterSalesTemplates = copyTemplateMap(DEFAULT_AFTER_SALES_TEMPLATES, merged.afterSalesTemplates);
   merged.greetingTemplates = copyTemplateMap(DEFAULT_GREETING_TEMPLATES, merged.greetingTemplates);
+  merged.uncertainReplyTemplates = copyTemplateMap(
+    DEFAULT_UNCERTAIN_REPLY_TEMPLATES,
+    merged.uncertainReplyTemplates,
+  );
   merged.slaDayByLang = copyTemplateMap(DEFAULT_SLA_DAY_BY_LANG, merged.slaDayByLang);
   merged.slaNightByLang = copyTemplateMap(DEFAULT_SLA_NIGHT_BY_LANG, merged.slaNightByLang);
+
+  if (!merged.nightReadinessByShop || typeof merged.nightReadinessByShop !== "object") {
+    merged.nightReadinessByShop = {};
+  }
 
   if (raw.afterSalesTemplateZh) merged.afterSalesTemplates.zh = String(raw.afterSalesTemplateZh).slice(0, 4000);
   if (raw.afterSalesTemplateEn) merged.afterSalesTemplates.en = String(raw.afterSalesTemplateEn).slice(0, 4000);

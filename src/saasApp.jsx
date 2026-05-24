@@ -23,6 +23,7 @@ import {
   UserPlus,
   UploadCloud,
   Users,
+  Video,
   X,
   Zap,
 } from "lucide-react";
@@ -46,6 +47,7 @@ import {
   TikTokAgentHint,
   useExtensionWorkspaceSummary,
 } from "./workspace/tiktokPanels.jsx";
+import { VibeClipPanel } from "./workspace/vibeClipPanel.jsx";
 
 const EARLY_BIRD_HINT = "早鸟价续费同价 · 限前 100 名或至 2026年8月31日";
 
@@ -149,6 +151,14 @@ const agents = [
     icon: Sparkles,
     desc: "生成标题、五点描述、关键词、FAQ 和 A+ 页面结构。",
     prompt: "把这款宠物饮水机优化成 Amazon US 高转化 Listing。",
+  },
+  {
+    id: "vibeclip",
+    name: "氛围成片",
+    icon: Video,
+    desc: "上传商品图，AI 匹配氛围、文案与 BGM，生成 TikTok 卖货短视频方案。",
+    prompt: "",
+    customPanel: "vibeclip",
   },
   {
     id: "growth",
@@ -264,6 +274,8 @@ const caseStudies = [
 function readRouteHash() {
   return window.location.hash.replace(/^#/, "").trim();
 }
+
+const CS_FAQ_PENDING_KEY = "fanmeng_pending_cs_faq";
 
 function parseCaseSlugFromHash(raw) {
   if (!raw.startsWith("case/")) return null;
@@ -2308,7 +2320,7 @@ function StoreDataNudgeModal({ agentId, onClose, onOpenStoreApi }) {
     agentId === "growth"
       ? "店铺业绩诊断"
       : agentId === "service"
-        ? "AI 客服售后"
+        ? "客服控制台"
         : "广告库存利润";
 
   function dismiss() {
@@ -2454,64 +2466,6 @@ function StructuredAgentPreview({ agentId }) {
             <h4>行动清单</h4>
             <p>补数据 → 验证假设 → 调整广告/Listing/库存，按周复盘。</p>
           </section>
-        </div>
-      </div>
-    );
-  }
-
-  if (agentId === "service") {
-    return (
-      <div className="structured-preview service-preview">
-        <div className="preview-heading">
-          <strong>AI 客服 · 策略与话术</strong>
-          <span>不代客执行后台；高风险须人工或系统确认</span>
-        </div>
-        <div className="service-flow">
-          <div>意图识别</div>
-          <span>→</span>
-          <div>话术与 Checklist</div>
-          <span>→</span>
-          <div>若接 API 可规划查询</div>
-          <span>→</span>
-          <div>人工/系统执行</div>
-        </div>
-        <div className="service-matrix">
-          <section>
-            <h4>售前策略</h4>
-            <p>规格/库存/时效：无实时数据时用核对模板索取信息。</p>
-            <p>价格优惠：避免未经授权的底价承诺。</p>
-            <p>推荐与对比：基于需求给方向，注明需核实库存。</p>
-            <p>催单改单：只给内部步骤，执行标「待确认」。</p>
-          </section>
-          <section>
-            <h4>售后策略</h4>
-            <p>订单物流：话术 + 建议向官方渠道核实的方式。</p>
-            <p>退款退货：政策对齐话术，不声称「已操作完成」。</p>
-            <p>投诉/差评：安抚与补偿梯度，标注审批与记录。</p>
-            <p>换货补发：Checklist + 待仓库/人工执行。</p>
-          </section>
-        </div>
-        <div className="service-system">
-          <div>
-            <span>后续接入</span>
-            <strong>Shopify / Amazon / WooCommerce API 规划项</strong>
-          </div>
-          <div>
-            <span>消息通道</span>
-            <strong>草稿回复供人工发送</strong>
-          </div>
-          <div>
-            <span>语言层</span>
-            <strong>多语言草稿（按需）</strong>
-          </div>
-          <div>
-            <span>知识库</span>
-            <strong>政策 + Q&A 沉淀</strong>
-          </div>
-        </div>
-        <div className="reply-box">
-          <h4>输出约定</h4>
-          <p>统一输出含：意图、风险等级、话术、须确认项；禁止「已替您在后台操作」类表述。</p>
         </div>
       </div>
     );
@@ -2863,6 +2817,7 @@ function Workspace() {
   const [routeHash, setRouteHash] = useState(readRouteHash);
   const [storeMetricsReady, setStoreMetricsReady] = useState(false);
   const [csDrillBusy, setCsDrillBusy] = useState(false);
+  const [csOpenFaqTab, setCsOpenFaqTab] = useState(false);
   const tiktokOAuthReturnHandledRef = useRef(false);
 
   const extSummaryAuthHeaders = useCallback(
@@ -3028,6 +2983,58 @@ function Workspace() {
   useEffect(() => {
     initUmami();
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      const hash = readRouteHash();
+      if (hash === "cs-faq" || hash === "faq-ai") {
+        try {
+          sessionStorage.setItem(CS_FAQ_PENDING_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+    const hash = readRouteHash();
+    const pending = (() => {
+      try {
+        return sessionStorage.getItem(CS_FAQ_PENDING_KEY) === "1";
+      } catch {
+        return false;
+      }
+    })();
+    if (hash === "cs-faq" || hash === "faq-ai" || pending) {
+      setActiveId("service");
+      setCsOpenFaqTab(true);
+      try {
+        sessionStorage.removeItem(CS_FAQ_PENDING_KEY);
+      } catch {
+        /* ignore */
+      }
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      setRouteHash("");
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const handler = () => {
+      const hash = readRouteHash();
+      if (hash === "cs-faq" || hash === "faq-ai") {
+        setActiveId("service");
+        setCsOpenFaqTab(true);
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        setRouteHash("");
+      }
+    };
+    window.addEventListener("hashchange", handler);
+    return () => window.removeEventListener("hashchange", handler);
+  }, [token]);
+
+  useEffect(() => {
+    if (activeId !== "service") setCsOpenFaqTab(false);
+  }, [activeId]);
 
   useEffect(() => {
     if (token) return;
@@ -3216,6 +3223,16 @@ function Workspace() {
   }
 
   function selectAgent(id) {
+    const agent = agents.find((a) => a.id === id);
+    if (agent?.customPanel === "vibeclip") {
+      if (!hasFeature("vibeClip")) {
+        showToast("「氛围成片」需升级成长版或更高套餐。");
+        setShowSubscription(true);
+        return;
+      }
+      requestNavigateTo(id);
+      return;
+    }
     if (!hasFeature("agent", id)) {
       const name = agents.find((a) => a.id === id)?.name || "该模块";
       showToast(
@@ -3629,6 +3646,7 @@ function Workspace() {
   );
 
   const isTikTokAgent = ["growth", "service", "profit"].includes(activeId);
+  const isCustomPanelAgent = isTikTokAgent || activeAgent?.customPanel === "vibeclip";
 
   const ActiveIcon = activeAgent?.icon || Rocket;
   const canUseScraper = activeId === WORKSPACE_AUTOPILOT_ID || activeAgent?.id === "trend";
@@ -3775,7 +3793,23 @@ function Workspace() {
         </button>
 
         <div className="side-label">内容生产</div>
-        {agents.filter((agent) => !agent.tiktokPanel).map((agent) => {
+        {agents.filter((agent) => !agent.tiktokPanel && !agent.customPanel).map((agent) => {
+          const Icon = agent.icon;
+          return (
+            <button key={agent.id} className={activeId === agent.id ? "side-item active" : "side-item"} onClick={() => selectAgent(agent.id)}>
+              <span>
+                <Icon size={18} />
+              </span>
+              <div>
+                <strong>{agent.name}</strong>
+                <small>{agent.desc}</small>
+              </div>
+            </button>
+          );
+        })}
+
+        <div className="side-label">氛围视频</div>
+        {agents.filter((agent) => agent.customPanel === "vibeclip").map((agent) => {
           const Icon = agent.icon;
           return (
             <button key={agent.id} className={activeId === agent.id ? "side-item active" : "side-item"} onClick={() => selectAgent(agent.id)}>
@@ -3906,6 +3940,23 @@ function Workspace() {
                 onRun={() => runAgent({ input: agents.find((a) => a.id === "growth")?.prompt })}
               />
             ) : null}
+            {activeId === "service" ? (
+              <CsControlConsole
+                key={csOpenFaqTab ? "cs-faq" : "cs-default"}
+                authHeaders={authHeaders}
+                showToast={showToast}
+                formatError={formatError}
+                summary={extSummary}
+                onRefreshSummary={reloadExtSummary}
+                onOpenExtensionGuide={openExtensionInstallGuide}
+                drillText={panel.csDrillText}
+                onDrillTextChange={(v) => patchPanel("service", { csDrillText: v })}
+                onDrillRun={runCsDrill}
+                drillResult={panel.csDrillResult}
+                drillBusy={csDrillBusy}
+                initialTab={csOpenFaqTab ? "faq" : "alerts"}
+              />
+            ) : null}
             {activeId === "profit" ? (
               <ProfitWorkbenchPanel
                 summary={extSummary}
@@ -3926,22 +3977,15 @@ function Workspace() {
                 }
               />
             ) : null}
-            {activeId === "service" ? (
-              <CsControlConsole
+            {activeId === "vibeclip" ? (
+              <VibeClipPanel
                 authHeaders={authHeaders}
                 showToast={showToast}
                 formatError={formatError}
-                summary={extSummary}
-                onRefreshSummary={reloadExtSummary}
-                onOpenExtensionGuide={openExtensionInstallGuide}
-                drillText={panel.csDrillText}
-                onDrillTextChange={(v) => patchPanel("service", { csDrillText: v })}
-                onDrillRun={runCsDrill}
-                drillResult={panel.csDrillResult}
-                drillBusy={csDrillBusy}
+                hasFeature={hasFeature}
               />
             ) : null}
-            {!isTikTokAgent ? <StructuredAgentPreview agentId={activeAgent?.id} /> : null}
+            {!isCustomPanelAgent ? <StructuredAgentPreview agentId={activeAgent?.id} /> : null}
             {activeId === "trend" && panel.echotikHint?.detected ? (
               <p className="echotik-hint">
                 {panel.echotikHint.marketFlag} 已识别 {panel.echotikHint.marketName}
@@ -3949,14 +3993,14 @@ function Workspace() {
                 {panel.echotikHint.sampleCount ? ` · 已加载 TOP${panel.echotikHint.sampleCount} 样本` : ""}
               </p>
             ) : null}
-            {!isTikTokAgent || panel.answer ? (
+            {!isCustomPanelAgent || panel.answer ? (
               <ResultDocument content={panel.answer} streaming={isRunning && runningPanelId === activeId} typingReveal={panel.typingReveal} />
             ) : null}
             </div>
           </section>
         </div>
 
-        {!isTikTokAgent ? (
+        {!isCustomPanelAgent ? (
         <section className="composer">
           {activeId === "trend" ? (
             <p className="echotik-catalog-hint">

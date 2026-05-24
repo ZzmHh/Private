@@ -1,5 +1,5 @@
 /**
- * 分层客服路由：FAQ 直发 → 售后模板+告警 → 北京夜间 AI 兜底 → 否则草稿
+ * 分层客服路由：FAQ 直发 → 售后模板+告警 → 白天 AI 待确认/信任自动 → 夜间就绪+AI 自评 → 委婉模板
  */
 import { classifyBuyerIntent, detectBuyerLanguage } from "./classifyBuyerIntent.js";
 import { applyTemplateVars, getSlaText, isBeijingRestHours } from "./beijingTime.js";
@@ -11,8 +11,14 @@ import {
 } from "./csStore.js";
 import { getLanguageLabel } from "../../shared/tiktokShopLanguages.js";
 import { pickLocalizedTemplate } from "./csBuiltinTemplates.js";
-import { generateNightBuyerReplyText } from "./generateNightBuyerReply.js";
-import { generateBuyerReplyText } from "./generateBuyerReply.js";
+import { generateSmartCsReply } from "./generateSmartCsReply.js";
+import { assessNightReadinessSync } from "./assessNightReadiness.js";
+
+function uncertainReply(settings, lang, beijingNight, shopName) {
+  const sla = getSlaText({ lang, beijingNight, settings });
+  const tpl = pickLocalizedTemplate(settings.uncertainReplyTemplates, lang);
+  return applyTemplateVars(tpl, { sla, shopName });
+}
 
 /**
  * @param {{
@@ -22,6 +28,7 @@ import { generateBuyerReplyText } from "./generateBuyerReply.js";
  *   shopName?: string,
  *   channel?: 'webhook'|'extension',
  *   orderContext?: string,
+ *   mergedContext?: object|null,
  *   faqTemplates?: object[],
  *   settings?: object,
  *   planAllowsAutoSend?: boolean,
@@ -55,7 +62,7 @@ export async function routeBuyerMessage(input) {
   if (intent.tier === "aftersales") {
     const tpl = pickLocalizedTemplate(settings.afterSalesTemplates, lang);
     const replyText = applyTemplateVars(tpl, { sla, shopName });
-    const alert = createCsSellerAlert({
+    createCsSellerAlert({
       userId: input.userId,
       shopKey: input.shopKey,
       shopName,
@@ -78,7 +85,6 @@ export async function routeBuyerMessage(input) {
       templateUsed: { kind: "aftersales", lang },
       notifySeller: true,
       sellerMessage: `⚠️ 售后待处理：买家消息需人工跟进（${intent.category}）`,
-      alertId: alert.id,
       reason: "售后类问题：已发安抚模板并通知卖家",
     };
   }
@@ -136,55 +142,107 @@ export async function routeBuyerMessage(input) {
     };
   }
 
-  // —— 北京夜间 · 非售后 · FAQ 未命中 · AI 兜底 ——
+  // —— 北京夜间 · 非售后 · FAQ 未命中 ——
   if (beijingNight && settings.nightAiEnabled !== false) {
-    const gen = await generateNightBuyerReplyText({
+    const readiness = assessNightReadinessSync(input.mergedContext);
+    const storedReady = settings.nightReadinessByShop?.[String(input.shopKey || "")];
+
+    if (!readiness.canEnableNightAi && storedReady?.canEnableNightAi !== true) {
+      const replyText = uncertainReply(settings, lang, true, shopName);
+      const autoSend = planAllowsAutoSend && channel === "webhook" ? true : planAllowsAutoSend;
+      return {
+        ok: true,
+        ...base,
+        tier: "night_fallback",
+        action: autoSend ? "auto_send" : "draft",
+        replyText,
+        notifySeller: false,
+        nightReadiness: readiness,
+        reason: "夜间商品资料或 AI 评估未就绪，已发送委婉等候模板",
+      };
+    }
+
+    const smart = await generateSmartCsReply({
       buyerText,
       shopName,
-      orderContext: input.orderContext || "",
+      mergedContext: input.mergedContext,
+      orderContext: input.orderContext,
       languageHint: lang,
+      mode: "night",
     });
-    if (gen.ok) {
+
+    if (smart.ok && smart.canAutoSend && smart.confidence === "high" && planAllowsAutoSend) {
       return {
         ok: true,
         ...base,
         tier: "night_ai",
-        action: planAllowsAutoSend ? "auto_send" : "draft",
-        replyText: gen.text,
+        action: "auto_send",
+        replyText: smart.text,
+        aiConfidence: smart.confidence,
+        productMatch: smart.productMatch,
         notifySeller: false,
-        reason: "北京时间休息时段，AI 售前兜底（非售后）",
+        reason: "夜间 AI 高置信度，已自动回复",
       };
     }
+
+    const replyText = uncertainReply(settings, lang, true, shopName);
     return {
-      ok: false,
+      ok: true,
       ...base,
-      tier: "night_ai",
-      action: "draft",
-      error: gen.error,
+      tier: "night_fallback",
+      action: planAllowsAutoSend ? "auto_send" : "draft",
+      replyText,
+      aiConfidence: smart.confidence || "low",
+      productMatch: smart.productMatch || null,
       notifySeller: false,
-      reason: "夜间 AI 失败，请人工处理",
+      reason: smart.uncertainReason || "夜间 AI 无法确证，已发送委婉等候模板",
     };
   }
 
-  // —— 白天：生成草稿，不自动发 ——
-  const draft = await generateBuyerReplyText({
+  // —— 白天 · 智能商品感知回复 ——
+  const smart = await generateSmartCsReply({
     buyerText,
     shopName,
-    platform: "TikTok Shop",
+    mergedContext: input.mergedContext,
+    orderContext: input.orderContext,
     languageHint: lang,
+    mode: "daytime",
   });
 
+  if (smart.ok) {
+    const trustedAuto =
+      planAllowsAutoSend &&
+      settings.daytimeAiTrustedAutoSend === true &&
+      smart.canAutoSend &&
+      smart.confidence === "high";
+
+    return {
+      ok: true,
+      ...base,
+      tier: smart.productMatch ? "product_ai" : "day_ai",
+      action: trustedAuto ? "auto_send" : "pending_confirm",
+      replyText: smart.text,
+      aiConfidence: smart.confidence,
+      productMatch: smart.productMatch,
+      notifySeller: false,
+      reason: trustedAuto
+        ? "已识别商品并高置信度回复，已自动发送"
+        : smart.productMatch
+          ? `已识别商品「${smart.productMatch.name}」，请确认 AI 回复后发送`
+          : "AI 已生成回复，请确认后发送（可开启「白天信任 AI 自动发送」）",
+    };
+  }
+
+  const replyText = uncertainReply(settings, lang, false, shopName);
   return {
-    ok: draft.ok,
+    ok: false,
     ...base,
     tier: "manual",
-    action: "draft",
-    replyText: draft.ok ? draft.text : "",
-    error: draft.error,
+    action: "pending_confirm",
+    replyText,
+    error: smart.error,
     notifySeller: false,
-    reason: beijingNight
-      ? "休息时段但未开启夜间 AI"
-      : "非 FAQ/非售后，白天需人工确认后发送",
+    reason: smart.error || "AI 生成失败，已提供保守回复供确认",
   };
 }
 

@@ -4,9 +4,12 @@
 import { agentSkills, buildAgentMessages } from "./agentSkills.js";
 import { generateBuyerReplyText } from "./autoReply/generateBuyerReply.js";
 import { routeBuyerMessage } from "./autoReply/routeBuyerMessage.js";
-import { listLanguagesForApi } from "../../shared/tiktokShopLanguages.js";
+import { assessNightReadiness } from "./autoReply/assessNightReadiness.js";
+import { listLanguagesForApi } from "../shared/tiktokShopLanguages.js";
 import { getCsAnalyticsSummary, recordCsRouteEvent } from "./autoReply/csAnalytics.js";
 import { parseFaqImportPayload, FAQ_IMPORT_SAMPLE_CSV } from "./autoReply/parseFaqImport.js";
+import { buildFaqShopContext } from "./autoReply/buildFaqShopContext.js";
+import { generateFaqDrafts } from "./autoReply/generateFaqDrafts.js";
 import { withDbLock } from "./repositories/index.js";
 import {
   deleteCsFaqTemplate,
@@ -197,6 +200,107 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     }
   }));
 
+  app.get("/api/extension/cs/faq/context", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const shopKey = String(req.query.shopKey || "").trim();
+      const merged = getMergedExtensionContext(req.user.id, "tiktok", 12, shopKey || undefined);
+      const ctx = buildFaqShopContext({ mergedContext: merged, shopName: req.query.shopName || "" });
+      res.json({
+        ok: true,
+        shopKey,
+        ready: ctx.ready,
+        shopName: ctx.shopName,
+        primaryLang: ctx.primaryLang,
+        pageTypes: ctx.pageTypes,
+        snapshotCount: ctx.snapshotCount,
+        latestAt: ctx.latestAt,
+        hints: ctx.hints,
+      });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取 FAQ 素材失败。" });
+    }
+  });
+
+  app.post("/api/extension/cs/faq/generate", authMiddleware, asyncHandler(async (req, res) => {
+    const startedAt = Date.now();
+    let usage;
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      ensureFeatureAccess(req.user, "agent", "service");
+      const { shopKey, shopName, primaryLang, pages, useSnapshots = true } = req.body || {};
+      const sk = String(shopKey || "").trim();
+
+      const merged =
+        useSnapshots !== false ? getMergedExtensionContext(req.user.id, "tiktok", 12, sk || undefined) : null;
+
+      usage = incrementUsage(req.user.id, "service");
+      const result = await generateFaqDrafts({
+        mergedContext: merged,
+        inlinePages: Array.isArray(pages) ? pages : [],
+        shopName: shopName || merged?.pages?.[0]?.shopName || "",
+        primaryLang: primaryLang || undefined,
+      });
+
+      if (usage?.logId) {
+        finalizeUsageLog(usage.logId, {
+          type: "service",
+          status: result.ok ? "success" : "failed",
+          inputLength: result.contextSummary?.snapshotCount || 0,
+          outputLength: (result.drafts || []).length,
+          startedAt,
+          metadata: { action: "faq_generate", shopKey: sk, draftCount: (result.drafts || []).length },
+        });
+      }
+
+      if (!result.ok) {
+        return res.status(400).json({
+          error: result.error,
+          contextSummary: result.contextSummary,
+          billingUrl: extensionBillingUrl(),
+        });
+      }
+
+      res.json({
+        ok: true,
+        drafts: result.drafts,
+        contextSummary: result.contextSummary,
+        warnings: result.warnings,
+        modelUsed: result.modelUsed,
+      });
+    } catch (error) {
+      res.status(error.status || 500).json({
+        error: error.message || "生成 FAQ 草稿失败。",
+        billingUrl: extensionBillingUrl(),
+      });
+    }
+  }));
+
+  app.post("/api/extension/cs/faq/generate/apply", authMiddleware, asyncHandler(async (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const { shopKey, templates } = req.body || {};
+      const list = (templates || [])
+        .filter((t) => t?.text?.trim())
+        .map((t) => ({
+          name: t.name,
+          text: t.text,
+          triggers: t.triggers,
+          category: t.category,
+          lang: t.lang,
+        }));
+      if (!list.length) {
+        return res.status(400).json({ error: "请至少选择一条有效 FAQ 草稿。" });
+      }
+      const rows = await withDbLock(async () =>
+        importCsFaqTemplates(req.user.id, String(shopKey || ""), list, { mode: "merge" }),
+      );
+      res.json({ ok: true, count: rows.length, templates: rows });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "启用 FAQ 草稿失败。" });
+    }
+  }));
+
   app.post("/api/extension/snapshot", authMiddleware, validateBody(validators.extensionSnapshot), (req, res) => {
     try {
       ensureFeatureAccess(req.user, "storeApiAgents");
@@ -235,9 +339,9 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       }
 
       let ctxText = String(orderContext || "").slice(0, 2000);
-      if (!ctxText) {
-        const merged = getMergedExtensionContext(req.user.id, "tiktok", 4, sk || undefined);
-        if (merged) ctxText = JSON.stringify(merged).slice(0, 2000);
+      const merged = getMergedExtensionContext(req.user.id, "tiktok", 12, sk || undefined);
+      if (!ctxText && merged) {
+        ctxText = JSON.stringify(merged).slice(0, 2000);
       }
 
       usage = dryRun ? null : incrementUsage(req.user.id, "service");
@@ -248,6 +352,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         shopName: shopName || "",
         channel: "extension",
         orderContext: ctxText,
+        mergedContext: merged,
         faqTemplates: faqTemplates?.length ? faqTemplates : listCsFaqTemplates(req.user.id, sk),
         settings: getCsSettings(req.user.id),
         planAllowsAutoSend: Boolean(getPlan(req.user).features.extensionAutoSend),
@@ -311,9 +416,9 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       if (useLegacy !== true) {
         const sk = String(shopKey || "").trim();
         let ctxText = String(orderContext || "").slice(0, 2000);
-        if (!ctxText) {
-          const merged = getMergedExtensionContext(req.user.id, "tiktok", 4, sk || undefined);
-          if (merged) ctxText = JSON.stringify(merged).slice(0, 2000);
+        const merged = getMergedExtensionContext(req.user.id, "tiktok", 12, sk || undefined);
+        if (!ctxText && merged) {
+          ctxText = JSON.stringify(merged).slice(0, 2000);
         }
         usage = incrementUsage(req.user.id, "service");
         const routed = await routeBuyerMessage({
@@ -323,6 +428,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
           shopName: shopName || "",
           channel: "extension",
           orderContext: ctxText,
+          mergedContext: merged,
           settings: getCsSettings(req.user.id),
           planAllowsAutoSend: Boolean(getPlan(req.user).features.extensionAutoSend),
         });
@@ -448,15 +554,65 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     }
   });
 
-  app.post("/api/extension/cs/settings", authMiddleware, (req, res) => {
+  app.post("/api/extension/cs/settings", authMiddleware, asyncHandler(async (req, res) => {
     try {
       ensureFeatureAccess(req.user, "storeApiAgents");
-      const settings = saveCsSettings(req.user.id, req.body || {});
+      const partial = { ...(req.body || {}) };
+      const shopKey = String(partial.nightReadinessShopKey || partial.shopKey || "").trim();
+
+      if (partial.nightAiEnabled === true) {
+        const assessment = await assessNightReadiness(req.user.id, shopKey);
+        if (!assessment.canEnableNightAi) {
+          return res.status(400).json({
+            error: assessment.message || "商品资料或 AI 评估未通过，暂不能开启夜间自动回复。",
+            readiness: assessment,
+          });
+        }
+        const current = getCsSettings(req.user.id);
+        partial.nightReadinessByShop = {
+          ...(current.nightReadinessByShop || {}),
+          [shopKey || "_default"]: assessment,
+        };
+      }
+
+      delete partial.nightReadinessShopKey;
+      delete partial.shopKey;
+
+      const settings = saveCsSettings(req.user.id, partial);
       res.json({ ok: true, settings });
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message || "保存设置失败。" });
     }
-  });
+  }));
+
+  app.get("/api/extension/cs/readiness", authMiddleware, asyncHandler(async (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const shopKey = String(req.query.shopKey || "").trim();
+      const readiness = await assessNightReadiness(req.user.id, shopKey);
+      res.json({ ok: true, readiness });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取就绪状态失败。" });
+    }
+  }));
+
+  app.post("/api/extension/cs/readiness/assess", authMiddleware, asyncHandler(async (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const shopKey = String(req.body?.shopKey || "").trim();
+      const readiness = await assessNightReadiness(req.user.id, shopKey);
+      const current = getCsSettings(req.user.id);
+      saveCsSettings(req.user.id, {
+        nightReadinessByShop: {
+          ...(current.nightReadinessByShop || {}),
+          [shopKey || "_default"]: readiness,
+        },
+      });
+      res.json({ ok: true, readiness });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "AI 评估失败。" });
+    }
+  }));
 
   app.post("/api/extension/analyze", authMiddleware, async (req, res) => {
     const startedAt = Date.now();

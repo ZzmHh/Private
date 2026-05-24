@@ -3,11 +3,11 @@
  */
 const FanmengExtensionConfig = {
   BUILD: "dev",
-  VERSION: "0.4.8",
+  VERSION: "0.4.9",
   DEFAULT_API_BASE: "http://127.0.0.1:8787",
   CHROME_STORE_URL: "",
   PRIVACY_URL: "",
-  WEBSITE_URL: "",
+  WEBSITE_URL: "http://127.0.0.1:5173",
 };
 
 if (typeof globalThis !== "undefined") {

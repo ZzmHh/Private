@@ -139,14 +139,16 @@ document.getElementById("apiBase").addEventListener("blur", async () => {
 });
 
 document.getElementById("openFaqWeb").addEventListener("click", async () => {
-  const base = FanmengApi.normalizeBase(document.getElementById("apiBase").value.trim());
-  if (!base) {
+  const apiBase = FanmengApi.normalizeBase(document.getElementById("apiBase").value.trim());
+  if (!apiBase) {
     showMsg("请先填写 API 地址");
     return;
   }
   try {
-    await FanmengPermissions.ensureHostPermission(base);
-    chrome.tabs.create({ url: `${base}/#cs-faq` });
+    const workspace = FanmengPermissions.resolveWorkspaceUrl(apiBase);
+    await FanmengPermissions.ensureHostPermission(apiBase);
+    await FanmengPermissions.ensureHostPermission(workspace);
+    chrome.tabs.create({ url: `${workspace}/#cs-faq` });
   } catch (e) {
     showMsg(e.message || "无法打开");
   }

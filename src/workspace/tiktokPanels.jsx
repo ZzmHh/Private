@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Shield,
+  Sparkles,
   Trash2,
   UploadCloud,
   Zap,
@@ -267,11 +268,15 @@ const TIER_LABELS = {
   aftersales: "售后安抚",
   faq: "FAQ / 问候",
   night_ai: "夜间 AI 兜底",
+  night_fallback: "夜间等候模板",
+  day_ai: "白天 AI",
+  product_ai: "商品 AI",
   manual: "人工草稿",
 };
 
 const ACTION_LABELS = {
   auto_send: "可自动发送",
+  pending_confirm: "待卖家确认",
   draft: "仅草稿",
 };
 
@@ -433,6 +438,8 @@ function DrillResultPanel({ result }) {
     rows.push(["内置模板", `${result.templateUsed.kind || "—"} · ${getLanguageLabel(result.templateUsed.lang)}`]);
   }
   if (result.notifySeller) rows.push(["卖家告警", result.sellerMessage || "将通知卖家"]);
+  if (result.productMatch?.name) rows.push(["识别商品", result.productMatch.name]);
+  if (result.aiConfidence) rows.push(["AI 置信度", result.aiConfidence]);
 
   return (
     <div className="tt-drill-result">
@@ -452,6 +459,302 @@ function DrillResultPanel({ result }) {
         </>
       ) : null}
       {result.error ? <p className="tt-drill-error">{result.error}</p> : null}
+    </div>
+  );
+}
+
+function CsNightReadinessPanel({ readiness, loading, busy, onRefresh, onAssess }) {
+  if (loading && !readiness) {
+    return <p className="tt-hint">正在检查夜间自动回复就绪状态…</p>;
+  }
+  if (!readiness) {
+    return (
+      <p className="tt-hint">
+        尚未评估。请先在插件中同步商品/库存页。
+        <button type="button" className="header-ghost slim" disabled={busy} onClick={onRefresh}>
+          刷新
+        </button>
+      </p>
+    );
+  }
+
+  const ready = readiness.canEnableNightAi;
+  return (
+    <div className={`tt-cs-readiness ${ready ? "is-ready" : "is-pending"}`}>
+      <div className="tt-cs-readiness-head">
+        <strong>夜间自动回复就绪</strong>
+        <span className={ready ? "tt-dot is-on" : "tt-dot"} aria-hidden />
+        <span>{ready ? "可开启" : "未就绪"}</span>
+      </div>
+      <ul className="tt-faq-ai-hints">
+        <li>商品/库存页：{readiness.productPages ?? 0} 页</li>
+        <li>商品线索：{readiness.catalogCount ?? 0} 条</li>
+        <li>已同步快照：{readiness.snapshotCount ?? 0} 页</li>
+      </ul>
+      {(readiness.gaps || []).length ? (
+        <ul className="tt-faq-ai-warnings">
+          {readiness.gaps.map((g) => (
+            <li key={g}>{g}</li>
+          ))}
+        </ul>
+      ) : null}
+      {readiness.aiAssessment?.summary ? (
+        <p className="tt-hint">AI 评估：{readiness.aiAssessment.summary}</p>
+      ) : null}
+      {readiness.message ? <p className="tt-hint">{readiness.message}</p> : null}
+      <div className="tt-faq-ai-actions">
+        <button type="button" className="header-ghost slim" disabled={busy} onClick={onRefresh}>
+          刷新检查
+        </button>
+        <button type="button" className="continue-checkout slim" disabled={busy} onClick={onAssess}>
+          {busy ? "评估中…" : "AI 重新评估"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FaqAiGeneratePanel({ authHeaders, showToast, formatError, shopKey, shopLabel, onApplied, busy, setBusy }) {
+  const [contextInfo, setContextInfo] = useState(null);
+  const [drafts, setDrafts] = useState([]);
+  const [selected, setSelected] = useState(() => new Set());
+  const [primaryLang, setPrimaryLang] = useState("en");
+  const [generating, setGenerating] = useState(false);
+  const [loadingCtx, setLoadingCtx] = useState(false);
+  const [warnings, setWarnings] = useState([]);
+  const languageOptions = buildLanguageSelectOptions();
+
+  async function loadContext() {
+    setLoadingCtx(true);
+    try {
+      const qs = new URLSearchParams({ shopKey: shopKey || "" });
+      const response = await fetch(`/api/extension/cs/faq/context?${qs}`, { headers: authHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setContextInfo(data);
+      if (data.primaryLang) setPrimaryLang(data.primaryLang);
+    } catch (error) {
+      setContextInfo(null);
+      showToast(formatError(error));
+    } finally {
+      setLoadingCtx(false);
+    }
+  }
+
+  useEffect(() => {
+    setDrafts([]);
+    setSelected(new Set());
+    setWarnings([]);
+    loadContext();
+  }, [shopKey]);
+
+  function toggleDraft(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll(on) {
+    if (on) setSelected(new Set(drafts.map((d) => d.id)));
+    else setSelected(new Set());
+  }
+
+  function updateDraftField(id, field, value) {
+    setDrafts((list) => list.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
+  }
+
+  async function runGenerate() {
+    setGenerating(true);
+    setBusy(true);
+    try {
+      const response = await fetch("/api/extension/cs/faq/generate", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          shopKey: shopKey || "",
+          shopName: contextInfo?.shopName || shopLabel,
+          primaryLang,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setDrafts(data.drafts || []);
+      setWarnings(data.warnings || []);
+      setContextInfo((prev) => ({ ...(prev || {}), ...(data.contextSummary || {}) }));
+      const ids = (data.drafts || []).filter((d) => !d.needsReview).map((d) => d.id);
+      setSelected(new Set(ids.length ? ids : (data.drafts || []).map((d) => d.id)));
+      showToast(`已生成 ${data.drafts?.length || 0} 条 FAQ 草稿，请核对后启用`);
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setGenerating(false);
+      setBusy(false);
+    }
+  }
+
+  async function applySelected() {
+    const picked = drafts.filter((d) => selected.has(d.id));
+    if (!picked.length) {
+      showToast("请至少勾选一条 FAQ 草稿。");
+      return;
+    }
+    const risky = picked.filter((d) => d.needsReview);
+    if (risky.length && !window.confirm(`有 ${risky.length} 条标记为「需确认」，仍要启用吗？建议先编辑价格/物流表述。`)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/extension/cs/faq/generate/apply", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          shopKey: shopKey || "",
+          templates: picked.map((d) => ({
+            name: d.name,
+            text: d.text,
+            triggers: d.triggers,
+            category: d.category,
+            lang: d.lang,
+          })),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      showToast(`已启用 ${data.count} 条 FAQ 模板`);
+      setDrafts([]);
+      setSelected(new Set());
+      await onApplied();
+      await loadContext();
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const ready = Boolean(contextInfo?.ready);
+  const pageTypes = contextInfo?.pageTypes || [];
+
+  return (
+    <div className="tt-faq-ai-panel">
+      <div className="tt-faq-ai-head">
+        <div>
+          <strong><Sparkles size={16} aria-hidden /> AI 生成 FAQ 草稿</strong>
+          <p className="tt-hint">
+            插件在卖家中心同步商品/物流等页面后，AI 根据店铺信息生成 FAQ，您微调后一键启用。
+          </p>
+        </div>
+        <button type="button" className="header-ghost slim" disabled={loadingCtx || busy} onClick={loadContext}>
+          <RefreshCw size={14} aria-hidden /> 刷新素材
+        </button>
+      </div>
+
+      <div className="tt-faq-ai-status">
+        <span className={ready ? "tt-dot is-on" : "tt-dot"} aria-hidden />
+        <span>
+          {ready
+            ? `已采集 ${contextInfo?.snapshotCount || 0} 页 · ${pageTypes.map((t) => t).join(" / ") || "—"}`
+            : "尚未检测到插件同步的店铺页面"}
+          {contextInfo?.latestAt ? ` · ${formatRelativeTime(contextInfo.latestAt)}` : ""}
+        </span>
+      </div>
+
+      {(contextInfo?.hints || []).length ? (
+        <ul className="tt-faq-ai-hints">
+          {(contextInfo.hints || []).map((h) => (
+            <li key={h}>{h}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      {!ready ? (
+        <p className="tt-faq-ai-empty">
+          请安装凡梦 Chrome 插件 → 登录 TikTok 卖家中心 → 打开<strong>商品、订单/发货</strong>等页面 → 点插件「同步本页」或「同步到 FAQ 素材」。
+        </p>
+      ) : (
+        <div className="tt-faq-ai-actions">
+          <label>
+            主语言
+            <select value={primaryLang} disabled={generating || busy} onChange={(e) => setPrimaryLang(e.target.value)}>
+              {languageOptions.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {group.options.map((opt) => (
+                    <option key={`${group.id}-${opt.value}`} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="continue-checkout slim" disabled={generating || busy} onClick={runGenerate}>
+            <Sparkles size={14} aria-hidden /> {generating ? "生成中…" : "AI 生成 FAQ 草稿"}
+          </button>
+        </div>
+      )}
+
+      {warnings.length ? (
+        <ul className="tt-faq-ai-warnings">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      {drafts.length ? (
+        <div className="tt-faq-ai-drafts">
+          <div className="tt-faq-ai-drafts-head">
+            <strong>{drafts.length} 条草稿</strong>
+            <div className="tt-faq-ai-drafts-tools">
+              <button type="button" className="header-ghost slim" onClick={() => toggleAll(true)}>全选</button>
+              <button type="button" className="header-ghost slim" onClick={() => toggleAll(false)}>全不选</button>
+              <button type="button" className="continue-checkout slim" disabled={busy || !selected.size} onClick={applySelected}>
+                启用选中 ({selected.size})
+              </button>
+            </div>
+          </div>
+          <ul className="tt-faq-ai-draft-list">
+            {drafts.map((d) => (
+              <li key={d.id} className={d.needsReview ? "needs-review" : ""}>
+                <label className="tt-faq-ai-draft-check">
+                  <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleDraft(d.id)} />
+                  <span>
+                    <strong>{d.name}</strong>
+                    {d.category ? ` · ${d.category}` : ""}
+                    {d.lang ? ` · ${getLanguageLabel(d.lang)}` : ""}
+                    {d.needsReview ? <em className="tt-faq-ai-badge">需确认</em> : null}
+                  </span>
+                </label>
+                {d.reviewReason ? <p className="tt-faq-ai-review">{d.reviewReason}</p> : null}
+                <label className="tt-note-field">
+                  触发词（| 分隔）
+                  <input
+                    value={(d.triggers || []).join(" | ")}
+                    onChange={(e) =>
+                      updateDraftField(
+                        d.id,
+                        "triggers",
+                        e.target.value.split(/[,，|/;；]+/).map((s) => s.trim()).filter(Boolean),
+                      )
+                    }
+                  />
+                </label>
+                <label className="tt-note-field">
+                  回复内容
+                  <textarea
+                    rows={3}
+                    value={d.text || ""}
+                    onChange={(e) => updateDraftField(d.id, "text", e.target.value)}
+                  />
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -571,6 +874,17 @@ function FaqTemplateManager({ authHeaders, showToast, formatError, templates, on
 
   return (
     <div className="tt-faq-manager">
+      <FaqAiGeneratePanel
+        authHeaders={authHeaders}
+        showToast={showToast}
+        formatError={formatError}
+        shopKey={shopKey}
+        shopLabel={shopLabel}
+        onApplied={onReload}
+        busy={busy}
+        setBusy={setBusy}
+      />
+
       <div className="tt-faq-toolbar">
         <p className="tt-hint tt-faq-intro">
           当前编辑：<strong>{shopLabel}</strong>。覆盖 15 国站点语言；插件识别买家语言后优先匹配同语言 FAQ。
@@ -654,7 +968,7 @@ function FaqTemplateManager({ authHeaders, showToast, formatError, templates, on
       </div>
 
       {!templates.length ? (
-        <p className="tt-empty">还没有 FAQ。可上方手动添加，或下载 CSV 模板填好后导入。</p>
+        <p className="tt-empty">还没有 FAQ 模板。可上方 AI 生成草稿，或手动添加 / CSV 导入。</p>
       ) : (
         <ul className="tt-faq-list">
           {templates.map((t) => (
@@ -696,8 +1010,9 @@ export function CsControlConsole({
   onDrillRun,
   drillResult,
   drillBusy,
+  initialTab = "alerts",
 }) {
-  const [tab, setTab] = useState("alerts");
+  const [tab, setTab] = useState(initialTab);
   const [alerts, setAlerts] = useState([]);
   const [settings, setSettings] = useState(null);
   const [faqTemplates, setFaqTemplates] = useState([]);
@@ -708,6 +1023,8 @@ export function CsControlConsole({
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [draftSettings, setDraftSettings] = useState(null);
+  const [nightReadiness, setNightReadiness] = useState(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
 
   const shopLabel = csShopKey
     ? shops.find((s) => s.shopKey === csShopKey)?.shopName || csShopKey
@@ -778,6 +1095,43 @@ export function CsControlConsole({
     if (tab === "analytics") loadAnalytics(analyticsDays);
   }, [tab, analyticsDays]);
 
+  async function loadNightReadiness(shopKey = csShopKey) {
+    setReadinessLoading(true);
+    try {
+      const qs = new URLSearchParams({ shopKey: shopKey || "" });
+      const response = await fetch(`/api/extension/cs/readiness?${qs}`, { headers: authHeaders() });
+      const data = await response.json();
+      if (response.ok) setNightReadiness(data.readiness || null);
+    } catch {
+      setNightReadiness(null);
+    } finally {
+      setReadinessLoading(false);
+    }
+  }
+
+  async function runNightAssess() {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/extension/cs/readiness/assess", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ shopKey: csShopKey || "" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setNightReadiness(data.readiness || null);
+      showToast(data.readiness?.canEnableNightAi ? "评估通过，可开启夜间自动回复" : "评估未通过，请先同步商品资料");
+    } catch (error) {
+      showToast(formatError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "rules") loadNightReadiness(csShopKey);
+  }, [tab, csShopKey]);
+
   async function markRead(id) {
     setBusy(true);
     try {
@@ -799,10 +1153,16 @@ export function CsControlConsole({
       const response = await fetch("/api/extension/cs/settings", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify(draftSettings || {}),
+        body: JSON.stringify({
+          ...(draftSettings || {}),
+          nightReadinessShopKey: csShopKey || "",
+        }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) {
+        if (data.readiness) setNightReadiness(data.readiness);
+        throw new Error(data.error);
+      }
       setSettings(data.settings);
       showToast("自动化规则已保存");
     } catch (error) {
@@ -821,7 +1181,7 @@ export function CsControlConsole({
         <div>
           <h4>客服控制台</h4>
           <p>
-            <strong>实时回复在 TikTok 插件里完成</strong>（识别消息、生成话术、FAQ/售后自动发）。此处配置规则、<strong>管理 FAQ 模板</strong>、处理告警。
+            <strong>实时回复在 TikTok 插件里完成</strong>（识别消息、生成话术、FAQ/售后自动发）。此处配置规则、管理 FAQ 模板、处理告警。
           </p>
         </div>
       </div>
@@ -894,6 +1254,12 @@ export function CsControlConsole({
 
       {tab === "rules" && draftSettings && (
         <div className="tt-cs-pane">
+          <CsShopScopeBar
+            shops={shops}
+            shopKey={csShopKey}
+            onShopKeyChange={setCsShopKey}
+            hint="夜间就绪评估与 FAQ 按店铺隔离。请先在插件绑定并同步该店铺的商品/库存页。"
+          />
           <label className="tt-toggle-row">
             <input
               type="checkbox"
@@ -913,11 +1279,42 @@ export function CsControlConsole({
           <label className="tt-toggle-row">
             <input
               type="checkbox"
+              checked={Boolean(draftSettings.daytimeAiTrustedAutoSend)}
+              onChange={(e) =>
+                setDraftSettings({ ...draftSettings, daytimeAiTrustedAutoSend: e.target.checked })
+              }
+            />
+            白天：信任 AI 高置信度回复（自动发送，无需逐条确认）
+          </label>
+          <p className="tt-hint">
+            默认白天 AI 会识别商品并生成回复，但需您在插件里点「确认发送」。开启此项后，仅当 AI 自评高置信度才会自动发。
+          </p>
+          <CsNightReadinessPanel
+            readiness={nightReadiness}
+            loading={readinessLoading}
+            busy={busy}
+            onRefresh={() => loadNightReadiness(csShopKey)}
+            onAssess={runNightAssess}
+          />
+          <label className="tt-toggle-row">
+            <input
+              type="checkbox"
               checked={Boolean(draftSettings.nightAiEnabled)}
+              disabled={!nightReadiness?.canEnableNightAi}
               onChange={(e) => setDraftSettings({ ...draftSettings, nightAiEnabled: e.target.checked })}
             />
-            北京夜间（23:00–09:00）启用 AI 兜底回复
+            北京夜间（23:00–09:00）启用 AI 自动回复
           </label>
+          <p className="tt-hint">
+            夜间须先完成上方就绪评估。AI 无法确证时会自动发「委婉等候」模板，不会编造商品细节。
+          </p>
+          <CsMultiLangTemplatesEditor
+            draftSettings={draftSettings}
+            setDraftSettings={setDraftSettings}
+            field="uncertainReplyTemplates"
+            title="低置信度 / 夜间等候模板"
+            rows={3}
+          />
           <CsMultiLangTemplatesEditor
             draftSettings={draftSettings}
             setDraftSettings={setDraftSettings}
@@ -1000,7 +1397,7 @@ export function TikTokAgentHint({ agentId }) {
   if (agentId === "service") {
     return (
       <p className="tt-workspace-hint">
-        <Zap size={14} aria-hidden /> 主战场在 <strong>TikTok 插件</strong>；本页为控制台 + 离线演练。
+        <Zap size={14} aria-hidden /> 主战场在 <strong>TikTok 插件</strong>；本页为控制台 + 离线演练。FAQ 模板 Tab 支持 <strong>AI 批量生成</strong>。
       </p>
     );
   }

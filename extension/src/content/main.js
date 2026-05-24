@@ -459,6 +459,51 @@
     }
   }
 
+  function hidePendingConfirmRow() {
+    document.querySelector(`#${PANEL_ID} .fm-pending-row`)?.remove();
+  }
+
+  function ensurePendingConfirmRow() {
+    const existing = document.querySelector(`#${PANEL_ID} .fm-pending-row`);
+    if (existing) return existing;
+
+    const row = el("div", "fm-pending-row fm-row");
+    const confirmBtn = el("button", "fm-btn primary", "确认发送");
+    const dismissBtn = el("button", "fm-btn", "我来回复");
+    confirmBtn.type = "button";
+    dismissBtn.type = "button";
+    row.append(confirmBtn, dismissBtn);
+
+    const replyArea = document.querySelector(`#${PANEL_ID} .fm-reply-text`);
+    if (replyArea?.parentNode) {
+      replyArea.parentNode.insertBefore(row, replyArea.nextSibling);
+    }
+
+    confirmBtn.addEventListener("click", async () => {
+      const text = document.querySelector(`#${PANEL_ID} .fm-reply-text`)?.value?.trim();
+      if (!text) {
+        setStatus("没有可发送的内容", "err");
+        return;
+      }
+      const filled = fillReplyInput(text);
+      if (!filled) {
+        setStatus("未找到聊天输入框，请手动复制", "err");
+        return;
+      }
+      await sleep(180);
+      const sent = await tryAutoClickSendWithRetry();
+      hidePendingConfirmRow();
+      setStatus(sent ? "已确认并发送给买家" : "已填入聊天框，请手动点发送", sent ? "ok" : "busy");
+    });
+
+    dismissBtn.addEventListener("click", () => {
+      hidePendingConfirmRow();
+      setStatus("已取消 AI 发送，请您自行回复买家", "ok");
+    });
+
+    return row;
+  }
+
   async function applyRoutedCsResult(res, opts = {}) {
     const { fromAuto = false, via = "" } = opts;
     const routed = res.routed || res;
@@ -470,10 +515,33 @@
       faq: "FAQ 模板",
       aftersales: "售后安抚",
       night_ai: "夜间 AI",
+      night_fallback: "夜间等候",
+      day_ai: "白天 AI",
+      product_ai: "商品 AI",
       manual: "人工草稿",
     }[routed.tier || res.tier] || routed.tier || "";
 
     const shouldAutoSend = routed.action === "auto_send" || res.action === "auto_send";
+    const shouldPending =
+      routed.action === "pending_confirm" || res.action === "pending_confirm";
+
+    if (shouldPending) {
+      ensurePendingConfirmRow();
+      setStatus(
+        routed.productMatch?.name
+          ? `已识别「${routed.productMatch.name}」· ${routed.reason || "请确认后发送"}${via}`
+          : `${routed.reason || "AI 已生成回复，请确认后发送"}${via}`,
+        "ok",
+      );
+      if (routed.notifySeller && routed.sellerMessage) {
+        setStatus(routed.sellerMessage, "err");
+        await refreshCsAlerts();
+      }
+      return;
+    }
+
+    hidePendingConfirmRow();
+
     if (shouldAutoSend) {
       const csSettings = await getCsSettingsCached();
       const filled = fillReplyInput(text);
@@ -511,14 +579,21 @@
   async function openFaqWorkspace() {
     try {
       const settings = await FanmengStorage.getSettings();
-      const base = FanmengApi.normalizeBase(settings.apiBase);
-      if (!base) {
+      const apiBase = FanmengApi.normalizeBase(settings.apiBase);
+      if (!apiBase) {
         setStatus("请先在插件弹窗配置凡梦 API 地址", "err");
         return;
       }
-      const url = `${base}/#cs-faq`;
-      window.open(url, "_blank", "noopener,noreferrer");
-      setStatus("已打开 FAQ 生成页面", "ok");
+      const workspace = FanmengPermissions.resolveWorkspaceUrl(apiBase);
+      await FanmengPermissions.ensureHostPermission(apiBase);
+      await FanmengPermissions.ensureHostPermission(workspace);
+      const url = `${workspace}/#cs-faq`;
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        setStatus(`请允许弹窗，或手动打开：${url}`, "err");
+        return;
+      }
+      setStatus("已打开 FAQ 生成页面（请确认已登录凡梦）", "ok");
     } catch (e) {
       setStatus(e.message || "无法打开网站", "err");
     }
@@ -544,12 +619,21 @@
       });
       FanmengDiagnosisPack.invalidateCache();
       await refreshDiagnosisProgress();
-      const ctx = await FanmengApi.getFaqGenerateContext(shop.id);
-      const n = ctx.snapshotCount || 0;
-      const hint =
-        n >= 2
-          ? `FAQ 素材 ${n} 页 · 点下方「网站 · AI 生成 FAQ」`
-          : `已同步 ${scraped.pageType} · 建议再同步商品/订单页，然后点「网站 · AI 生成 FAQ」`;
+      let hint = `已同步 ${scraped.pageType} · 页面数据已上传`;
+      try {
+        const ctx = await FanmengApi.getFaqGenerateContext(shop.id);
+        const n = ctx.snapshotCount || 0;
+        hint =
+          n >= 2
+            ? `FAQ 素材 ${n} 页 · 点下方「网站 · FAQ 生成」`
+            : `已同步 ${scraped.pageType} · 建议再同步商品/订单页，然后点「网站 · AI 生成 FAQ」`;
+      } catch (ctxErr) {
+        if (ctxErr?.status === 404 || /接口不存在/.test(ctxErr?.message || "")) {
+          hint = `已同步 ${scraped.pageType} · 素材已保存（网站 FAQ 统计接口待更新，不影响同步本页）`;
+        } else {
+          throw ctxErr;
+        }
+      }
       setStatus(hint, "ok");
     } catch (e) {
       handlePaidApiError(e);
@@ -699,7 +783,7 @@
 
     const alertsBox = el("div", "fm-cs-alerts hidden");
     body.appendChild(alertsBox);
-    body.appendChild(el("p", "fm-hint fm-cs-tier-hint", "FAQ/问候/夜间 AI 命中后自动填入并发送 · 售后发安抚模板并提醒人工跟进"));
+    body.appendChild(el("p", "fm-hint fm-cs-tier-hint", "FAQ 命中自动发 · 白天 AI 需您确认 · 夜间需商品资料+AI评估通过才全自动"));
 
     const tutBox = el("div", "fm-tutorial-box hidden");
     const tutHead = el("div", "fm-tutorial-head");
@@ -762,7 +846,7 @@
     profitBtn.type = "button";
     btnRow2.append(growthBtn, profitBtn);
 
-    const replyLabel = el("label", "fm-label", "客服回复草稿（FAQ/售后可自动发送）");
+    const replyLabel = el("label", "fm-label", "客服回复草稿（FAQ/夜间等候可自动发，白天 AI 请确认）");
     const replyArea = el("textarea", "fm-reply-text");
     replyArea.rows = 4;
     replyArea.placeholder = "开启「自动监听新消息」后此处会自动填入…";
