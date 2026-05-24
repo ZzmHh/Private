@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orders | Fulfillment &amp; Shipping | TikTok Shop Seller Center</title>
+    <link rel="stylesheet" href="shared.css" />
+  </head>
+  <body data-fanmeng-mock-page="tiktok-shop">
+    <div id="mockShell"></div>
+    <div id="mockPageContent" hidden>
+      <div class="page-head">
+        <h1>Orders · Fulfillment</h1>
+        <p>Manage order fulfillment and shipping · <span class="shop-name">Fanmeng Demo Store US</span></p>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="label">Awaiting shipment</div>
+          <div class="value">23</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">In transit</div>
+          <div class="value">156</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Delivered (7d)</div>
+          <div class="value">241</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Return / refund</div>
+          <div class="value">8</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Recent orders</h2>
+        <p style="color: var(--tts-sub); margin: 0 0 12px">
+          Shipping SLA: 1–2 business days · Standard delivery 5–9 days US domestic
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Product</th>
+              <th>Buyer</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Ship by</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>TK928184726</td>
+              <td>Wireless Earbuds Pro ×1</td>
+              <td>Sarah M.</td>
+              <td>$29.99</td>
+              <td><span class="tag warn">Awaiting shipment</span></td>
+              <td>May 22</td>
+            </tr>
+            <tr>
+              <td>TK928184701</td>
+              <td>Portable Blender ×1</td>
+              <td>James K.</td>
+              <td>$24.50</td>
+              <td><span class="tag">In transit</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>TK928184688</td>
+              <td>Pet Water Fountain ×2</td>
+              <td>Maria G.</td>
+              <td>$39.98</td>
+              <td><span class="tag ok">Delivered</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>TK928184655</td>
+              <td>LED Desk Lamp ×1</td>
+              <td>David L.</td>
+              <td>$34.00</td>
+              <td><span class="tag warn">Awaiting shipment</span></td>
+              <td>May 21</td>
+            </tr>
+            <tr>
+              <td>TK928184612</td>
+              <td>Wireless Earbuds Pro ×1</td>
+              <td>Emily R.</td>
+              <td>$29.99</td>
+              <td><span class="tag">Return requested</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>TK928184590</td>
+              <td>Yoga Mat Premium ×1</td>
+              <td>Chris T.</td>
+              <td>$18.99</td>
+              <td><span class="tag ok">Delivered</span></td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Fulfillment notes</h2>
+        <p>
+          Free shipping on orders over $35. International orders 10–15 business days.
+          Order #TK928184726 buyer asked about shipping timeline in customer messages.
+        </p>
+      </div>
+    </div>
+    <script src="shared.js"></script>
+    <script>
+      MockShop.init("orders");
+      document.getElementById("mockMain").insertAdjacentHTML("afterbegin", MockShop.renderPackBanner());
+    </script>
+  </body>
+</html>

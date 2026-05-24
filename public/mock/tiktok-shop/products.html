@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Products &amp; Inventory | TikTok Shop Seller Center</title>
+    <link rel="stylesheet" href="shared.css" />
+  </head>
+  <body data-fanmeng-mock-page="tiktok-shop">
+    <div id="mockShell"></div>
+    <div id="mockPageContent" hidden>
+      <div class="page-head">
+        <h1>Products · Inventory</h1>
+        <p>SKU, price and stock levels · <span class="shop-name">Fanmeng Demo Store US</span></p>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="label">Active products</div>
+          <div class="value">24</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Low stock SKU</div>
+          <div class="value">3</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Out of stock</div>
+          <div class="value">1</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Warehouse</div>
+          <div class="value">US-East</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Product catalog</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Product</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SKU-EAR-001</td>
+              <td>Wireless Earbuds Pro — Active Noise Cancelling, 32h battery</td>
+              <td>$29.99</td>
+              <td>842</td>
+              <td><span class="tag ok">In stock</span></td>
+            </tr>
+            <tr>
+              <td>SKU-BLD-002</td>
+              <td>Portable Blender 380ml — USB rechargeable smoothie maker</td>
+              <td>$24.50</td>
+              <td>156</td>
+              <td><span class="tag ok">In stock</span></td>
+            </tr>
+            <tr>
+              <td>SKU-PET-003</td>
+              <td>Pet Water Fountain 2.5L — ultra quiet pump</td>
+              <td>$19.99</td>
+              <td>48</td>
+              <td><span class="tag warn">Low stock</span></td>
+            </tr>
+            <tr>
+              <td>SKU-LMP-004</td>
+              <td>LED Desk Lamp — dimmable, USB charging port</td>
+              <td>$34.00</td>
+              <td>210</td>
+              <td><span class="tag ok">In stock</span></td>
+            </tr>
+            <tr>
+              <td>SKU-YGA-005</td>
+              <td>Yoga Mat Premium 6mm — non-slip TPE</td>
+              <td>$18.99</td>
+              <td>0</td>
+              <td><span class="tag warn">Out of stock</span></td>
+            </tr>
+            <tr>
+              <td>SKU-CBL-006</td>
+              <td>USB-C Cable 3-pack 6ft — fast charge</td>
+              <td>$12.99</td>
+              <td>1,240</td>
+              <td><span class="tag ok">In stock</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Listing policy (for FAQ generation)</h2>
+        <p>
+          All items ship from US warehouse within 1–2 business days.
+          Free returns within 30 days for unopened items.
+          Wireless Earbuds Pro retail price $29.99 · Portable Blender $24.50 · Pet Water Fountain $19.99.
+          Contact seller for bulk wholesale pricing.
+        </p>
+      </div>
+    </div>
+    <script src="shared.js"></script>
+    <script>
+      MockShop.init("products");
+      document.getElementById("mockMain").insertAdjacentHTML("afterbegin", MockShop.renderPackBanner());
+    </script>
+  </body>
+</html>

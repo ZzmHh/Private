@@ -35,6 +35,8 @@ const plans = {
       csvImport: false,
       historyLimit: 15,
       shopLimit: 1,
+      vibeClip: true,
+      vibeClipMonthlyLimit: 3,
     },
   },
   growth: {
@@ -53,6 +55,8 @@ const plans = {
       csvImport: false,
       historyLimit: 50,
       shopLimit: 1,
+      vibeClip: true,
+      vibeClipMonthlyLimit: 15,
     },
   },
   pro: {
@@ -73,6 +77,8 @@ const plans = {
       csvImport: true,
       historyLimit: 100,
       shopLimit: 3,
+      vibeClip: true,
+      vibeClipMonthlyLimit: 30,
     },
   },
   team: {
@@ -96,6 +102,8 @@ const plans = {
       multiStore: true,
       weeklyReport: true,
       prioritySupport: true,
+      vibeClip: true,
+      vibeClipMonthlyLimit: 100,
     },
   },
   /** @deprecated 旧账号 3 天试用（新注册已改为 free + 7 天专业体验） */
@@ -118,6 +126,8 @@ const plans = {
       csvImport: true,
       historyLimit: 40,
       shopLimit: 1,
+      vibeClip: true,
+      vibeClipMonthlyLimit: 30,
     },
   },
   /** @deprecated 旧尝鲜版 */
@@ -838,6 +848,10 @@ export function ensureFeatureAccess(user, feature, detail) {
 
   if (feature === "extensionAutoSend" && !features.extensionAutoSend) {
     throw createError("当前套餐不支持插件自动发送，请升级到成长版或更高套餐。", 403);
+  }
+
+  if (feature === "vibeClip" && !features.vibeClip) {
+    throw createError("当前套餐不支持氛围成片，请升级套餐。", 403);
   }
 }
 

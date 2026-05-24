@@ -156,9 +156,10 @@ const agents = [
     id: "vibeclip",
     name: "氛围成片",
     icon: Video,
-    desc: "上传商品图，AI 匹配氛围、文案与 BGM，生成 TikTok 卖货短视频方案。",
+    desc: "商品图生成 TikTok 卖货短视频（开发中，尚未正式开通）。",
     prompt: "",
     customPanel: "vibeclip",
+    notYetOpen: true,
   },
   {
     id: "growth",
@@ -276,6 +277,7 @@ function readRouteHash() {
 }
 
 const CS_FAQ_PENDING_KEY = "fanmeng_pending_cs_faq";
+const AGENT_RUN_PENDING_KEY = "fanmeng_pending_agent_run";
 
 function parseCaseSlugFromHash(raw) {
   if (!raw.startsWith("case/")) return null;
@@ -2818,6 +2820,7 @@ function Workspace() {
   const [storeMetricsReady, setStoreMetricsReady] = useState(false);
   const [csDrillBusy, setCsDrillBusy] = useState(false);
   const [csOpenFaqTab, setCsOpenFaqTab] = useState(false);
+  const [pendingAgentRun, setPendingAgentRun] = useState(null);
   const tiktokOAuthReturnHandledRef = useRef(false);
 
   const extSummaryAuthHeaders = useCallback(
@@ -3016,6 +3019,83 @@ function Workspace() {
       setRouteHash("");
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      const hash = readRouteHash();
+      if (/^(growth|profit)(-run)?$/.test(hash)) {
+        try {
+          sessionStorage.setItem(
+            AGENT_RUN_PENDING_KEY,
+            JSON.stringify({
+              agentId: hash.replace(/-run$/, ""),
+              autoRun: hash.endsWith("-run"),
+              ts: Date.now(),
+            }),
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+
+    const hash = readRouteHash();
+    const agentId = hash.replace(/-run$/, "");
+    if (!["growth", "profit"].includes(agentId)) return;
+
+    setActiveId(agentId);
+
+    let pending = null;
+    try {
+      const raw = sessionStorage.getItem(AGENT_RUN_PENDING_KEY);
+      if (raw) pending = JSON.parse(raw);
+    } catch {
+      /* ignore */
+    }
+
+    const shouldAutoRun = hash.endsWith("-run") || pending?.autoRun;
+    if (shouldAutoRun && pending?.agentId === agentId && Date.now() - (pending.ts || 0) < 5 * 60 * 1000) {
+      try {
+        sessionStorage.removeItem(AGENT_RUN_PENDING_KEY);
+      } catch {
+        /* ignore */
+      }
+      setPendingAgentRun({ agentId, profitMode: pending.profitMode || null });
+    }
+
+    window.history.replaceState(null, "", window.location.pathname + window.location.search + `#${agentId}`);
+    setRouteHash(agentId);
+    void reloadExtSummary();
+  }, [token, reloadExtSummary]);
+
+  useEffect(() => {
+    if (!pendingAgentRun || !token || !user || !extSummary) return;
+
+    const { agentId, profitMode } = pendingAgentRun;
+
+    if (!hasFeature("agent", agentId)) {
+      const name = agents.find((a) => a.id === agentId)?.name || agentId;
+      showToast(`当前套餐不支持「${name}」，请升级成长版或专业版。`);
+      setShowSubscription(true);
+      setPendingAgentRun(null);
+      return;
+    }
+
+    if (agentId === "growth" && !extSummary.growthReady) {
+      showToast("诊断包未满 2/4。请用插件在卖家中心同步页面后，点「重新检查并打开网站」。");
+      setPendingAgentRun(null);
+      return;
+    }
+
+    if (agentId === "profit" && profitMode) {
+      patchPanel("profit", { profitMode });
+    }
+
+    const prompt = agents.find((a) => a.id === agentId)?.prompt;
+    runAgent({ input: prompt, profitMode: profitMode || undefined });
+    setPendingAgentRun(null);
+  }, [pendingAgentRun, extSummary, token, user]);
 
   useEffect(() => {
     if (!token) return;
@@ -3225,11 +3305,6 @@ function Workspace() {
   function selectAgent(id) {
     const agent = agents.find((a) => a.id === id);
     if (agent?.customPanel === "vibeclip") {
-      if (!hasFeature("vibeClip")) {
-        showToast("「氛围成片」需升级成长版或更高套餐。");
-        setShowSubscription(true);
-        return;
-      }
       requestNavigateTo(id);
       return;
     }
@@ -3812,12 +3887,15 @@ function Workspace() {
         {agents.filter((agent) => agent.customPanel === "vibeclip").map((agent) => {
           const Icon = agent.icon;
           return (
-            <button key={agent.id} className={activeId === agent.id ? "side-item active" : "side-item"} onClick={() => selectAgent(agent.id)}>
+            <button key={agent.id} className={activeId === agent.id ? "side-item active" : "side-item side-item-soon"} onClick={() => selectAgent(agent.id)}>
               <span>
                 <Icon size={18} />
               </span>
               <div>
-                <strong>{agent.name}</strong>
+                <strong>
+                  {agent.name}
+                  {agent.notYetOpen ? <em className="side-badge-coming">尚未开通</em> : null}
+                </strong>
                 <small>{agent.desc}</small>
               </div>
             </button>
@@ -3983,6 +4061,7 @@ function Workspace() {
                 showToast={showToast}
                 formatError={formatError}
                 hasFeature={hasFeature}
+                notYetOpen={activeAgent?.notYetOpen}
               />
             ) : null}
             {!isCustomPanelAgent ? <StructuredAgentPreview agentId={activeAgent?.id} /> : null}

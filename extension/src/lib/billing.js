@@ -16,6 +16,7 @@ const FanmengBilling = {
       storeApiAgents: false,
       billingUrl: "",
       trialQuota: null,
+      agents: [],
     };
   },
 
@@ -57,6 +58,7 @@ const FanmengBilling = {
       trialActive: Boolean(ent.trialActive),
       subscriptionActive: Boolean(ent.subscriptionActive),
       storeApiAgents: Boolean(ent.storeApiAgents),
+      agents: Array.isArray(ent.agents) ? ent.agents : [],
       billingUrl,
       trialQuota: ent.trialQuota || null,
     };

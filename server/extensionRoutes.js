@@ -68,6 +68,7 @@ function extensionEntitlements(rawUser) {
     storeApiAgents: Boolean(user.planFeatures?.storeApiAgents),
     extensionAutoSend: Boolean(user.planFeatures?.extensionAutoSend),
     csvImport: Boolean(user.planFeatures?.csvImport),
+    agents: Array.isArray(user.planFeatures?.agents) ? user.planFeatures.agents : [],
     extensionAllowed,
     extensionBlockReason,
     trialQuota: user.trialQuota || null,

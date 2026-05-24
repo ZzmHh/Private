@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Analytics | Performance Dashboard | TikTok Shop Seller Center</title>
+    <link rel="stylesheet" href="shared.css" />
+  </head>
+  <body data-fanmeng-mock-page="tiktok-shop">
+    <div id="mockShell"></div>
+    <div id="mockPageContent" hidden>
+      <div class="page-head">
+        <h1>Analytics · Performance</h1>
+        <p>Last 7 days · United States · <span class="shop-name">Fanmeng Demo Store US</span></p>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-card overview-card">
+          <div class="label">GMV</div>
+          <div class="value">$12,480.50</div>
+          <div class="delta">Sales Revenue +8.2% vs prior week</div>
+        </div>
+        <div class="metric-card stat-card">
+          <div class="label">Orders</div>
+          <div class="value">428</div>
+          <div class="delta">Order count +5.1%</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Units sold</div>
+          <div class="value">512</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Visitors</div>
+          <div class="value">13,220</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Conversion CVR</div>
+          <div class="value">3.24%</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Avg order value</div>
+          <div class="value">$29.16</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Refund rate</div>
+          <div class="value">2.1%</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Ad Spend</div>
+          <div class="value">$1,842.00</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Daily performance</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>GMV</th>
+              <th>Orders</th>
+              <th>CVR</th>
+              <th>Ad Spend</th>
+              <th>ROAS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>2026-05-14</td><td>$1,620.00</td><td>54</td><td>3.1%</td><td>$240.00</td><td>2.72</td></tr>
+            <tr><td>2026-05-15</td><td>$1,890.50</td><td>63</td><td>3.4%</td><td>$268.00</td><td>2.91</td></tr>
+            <tr><td>2026-05-16</td><td>$2,010.00</td><td>68</td><td>3.2%</td><td>$290.00</td><td>2.88</td></tr>
+            <tr><td>2026-05-17</td><td>$1,740.00</td><td>59</td><td>3.0%</td><td>$255.00</td><td>2.65</td></tr>
+            <tr><td>2026-05-18</td><td>$2,220.00</td><td>74</td><td>3.5%</td><td>$310.00</td><td>3.02</td></tr>
+            <tr><td>2026-05-19</td><td>$1,980.00</td><td>66</td><td>3.3%</td><td>$279.00</td><td>2.94</td></tr>
+            <tr><td>2026-05-20</td><td>$1,020.00</td><td>44</td><td>3.1%</td><td>$200.00</td><td>2.80</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Top categories</h2>
+        <p>Electronics GMV $5,420 · Home &amp; Living GMV $3,880 · Pet Supplies GMV $2,180 · Conversion trend stable.</p>
+      </div>
+    </div>
+    <script src="shared.js"></script>
+    <script>
+      MockShop.init("analytics");
+      document.getElementById("mockMain").insertAdjacentHTML("afterbegin", MockShop.renderPackBanner());
+    </script>
+  </body>
+</html>

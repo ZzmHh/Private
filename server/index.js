@@ -64,6 +64,7 @@ import {
 import { registerExtensionRoutes } from "./extensionRoutes.js";
 import { getMergedExtensionContext } from "./extensionSync.js";
 import { registerStoreMetricsRoutes, getStoreMetricsAgentContext } from "./storeMetricsRoutes.js";
+import { registerVibeClipRoutes } from "./vibeClipRoutes.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { apiIpLimiter, extensionLimiter, agentRunLimiter } from "./middleware/rateLimit.js";
@@ -221,6 +222,7 @@ registerExtensionRoutes(app, {
 });
 
 registerStoreMetricsRoutes(app, { authMiddleware });
+registerVibeClipRoutes(app, { authMiddleware });
 
 registerHealthRoutes(app, { providerName, model, apiKey });
 

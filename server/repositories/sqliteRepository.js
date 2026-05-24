@@ -100,6 +100,12 @@ function initSchema(database) {
       created_at TEXT NOT NULL,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS vibe_clip_jobs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      created_at TEXT,
+      data TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_cs_route_events_user_created ON cs_route_events(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_product_events_created ON product_events(created_at);
     CREATE INDEX IF NOT EXISTS idx_product_events_event ON product_events(event);
@@ -198,6 +204,11 @@ export function readDb() {
     .all()
     .map((r) => JSON.parse(r.data));
 
+  db.vibeClipJobs = database
+    .prepare("SELECT data FROM vibe_clip_jobs ORDER BY created_at DESC")
+    .all()
+    .map((r) => JSON.parse(r.data));
+
   return normalizeDb(db);
 }
 
@@ -277,6 +288,13 @@ export function writeDb(data) {
       e.event,
       e.createdAt,
       JSON.stringify(e),
+    ]);
+
+    replaceTable(database, "vibe_clip_jobs", normalized.vibeClipJobs, (j) => [
+      j.id,
+      j.userId || null,
+      j.createdAt || null,
+      JSON.stringify(j),
     ]);
   });
 

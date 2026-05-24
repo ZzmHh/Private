@@ -14,6 +14,7 @@ export const defaultDb = {
   csAutomationSettings: {},
   csRouteEvents: [],
   productEvents: [],
+  vibeClipJobs: [],
 };
 
 /**
@@ -38,5 +39,6 @@ export function normalizeDb(db) {
       db.csAutomationSettings && typeof db.csAutomationSettings === "object" ? db.csAutomationSettings : {},
     csRouteEvents: Array.isArray(db.csRouteEvents) ? db.csRouteEvents : [],
     productEvents: Array.isArray(db.productEvents) ? db.productEvents : [],
+    vibeClipJobs: Array.isArray(db.vibeClipJobs) ? db.vibeClipJobs : [],
   };
 }

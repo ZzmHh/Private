@@ -23,9 +23,10 @@ export const apiIpLimiter = rateLimit({
 });
 
 /** 插件 API */
+const isDev = process.env.NODE_ENV !== "production";
 export const extensionLimiter = limiter({
   windowMs: 60 * 1000,
-  max: Number(process.env.EXTENSION_RATE_MAX || 30),
+  max: Number(process.env.EXTENSION_RATE_MAX || (isDev ? 120 : 30)),
   message: "插件请求太频繁，请稍后再试。",
 });
 

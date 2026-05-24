@@ -6,7 +6,7 @@ const FanmengDiagnosisPack = {
   keys: DIAGNOSIS_PAGE_KEYS,
   _cache: null,
   _cacheAt: 0,
-  _cacheTtlMs: 8000,
+  _cacheTtlMs: 20000,
 
   pageTypeToPackKey(pageType) {
     const t = String(pageType || "").toLowerCase();

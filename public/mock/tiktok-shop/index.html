@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Home | Analytics Dashboard | TikTok Shop Seller Center</title>
+    <link rel="stylesheet" href="shared.css" />
+  </head>
+  <body data-fanmeng-mock-page="tiktok-shop">
+    <div id="mockShell"></div>
+    <div id="mockPageContent" hidden>
+      <div class="page-head">
+        <h1>Mock Seller Center · 插件测试入口</h1>
+        <p>本地模拟 TikTok Shop 卖家中心，无需真实店铺。凡梦 Chrome 插件可在此测试诊断包、FAQ 素材、智能客服。</p>
+      </div>
+
+      <div class="hint-box">
+        <strong>推荐测试顺序：</strong>
+        ① 插件弹窗登录凡梦 API → ② 依次打开下方 5 个页面并点「同步本页」凑齐诊断包 4/4 →
+        ③ 打开 Messages 模拟买家消息测客服 → ④ 同步商品/订单页后去网站 FAQ Tab 做 AI 生成。
+      </div>
+
+      <div class="panel">
+        <h2>店铺设置</h2>
+        <div class="settings-row">
+          <label>
+            显示店铺名（插件会读取 <code class="shop-name">shop-name</code>）
+            <input id="shopNameInput" type="text" value="Fanmeng Demo Store US" />
+          </label>
+        </div>
+      </div>
+
+      <div class="hub-grid">
+        <article class="hub-card">
+          <strong>📊 Analytics · 数据概览</strong>
+          <p>GMV、订单量、转化率、访客等 KPI。对应诊断包「数据概览」。</p>
+          <a href="analytics.html">打开页面 →</a>
+        </article>
+        <article class="hub-card">
+          <strong>📦 Orders · 订单/发货</strong>
+          <p>待发货、运输中、退款订单样本。对应诊断包「订单」。</p>
+          <a href="orders.html">打开页面 →</a>
+        </article>
+        <article class="hub-card">
+          <strong>🏷 Products · 库存/商品</strong>
+          <p>SKU、价格、库存数量。对应诊断包「库存/商品」+ FAQ 素材。</p>
+          <a href="products.html">打开页面 →</a>
+        </article>
+        <article class="hub-card">
+          <strong>📣 Ads · 广告投放</strong>
+          <p>Spend、ROAS、ACOS 广告样本。对应诊断包「广告」。</p>
+          <a href="ads.html">打开页面 →</a>
+        </article>
+        <article class="hub-card">
+          <strong>💬 Customer Messages · 客服</strong>
+          <p>模拟买家聊天、插件识别消息、路由、自动回复、Send 闭环。</p>
+          <a href="chat.html">打开页面 →</a>
+        </article>
+      </div>
+
+      <div class="metric-grid" style="margin-top: 24px">
+        <div class="metric-card overview-card">
+          <div class="label">GMV (7d)</div>
+          <div class="value">$12,480.50</div>
+          <div class="delta">Revenue +8.2%</div>
+        </div>
+        <div class="metric-card stat-card">
+          <div class="label">Orders</div>
+          <div class="value">428</div>
+          <div class="delta">Order +5.1%</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Conversion CVR</div>
+          <div class="value">3.24%</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Ad ROAS</div>
+          <div class="value">2.86</div>
+        </div>
+      </div>
+    </div>
+    <script src="shared.js"></script>
+    <script>
+      MockShop.init("hub");
+      document.getElementById("mockMain").insertAdjacentHTML("afterbegin", MockShop.renderPackBanner());
+    </script>
+  </body>
+</html>

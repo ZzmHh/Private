@@ -1,0 +1,384 @@
+:root {
+  --tts-bg: #f6f6f6;
+  --tts-white: #ffffff;
+  --tts-line: #e6e6e6;
+  --tts-text: #121212;
+  --tts-sub: #69718c;
+  --tts-red: #fe2c55;
+  --tts-nav-active: #fff1f3;
+  --tts-radius: 8px;
+  --tts-green: #009995;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  background: var(--tts-bg);
+  color: var(--tts-text);
+  font-size: 14px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.mock-watermark {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 2000;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(254, 44, 85, 0.95);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+
+.ext-probe {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1999;
+  max-width: min(560px, 92vw);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ext-probe.ok {
+  background: #e8fff0;
+  border: 1px solid #95de64;
+  color: #135200;
+}
+
+.ext-probe.warn {
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  color: #874d00;
+}
+
+.ext-probe.err {
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  color: #a8071a;
+}
+
+.tts-topbar {
+  height: 56px;
+  background: var(--tts-white);
+  border-bottom: 1px solid var(--tts-line);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.tts-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tts-logo-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #25f4ee, var(--tts-red));
+}
+
+.tts-logo span {
+  color: var(--tts-sub);
+  font-weight: 500;
+}
+
+.shop-name {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--tts-sub);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tts-shell {
+  display: flex;
+  min-height: calc(100vh - 56px);
+}
+
+.tts-nav {
+  width: 220px;
+  background: var(--tts-white);
+  border-right: 1px solid var(--tts-line);
+  padding: 12px 8px;
+  flex-shrink: 0;
+}
+
+.tts-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--tts-radius);
+  margin-bottom: 2px;
+  color: var(--tts-text);
+}
+
+.tts-nav-item:hover {
+  background: #f2f2f2;
+}
+
+.tts-nav-item.is-active {
+  background: var(--tts-nav-active);
+  color: var(--tts-red);
+  font-weight: 600;
+}
+
+.tts-nav-icon {
+  width: 18px;
+  text-align: center;
+}
+
+.tts-main {
+  flex: 1;
+  padding: 24px;
+  min-width: 0;
+}
+
+.page-head {
+  margin-bottom: 20px;
+}
+
+.page-head h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.page-head p {
+  margin: 0;
+  color: var(--tts-sub);
+  font-size: 13px;
+}
+
+.pack-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--tts-line);
+  border-radius: var(--tts-radius);
+}
+
+.pack-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pack-chip.is-done {
+  background: #e8fff0;
+  color: #135200;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.metric-card,
+.stat-card,
+.overview-card {
+  background: var(--tts-white);
+  border: 1px solid var(--tts-line);
+  border-radius: var(--tts-radius);
+  padding: 16px;
+}
+
+.metric-card .label {
+  font-size: 12px;
+  color: var(--tts-sub);
+  margin-bottom: 6px;
+}
+
+.metric-card .value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.metric-card .delta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--tts-green);
+}
+
+.panel {
+  background: var(--tts-white);
+  border: 1px solid var(--tts-line);
+  border-radius: var(--tts-radius);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid var(--tts-line);
+  padding: 10px 8px;
+  text-align: left;
+}
+
+.data-table th {
+  color: var(--tts-sub);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.tag.warn {
+  background: #fff7e6;
+  color: #ad6800;
+}
+
+.tag.ok {
+  background: #e8fff0;
+  color: #135200;
+}
+
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.hub-card {
+  background: #fff;
+  border: 1px solid var(--tts-line);
+  border-radius: var(--tts-radius);
+  padding: 18px;
+  transition: box-shadow 0.15s;
+}
+
+.hub-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.hub-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.hub-card p {
+  margin: 0 0 12px;
+  color: var(--tts-sub);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.hub-card a {
+  color: var(--tts-red);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.settings-row input {
+  padding: 8px 10px;
+  border: 1px solid var(--tts-line);
+  border-radius: 6px;
+  min-width: 240px;
+}
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--tts-line);
+  background: #fff;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--tts-red);
+  border-color: var(--tts-red);
+  color: #fff;
+  font-weight: 600;
+}
+
+.hint-box {
+  padding: 12px 14px;
+  border-radius: var(--tts-radius);
+  background: #f0f7ff;
+  border: 1px solid #bae0ff;
+  color: #0958d9;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .tts-nav {
+    display: none;
+  }
+  .tts-main {
+    padding: 16px;
+  }
+}

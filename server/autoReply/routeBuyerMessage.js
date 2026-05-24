@@ -20,6 +20,11 @@ function uncertainReply(settings, lang, beijingNight, shopName) {
   return applyTemplateVars(tpl, { sla, shopName });
 }
 
+function shopReadinessKey(shopKey) {
+  const sk = String(shopKey || "").trim();
+  return sk || "_default";
+}
+
 /**
  * @param {{
  *   buyerText: string,
@@ -142,10 +147,10 @@ export async function routeBuyerMessage(input) {
     };
   }
 
-  // —— 北京夜间 · 非售后 · FAQ 未命中 ——
-  if (beijingNight && settings.nightAiEnabled !== false) {
+  // —— 北京夜间 · 非售后 · FAQ 未命中（须显式开启 nightAiEnabled）——
+  if (beijingNight && settings.nightAiEnabled === true) {
     const readiness = assessNightReadinessSync(input.mergedContext);
-    const storedReady = settings.nightReadinessByShop?.[String(input.shopKey || "")];
+    const storedReady = settings.nightReadinessByShop?.[shopReadinessKey(input.shopKey)];
 
     if (!readiness.canEnableNightAi && storedReady?.canEnableNightAi !== true) {
       const replyText = uncertainReply(settings, lang, true, shopName);

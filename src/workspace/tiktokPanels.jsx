@@ -1181,7 +1181,7 @@ export function CsControlConsole({
         <div>
           <h4>客服控制台</h4>
           <p>
-            <strong>实时回复在 TikTok 插件里完成</strong>（识别消息、生成话术、FAQ/售后自动发）。此处配置规则、管理 FAQ 模板、处理告警。
+            <strong>分层客服：</strong>FAQ 命中自动发 → 白天商品问题 AI 生成后需插件确认 → 可开启「信任 AI 自动发」→ 夜间须同步商品并通过 AI 评估后才全自动，不确定则发等候模板。
           </p>
         </div>
       </div>

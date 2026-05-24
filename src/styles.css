@@ -1253,6 +1253,29 @@ footer a {
   color: #9f1239;
 }
 
+.side-item-soon {
+  opacity: 0.92;
+}
+
+.side-badge-coming {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #667085;
+  background: #f2f4f7;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+.side-item.active .side-badge-coming {
+  color: #b54708;
+  background: #fffaeb;
+}
+
 .history-list {
   display: grid;
   gap: 8px;
@@ -6098,6 +6121,28 @@ footer a {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--soft);
+}
+
+.vc-callout-soon {
+  border-color: #e4e7ec;
+  background: linear-gradient(135deg, #f9fafb, #fff);
+}
+
+.vc-callout-soon > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #98a2b3;
+}
+
+.vc-soon-badge {
+  display: inline-block;
+  margin: 8px 0 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #b54708;
+  background: #fffaeb;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 @media (max-width: 960px) {

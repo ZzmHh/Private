@@ -419,3 +419,78 @@
   color: #2563eb;
   font-size: 10px;
 }
+
+#fanmeng-ai-panel-root .fm-route-badge {
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+#fanmeng-ai-panel-root .fm-route-badge.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-pending-row {
+  margin: 0 0 8px;
+  gap: 8px;
+}
+
+#fanmeng-ai-panel-root .fm-pending-row.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-pending-row .fm-confirm-send {
+  flex: 1;
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+#fanmeng-ai-panel-root .fm-pending-row .fm-dismiss-ai {
+  flex: 1;
+}
+
+#fanmeng-ai-panel-root .fm-analyze-guide {
+  margin: 0 0 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+#fanmeng-ai-panel-root .fm-analyze-guide.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-analyze-guide-title {
+  display: block;
+  margin-bottom: 6px;
+  color: #92400e;
+}
+
+#fanmeng-ai-panel-root .fm-analyze-guide-blockers {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: #b45309;
+}
+
+#fanmeng-ai-panel-root .fm-analyze-guide-blockers-wrap.hidden {
+  display: none;
+}
+
+#fanmeng-ai-panel-root .fm-analyze-guide-steps {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: #78350f;
+}
+
+#fanmeng-ai-panel-root .fm-analyze-guide-actions {
+  gap: 6px;
+  flex-wrap: wrap;
+}

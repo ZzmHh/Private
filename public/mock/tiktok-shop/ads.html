@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ads | Campaign Performance | TikTok Shop Seller Center</title>
+    <link rel="stylesheet" href="shared.css" />
+  </head>
+  <body data-fanmeng-mock-page="tiktok-shop">
+    <div id="mockShell"></div>
+    <div id="mockPageContent" hidden>
+      <div class="page-head">
+        <h1>Ads · Campaigns</h1>
+        <p>Promotion performance last 7 days · <span class="shop-name">Fanmeng Demo Store US</span></p>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-card overview-card">
+          <div class="label">Ad Spend</div>
+          <div class="value">$1,842.00</div>
+        </div>
+        <div class="metric-card stat-card">
+          <div class="label">ROAS</div>
+          <div class="value">2.86</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">ACOS</div>
+          <div class="value">34.9%</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Impressions</div>
+          <div class="value">428K</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Clicks</div>
+          <div class="value">12,840</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">CTR</div>
+          <div class="value">3.0%</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Active campaigns</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th>Spend</th>
+              <th>Revenue</th>
+              <th>ROAS</th>
+              <th>Orders</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Earbuds Pro — Video Spark</td>
+              <td>$680.00</td>
+              <td>$2,040.00</td>
+              <td>3.00</td>
+              <td>68</td>
+              <td><span class="tag ok">Active</span></td>
+            </tr>
+            <tr>
+              <td>Blender — GMV Max</td>
+              <td>$520.00</td>
+              <td>$1,352.00</td>
+              <td>2.60</td>
+              <td>55</td>
+              <td><span class="tag ok">Active</span></td>
+            </tr>
+            <tr>
+              <td>Pet Fountain — Retarget</td>
+              <td>$342.00</td>
+              <td>$958.00</td>
+              <td>2.80</td>
+              <td>48</td>
+              <td><span class="tag warn">Learning</span></td>
+            </tr>
+            <tr>
+              <td>Store Brand — Awareness</td>
+              <td>$300.00</td>
+              <td>$420.00</td>
+              <td>1.40</td>
+              <td>14</td>
+              <td><span class="tag">Paused</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Optimization hints</h2>
+        <p>
+          Campaign "Earbuds Pro — Video Spark" ROAS 3.00 above target 2.5 — consider +15% budget.
+          "Store Brand — Awareness" ACOS high at 71% — review creative fatigue.
+          Total ad efficiency: Spend $1,842 → Sales Revenue attributed $5,268.
+        </p>
+      </div>
+    </div>
+    <script src="shared.js"></script>
+    <script>
+      MockShop.init("ads");
+      document.getElementById("mockMain").insertAdjacentHTML("afterbegin", MockShop.renderPackBanner());
+    </script>
+  </body>
+</html>
