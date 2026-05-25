@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Insights AI · Growth &amp; Profit Demo | TikTok Shop Seller Center</title>
+    <link rel="stylesheet" href="shared.css" />
+  </head>
+  <body data-fanmeng-mock-page="tiktok-shop">
+    <div id="mockShell"></div>
+    <div id="mockPageContent" hidden>
+      <div class="page-head">
+        <h1>Insights AI · 业绩 &amp; 利润模拟</h1>
+        <p>
+          演示插件「业绩诊断 →」「广告库存利润 →」完整链路。本地进度仅用于演示导航；<strong>真实分析以插件「同步本页」+ 凡梦网站 Agent 为准</strong>。
+        </p>
+      </div>
+
+      <div class="hint-box">
+        <strong>推荐演示顺序：</strong>
+        ① 依次打开 Analytics / Orders / Ads / Products（左侧导航）→ ② 每页点插件「同步本页」→
+        ③ 回到本页查看就绪状态 → ④ 点下方按钮打开凡梦网站生成真实报告；或先看「模拟样例」了解输出形态。
+      </div>
+
+      <div class="panel analyze-status-panel">
+        <h2>当前就绪状态（演示 + 插件）</h2>
+        <div id="analyzeStatusGrid" class="analyze-status-grid"></div>
+        <div class="analyze-actions fm-row">
+          <button type="button" class="fm-mock-btn primary" id="btnOpenGrowth">打开网站 · 业绩诊断</button>
+          <button type="button" class="fm-mock-btn primary" id="btnOpenProfit">打开网站 · 广告库存利润</button>
+          <button type="button" class="fm-mock-btn" id="btnRefreshStatus">刷新状态</button>
+        </div>
+      </div>
+
+      <div class="analyze-grid">
+        <article class="panel analyze-card">
+          <div class="analyze-card-head">
+            <h2>📈 业绩诊断（Growth）</h2>
+            <span class="tag ok" id="growthReadyTag">检查中…</span>
+          </div>
+          <p class="analyze-desc">
+            合并诊断包页面快照（GMV、订单、广告花费、库存风险），在凡梦网站「业绩诊断 Agent」输出经营结论与下一步动作。
+          </p>
+          <button type="button" class="fm-mock-btn slim" data-toggle="growthSample">查看模拟样例 ▾</button>
+          <div id="growthSample" class="analyze-sample hidden">
+            <h3>【模拟输出 · 业绩诊断】Fanmeng Demo Store US · 近 7 日</h3>
+            <ul>
+              <li><strong>整体：</strong>GMV $12,480（+8.2%），订单 428（+5.1%），CVR 3.24% 稳定。</li>
+              <li><strong>广告：</strong>Spend $1,842，ROAS 2.86；Earbuds 计划 ROAS 3.0 表现最佳。</li>
+              <li><strong>风险：</strong>退款率 2.1% 略升；Store Brand 认知广告 ROAS 1.4 拖累效率。</li>
+              <li><strong>建议：</strong>① Earbuds 预算 +15% ② 暂停/降预算 Store Brand ③ 补货 Blender（库存 156，动销加快）。</li>
+            </ul>
+            <p class="analyze-note">↑ 以上为静态演示文案；点击「打开网站 · 业绩诊断」将用您账号下的真实同步数据跑 Agent。</p>
+          </div>
+        </article>
+
+        <article class="panel analyze-card">
+          <div class="analyze-card-head">
+            <h2>💰 广告库存利润（Profit）</h2>
+            <span class="tag warn" id="profitModeTag">检查中…</span>
+          </div>
+          <p class="analyze-desc">
+            根据广告页 + 库存页快照（可选 SKU 成本 CSV）分析花费效率、低库存/滞销 SKU、停投与补货建议。
+          </p>
+          <label class="analyze-mode-label">
+            演示模式
+            <select id="profitModeSelect">
+              <option value="framework">框架模式（仅规则提示）</option>
+              <option value="trend">趋势模式（有广告/库存页）</option>
+              <option value="precise">精算模式（演示 · 需成本 CSV）</option>
+            </select>
+          </label>
+          <button type="button" class="fm-mock-btn slim" data-toggle="profitSample">查看模拟样例 ▾</button>
+          <div id="profitSample" class="analyze-sample hidden">
+            <h3>【模拟输出 · 广告库存利润】趋势模式</h3>
+            <ul>
+              <li><strong>广告：</strong>总 Spend $1,842 → 归因 Revenue $5,268；建议停投「Store Brand — Awareness」（ROAS 1.4）。</li>
+              <li><strong>库存：</strong>SKU-EAR-001 库存 842 充足；SKU-PET-004 仅剩 28 件（低库存预警）。</li>
+              <li><strong>利润倾向：</strong>Earbuds / Blender 为当前利润贡献 TOP2（基于页面样本，非精确 SKU 成本）。</li>
+              <li><strong>下一步：</strong>导入 fanmeng-sku-inventory-cost.csv 填入采购价后可切换「精算模式」。</li>
+            </ul>
+            <p class="analyze-note">↑ 静态演示；真实分析请在网站「广告库存利润 Agent」查看，并确保插件已同步 Ads + Products 页。</p>
+          </div>
+        </article>
+      </div>
+
+      <div class="panel">
+        <h2>与模拟客服联动</h2>
+        <p>
+          客服演示请打开 <a href="chat.html"><strong>Messages · 模拟客服聊天</strong></a>：可测 FAQ 自动回复、商品 AI 待确认、多语言话术。
+          业绩/利润与客服共用同一插件面板，数据来自不同页面同步。
+        </p>
+      </div>
+    </div>
+    <script src="shared.js"></script>
+    <script>
+      MockShop.init("analyze");
+      document.getElementById("mockMain").insertAdjacentHTML("afterbegin", MockShop.renderPackBanner());
+
+      function renderStatus() {
+        const s = MockShop.renderAnalyzeStatus();
+        const grid = document.getElementById("analyzeStatusGrid");
+        grid.innerHTML = `
+          <div class="status-tile"><span>本地演示进度</span><strong>${s.done}/4 页</strong></div>
+          <div class="status-tile${s.growthReady ? " is-ok" : ""}"><span>业绩诊断</span><strong>${s.growthReady ? "可运行" : "需 ≥2/4"}</strong></div>
+          <div class="status-tile${s.hasAds ? " is-ok" : ""}"><span>广告页</span><strong>${s.hasAds ? "已访问/同步" : "未完成"}</strong></div>
+          <div class="status-tile${s.hasInv ? " is-ok" : ""}"><span>库存页</span><strong>${s.hasInv ? "已访问/同步" : "未完成"}</strong></div>
+          <div class="status-tile"><span>利润模式（演示）</span><strong>${s.profitLabel}</strong></div>
+        `;
+        document.getElementById("growthReadyTag").textContent = s.growthReady ? "就绪" : "未就绪";
+        document.getElementById("growthReadyTag").className = s.growthReady ? "tag ok" : "tag warn";
+        document.getElementById("profitModeTag").textContent = s.profitLabel;
+        const sel = document.getElementById("profitModeSelect");
+        if (sel && !sel.dataset.userPicked) sel.value = s.profitMode;
+      }
+
+      document.getElementById("btnOpenGrowth").addEventListener("click", () => {
+        MockShop.openFanmengAgent("growth");
+      });
+      document.getElementById("btnOpenProfit").addEventListener("click", () => {
+        const mode = document.getElementById("profitModeSelect").value || "framework";
+        MockShop.openFanmengAgent("profit", { profitMode: mode });
+      });
+      document.getElementById("btnRefreshStatus").addEventListener("click", renderStatus);
+      document.getElementById("profitModeSelect").addEventListener("change", (e) => {
+        e.target.dataset.userPicked = "1";
+      });
+
+      document.querySelectorAll("[data-toggle]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-toggle");
+          const box = document.getElementById(id);
+          if (!box) return;
+          box.classList.toggle("hidden");
+          btn.textContent = box.classList.contains("hidden") ? btn.textContent.replace("▴", "▾") : btn.textContent.replace("▾", "▴");
+        });
+      });
+
+      document.addEventListener("fanmeng-mock-sync", renderStatus);
+      renderStatus();
+    </script>
+  </body>
+</html>

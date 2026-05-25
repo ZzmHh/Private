@@ -15,9 +15,25 @@
       </div>
 
       <div class="hint-box">
+        <strong>本地演示地址：</strong>
+        <code id="mockBaseUrl"></code>
+        <br />
         <strong>推荐测试顺序：</strong>
-        ① 插件弹窗登录凡梦 API → ② 依次打开下方 5 个页面并点「同步本页」凑齐诊断包 4/4 →
-        ③ 打开 Messages 模拟买家消息测客服 → ④ 同步商品/订单页后去网站 FAQ Tab 做 AI 生成。
+        ① 插件弹窗登录凡梦 → ② 下方/左侧导航逐页「同步本页」凑齐诊断包 →
+        ③ <a href="chat.html">模拟客服</a> → ④ <a href="analyze.html">业绩/利润演示</a>。
+      </div>
+
+      <div class="hub-grid hub-grid-featured">
+        <article class="hub-card hub-card-featured">
+          <strong>💬 模拟客服聊天</strong>
+          <p>FAQ / 商品 AI / 确认发送 · 完整客服闭环演示。</p>
+          <a href="chat.html" class="hub-cta">进入 →</a>
+        </article>
+        <article class="hub-card hub-card-featured">
+          <strong>🧠 业绩诊断 &amp; 广告库存利润</strong>
+          <p>诊断包状态、模拟报告样例、跳转凡梦网站 Agent。</p>
+          <a href="analyze.html" class="hub-cta">进入 →</a>
+        </article>
       </div>
 
       <div class="panel">
@@ -56,6 +72,11 @@
           <p>模拟买家聊天、插件识别消息、路由、自动回复、Send 闭环。</p>
           <a href="chat.html">打开页面 →</a>
         </article>
+        <article class="hub-card">
+          <strong>🧠 Insights AI · 业绩/利润</strong>
+          <p>业绩诊断与广告库存利润演示、样例报告、跳转网站 Agent。</p>
+          <a href="analyze.html">打开页面 →</a>
+        </article>
       </div>
 
       <div class="metric-grid" style="margin-top: 24px">
@@ -83,6 +104,8 @@
     <script>
       MockShop.init("hub");
       document.getElementById("mockMain").insertAdjacentHTML("afterbegin", MockShop.renderPackBanner());
+      const baseEl = document.getElementById("mockBaseUrl");
+      if (baseEl) baseEl.textContent = location.origin + location.pathname.replace(/index\.html?$/, "");
     </script>
   </body>
 </html>
