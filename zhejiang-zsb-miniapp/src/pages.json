@@ -1,0 +1,80 @@
+{
+  "pages": [
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "今日学习",
+        "navigationBarBackgroundColor": "#FFFFFF"
+      }
+    },
+    {
+      "path": "pages/enroll/index",
+      "style": {
+        "navigationBarTitleText": "加入坚持奖学池"
+      }
+    },
+    {
+      "path": "pages/enroll-success/index",
+      "style": {
+        "navigationBarTitleText": "入营成功"
+      }
+    },
+    {
+      "path": "pages/checkin-complete/index",
+      "style": {
+        "navigationBarTitleText": "打卡完成",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/lottery-result/index",
+      "style": {
+        "navigationBarTitleText": "开奖公示"
+      }
+    },
+    {
+      "path": "pages/onboarding/index",
+      "style": {
+        "navigationBarTitleText": "开始备考"
+      }
+    },
+    {
+      "path": "pages/rules/index",
+      "style": {
+        "navigationBarTitleText": "活动规则"
+      }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "专升本备考",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F7FA"
+  },
+  "tabBar": {
+    "color": "#94A3B8",
+    "selectedColor": "#E85D04",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "今日",
+        "iconPath": "static/tab/home.png",
+        "selectedIconPath": "static/tab/home-active.png"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的",
+        "iconPath": "static/tab/profile.png",
+        "selectedIconPath": "static/tab/profile-active.png"
+      }
+    ]
+  }
+}

@@ -58,7 +58,9 @@ const FanmengBilling = {
       trialActive: Boolean(ent.trialActive),
       subscriptionActive: Boolean(ent.subscriptionActive),
       storeApiAgents: Boolean(ent.storeApiAgents),
+      extensionAutoSend: ent.extensionAutoSend !== false,
       agents: Array.isArray(ent.agents) ? ent.agents : [],
+      extensionAutoSend: Boolean(ent.extensionAutoSend),
       billingUrl,
       trialQuota: ent.trialQuota || null,
     };
@@ -74,6 +76,7 @@ const FanmengBilling = {
       else if (ent.subscriptionActive) base = `已订阅 · ${ent.planName}`;
       else base = ent.planName || "—";
       if (!hasService) base += " · 智能客服需成长版";
+      else if (ent.extensionAutoSend === false) base += " · FAQ 仅草稿（升级成长版可自动发送）";
       return base;
     }
     return ent.extensionBlockReason || "需要订阅后使用插件";

@@ -18,6 +18,11 @@ export const PRODUCT_EVENT_NAMES = [
   "extension_install_click",
   "first_agent_run",
   "agent_run",
+  "viral_roast_complete",
+  "viral_roast_start",
+  "viral_report_view",
+  "viral_report_publish",
+  "viral_ref_register",
 ];
 
 const FUNNEL_STEPS = [

@@ -7,6 +7,27 @@ const FanmengTikTok = {
 
   DEFAULT_SELLER_URL: "https://seller.tiktok.com/",
 
+  /** 本地 + 生产域名上的 /mock/tiktok-shop 模拟卖家中心 */
+  isMockSellerHost(hostname = "") {
+    const h = String(hostname || "").toLowerCase();
+    return (
+      h === "127.0.0.1" ||
+      h === "localhost" ||
+      h === "fanmengai.com.cn" ||
+      h === "www.fanmengai.com.cn" ||
+      h.endsWith(".fanmengai.com.cn")
+    );
+  },
+
+  isMockSellerPage(url = typeof location !== "undefined" ? location.href : "") {
+    try {
+      const u = new URL(String(url));
+      return this.isMockSellerHost(u.hostname) && /\/mock\/tiktok/i.test(u.pathname);
+    } catch {
+      return false;
+    }
+  },
+
   /** 与 manifest.json host_permissions / content_scripts.matches 保持一致 */
   SELLER_URL_PATTERNS: [
     "https://seller.tiktok.com/*",
@@ -14,6 +35,8 @@ const FanmengTikTok = {
     "https://seller.tiktokglobalshop.com/*",
     "https://seller-us.tiktokglobalshop.com/*",
     "https://*.tiktokshop.com/*",
+    "https://www.fanmengai.com.cn/*",
+    "https://fanmengai.com.cn/*",
   ],
 
   /** @returns {boolean} */
@@ -21,7 +44,7 @@ const FanmengTikTok = {
     try {
       const u = new URL(String(url));
       const host = u.hostname.toLowerCase();
-      if ((host === "127.0.0.1" || host === "localhost") && /\/mock\/tiktok/i.test(u.pathname)) {
+      if (this.isMockSellerPage(u.href)) {
         return true;
       }
       return (
@@ -39,7 +62,7 @@ const FanmengTikTok = {
   /** 卖家中心区域（用于店铺 metadata / 消息 layout profile 顺序） */
   detectRegion(hostname = location.hostname) {
     const h = String(hostname).toLowerCase();
-    if (h === "127.0.0.1" || h === "localhost") return "mock";
+    if (this.isMockSellerHost(h)) return "mock";
     if (/seller-us\.tiktokglobalshop/.test(h)) return "us_global";
     if (/seller-us\.tiktok/.test(h)) return "us";
     if (/tiktokglobalshop/.test(h)) return "global_cb";
@@ -51,7 +74,7 @@ const FanmengTikTok = {
   /** 聊天 DOM profile 尝试顺序（见 chatSelectors.js） */
   chatProfileOrder(hostname = location.hostname) {
     const h = String(hostname).toLowerCase();
-    if (h === "127.0.0.1" || h === "localhost") return ["sea", "generic"];
+    if (this.isMockSellerHost(h)) return ["mock", "sea", "generic"];
     if (/seller-us\.tiktokglobalshop/.test(h)) return ["us_global", "global_cb", "us", "generic"];
     if (/seller-us\.tiktok/.test(h)) return ["us", "us_global", "generic"];
     if (/tiktokglobalshop/.test(h)) return ["global_cb", "sea", "generic"];

@@ -4,6 +4,7 @@
 import crypto from "node:crypto";
 import { readDb, writeDb } from "../repositories/index.js";
 import { normalizeFaqLang } from "../../shared/tiktokShopLanguages.js";
+import { normalizeFaqTriggers } from "./matchFaq.js";
 import { defaultCsAutomationSettings, normalizeCsAutomationSettings } from "./csSettingsNormalize.js";
 
 export { defaultCsAutomationSettings, normalizeCsAutomationSettings };
@@ -56,19 +57,14 @@ export function listCsFaqTemplatesForEditor(userId, shopKey = "") {
 }
 
 function normalizeFaqRow(userId, shopKey, t) {
+  const triggers = normalizeFaqTriggers(t);
   return {
     id: t.id || crypto.randomUUID(),
     userId,
     shopKey: String(shopKey || ""),
     name: String(t.name || "模板").slice(0, 80),
     text: String(t.text || "").slice(0, 4000),
-    triggers: Array.isArray(t.triggers)
-      ? t.triggers.slice(0, 20)
-      : String(t.triggers || "")
-          .split(/[,，|/;；]+/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .slice(0, 20),
+    triggers,
     category: String(t.category || "").slice(0, 40),
     lang: normalizeFaqLang(t.lang),
     updatedAt: new Date().toISOString(),

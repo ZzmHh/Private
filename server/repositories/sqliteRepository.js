@@ -60,11 +60,62 @@ function initSchema(database) {
       platform TEXT,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS org_shops (
+      id TEXT PRIMARY KEY,
+      org_id TEXT,
+      platform TEXT,
+      market TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS member_shop_grants (
+      id TEXT PRIMARY KEY,
+      org_id TEXT,
+      member_user_id TEXT,
+      shop_id TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS shop_connections (
+      id TEXT PRIMARY KEY,
+      org_id TEXT,
+      shop_id TEXT,
+      platform TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS shop_catalog_items (
+      id TEXT PRIMARY KEY,
+      org_id TEXT,
+      shop_id TEXT,
+      data TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS extension_snapshots (
       id TEXT PRIMARY KEY,
       user_id TEXT,
       shop_key TEXT,
       pulled_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS enterprise_collect_items (
+      id TEXT PRIMARY KEY,
+      org_id TEXT,
+      status TEXT,
+      updated_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS enterprise_publish_jobs (
+      id TEXT PRIMARY KEY,
+      org_id TEXT,
+      shop_id TEXT,
+      status TEXT,
+      updated_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS enterprise_product_opportunities (
+      id TEXT PRIMARY KEY,
+      org_id TEXT,
+      target_platform TEXT,
+      market TEXT,
+      score INTEGER,
+      updated_at TEXT,
       data TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS store_metrics_imports (
@@ -106,12 +157,22 @@ function initSchema(database) {
       created_at TEXT,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS viral_reports (
+      id TEXT PRIMARY KEY,
+      ref_code TEXT,
+      created_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_viral_reports_ref ON viral_reports(ref_code);
     CREATE INDEX IF NOT EXISTS idx_cs_route_events_user_created ON cs_route_events(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_product_events_created ON product_events(created_at);
     CREATE INDEX IF NOT EXISTS idx_product_events_event ON product_events(event);
     CREATE INDEX IF NOT EXISTS idx_usage_logs_user_created ON usage_logs(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_enterprise_collect_org_updated ON enterprise_collect_items(org_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_enterprise_publish_org_shop_updated ON enterprise_publish_jobs(org_id, shop_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_enterprise_product_opp_org_score ON enterprise_product_opportunities(org_id, score);
   `);
 }
 
@@ -130,6 +191,20 @@ function maybeImportFromJson(database) {
   writeDb(jsonDb);
   database.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('imported_from_json', '1')").run();
   console.log("[sqliteRepository] JSON 导入完成。");
+}
+
+/** SQLite 行主键：模板 id 全局唯一会跨用户/店铺冲突，用复合键 */
+function csFaqSqliteId(t) {
+  return `${String(t.userId || "").trim()}|${String(t.shopKey || "").trim()}|${String(t.id || "").trim()}`;
+}
+
+function dedupeCsFaqTemplates(templates) {
+  const byRowId = new Map();
+  for (const t of templates || []) {
+    if (!t?.id) continue;
+    byRowId.set(csFaqSqliteId(t), t);
+  }
+  return [...byRowId.values()];
 }
 
 /** @param {import("better-sqlite3").Database} database @param {string} table @param {object[]} items @param {(item: object) => unknown[]} rowMapper */
@@ -173,8 +248,36 @@ export function readDb() {
     .prepare("SELECT data FROM store_connections")
     .all()
     .map((r) => JSON.parse(r.data));
+  db.orgShops = database
+    .prepare("SELECT data FROM org_shops")
+    .all()
+    .map((r) => JSON.parse(r.data));
+  db.memberShopGrants = database
+    .prepare("SELECT data FROM member_shop_grants")
+    .all()
+    .map((r) => JSON.parse(r.data));
+  db.shopConnections = database
+    .prepare("SELECT data FROM shop_connections")
+    .all()
+    .map((r) => JSON.parse(r.data));
+  db.shopCatalogItems = database
+    .prepare("SELECT data FROM shop_catalog_items")
+    .all()
+    .map((r) => JSON.parse(r.data));
   db.extensionSnapshots = database
     .prepare("SELECT data FROM extension_snapshots")
+    .all()
+    .map((r) => JSON.parse(r.data));
+  db.enterpriseCollectItems = database
+    .prepare("SELECT data FROM enterprise_collect_items ORDER BY updated_at DESC")
+    .all()
+    .map((r) => JSON.parse(r.data));
+  db.enterprisePublishJobs = database
+    .prepare("SELECT data FROM enterprise_publish_jobs ORDER BY updated_at DESC")
+    .all()
+    .map((r) => JSON.parse(r.data));
+  db.enterpriseProductOpportunities = database
+    .prepare("SELECT data FROM enterprise_product_opportunities ORDER BY score DESC, updated_at DESC")
     .all()
     .map((r) => JSON.parse(r.data));
   db.storeMetricsImports = database
@@ -206,6 +309,11 @@ export function readDb() {
 
   db.vibeClipJobs = database
     .prepare("SELECT data FROM vibe_clip_jobs ORDER BY created_at DESC")
+    .all()
+    .map((r) => JSON.parse(r.data));
+
+  db.viralReports = database
+    .prepare("SELECT data FROM viral_reports ORDER BY created_at DESC")
     .all()
     .map((r) => JSON.parse(r.data));
 
@@ -244,6 +352,33 @@ export function writeDb(data) {
       s.platform || null,
       JSON.stringify(s),
     ]);
+    replaceTable(database, "org_shops", normalized.orgShops, (s) => [
+      s.id,
+      s.orgId || null,
+      s.platform || null,
+      s.market || null,
+      JSON.stringify(s),
+    ]);
+    replaceTable(database, "member_shop_grants", normalized.memberShopGrants, (g) => [
+      g.id,
+      g.orgId || null,
+      g.memberUserId || null,
+      g.shopId || null,
+      JSON.stringify(g),
+    ]);
+    replaceTable(database, "shop_connections", normalized.shopConnections, (c) => [
+      c.id,
+      c.orgId || null,
+      c.shopId || null,
+      c.platform || null,
+      JSON.stringify(c),
+    ]);
+    replaceTable(database, "shop_catalog_items", normalized.shopCatalogItems, (p) => [
+      p.id,
+      p.orgId || null,
+      p.shopId || null,
+      JSON.stringify(p),
+    ]);
     replaceTable(database, "extension_snapshots", normalized.extensionSnapshots, (s) => [
       s.id,
       s.userId || null,
@@ -251,13 +386,37 @@ export function writeDb(data) {
       s.pulledAt || null,
       JSON.stringify(s),
     ]);
+    replaceTable(database, "enterprise_collect_items", normalized.enterpriseCollectItems, (i) => [
+      i.id,
+      i.orgId || null,
+      i.status || null,
+      i.updatedAt || i.createdAt || null,
+      JSON.stringify(i),
+    ]);
+    replaceTable(database, "enterprise_publish_jobs", normalized.enterprisePublishJobs, (j) => [
+      j.id,
+      j.orgId || null,
+      j.shopId || null,
+      j.status || null,
+      j.updatedAt || j.createdAt || null,
+      JSON.stringify(j),
+    ]);
+    replaceTable(database, "enterprise_product_opportunities", normalized.enterpriseProductOpportunities, (o) => [
+      o.id,
+      o.orgId || null,
+      o.targetPlatform || null,
+      o.market || null,
+      Number(o.score?.overall ?? o.overallScore ?? 0),
+      o.updatedAt || o.createdAt || null,
+      JSON.stringify(o),
+    ]);
     replaceTable(database, "store_metrics_imports", normalized.storeMetricsImports, (r) => [
       r.id,
       r.userId || null,
       JSON.stringify(r),
     ]);
-    replaceTable(database, "cs_faq_templates", normalized.csFaqTemplates, (t) => [
-      t.id,
+    replaceTable(database, "cs_faq_templates", dedupeCsFaqTemplates(normalized.csFaqTemplates), (t) => [
+      csFaqSqliteId(t),
       t.userId || null,
       t.shopKey || null,
       JSON.stringify(t),
@@ -295,6 +454,13 @@ export function writeDb(data) {
       j.userId || null,
       j.createdAt || null,
       JSON.stringify(j),
+    ]);
+
+    replaceTable(database, "viral_reports", normalized.viralReports, (r) => [
+      r.id,
+      r.refCode || null,
+      r.createdAt || null,
+      JSON.stringify(r),
     ]);
   });
 

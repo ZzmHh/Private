@@ -28,5 +28,9 @@ export async function fetchJson(url, options) {
     );
   }
 
+  if (!response.ok && data?.error === "接口不存在。" && data?.path) {
+    data.error = `接口不存在：${data.path}。请确认已运行 npm run dev:server 且后端已重启到最新代码。`;
+  }
+
   return { response, data: data ?? {} };
 }

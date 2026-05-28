@@ -1,0 +1,53 @@
+#enterprise-ext-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2147483646;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 8px 10px;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 10px;
+  font: 12px/1.4 system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+#enterprise-ext-collect-panel.enterprise-ext-collect {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #14532d;
+  color: #f0fdf4;
+  border-radius: 10px;
+  font: 12px/1.4 system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+#enterprise-ext-panel button,
+#enterprise-ext-collect-panel button {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+
+#enterprise-ext-collect-panel button {
+  background: #16a34a;
+}
+
+#enterprise-ext-status,
+#enterprise-ext-collect-status {
+  max-width: 160px;
+  opacity: 0.9;
+}

@@ -48,6 +48,16 @@ import {
   useExtensionWorkspaceSummary,
 } from "./workspace/tiktokPanels.jsx";
 import { VibeClipPanel } from "./workspace/vibeClipPanel.jsx";
+import { ProductIntroPage } from "./intro/ProductIntroPage.jsx";
+import {
+  ListingRoasterPage,
+  parseViralRouteHash,
+  captureViralRef,
+  getStoredViralRef,
+} from "./viral/ListingRoasterPage.jsx";
+import "./intro/intro.css";
+import { EnterpriseApp, parseEnterpriseRoute, resolveEnterpriseLandingHash } from "./enterprise/EnterpriseApp.jsx";
+import { enterpriseDefaultHash } from "./enterprise/enterpriseRoles.js";
 
 const EARLY_BIRD_HINT = "早鸟价续费同价 · 限前 100 名或至 2026年8月31日";
 
@@ -532,318 +542,6 @@ function CaseStudyNotFound({ onHome, onLoginClick, onRegisterClick }) {
   );
 }
 
-function PublicLanding({ onLoginClick, onRegisterClick, scrollSectionId }) {
-  useEffect(() => {
-    if (!scrollSectionId) return;
-    const id = scrollSectionId === "top" ? "top" : scrollSectionId;
-    window.requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, [scrollSectionId]);
-
-  function go(href) {
-    const id = href.replace("#", "");
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-  }
-
-  return (
-    <div className="public-landing">
-      <header className="pub-nav" role="banner">
-        <a className="pub-brand" href="#top" onClick={(e) => { e.preventDefault(); go("#top"); }}>
-          <span className="brand-mark">
-            <Sparkles size={18} />
-          </span>
-          凡梦AI
-        </a>
-        <nav className="pub-nav-links" aria-label="页面导航">
-          <button type="button" className="pub-nav-link" onClick={() => go("#flow")}>使用路径</button>
-          <button type="button" className="pub-nav-link" onClick={() => go("#capabilities")}>产品能力</button>
-          <button type="button" className="pub-nav-link" onClick={() => go("#cases")}>场景案例</button>
-          <button type="button" className="pub-nav-link" onClick={() => go("#trust")}>信任与安全</button>
-          <button type="button" className="pub-nav-link" onClick={() => go("#pricing-preview")}>定价</button>
-          <button type="button" className="pub-nav-link" onClick={() => go("#trial-explainer")}>试用说明</button>
-        </nav>
-        <div className="pub-nav-actions">
-          <button type="button" className="pub-btn pub-btn-ghost" onClick={onLoginClick}>
-            登录
-          </button>
-          <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>
-            免费注册 <ArrowRight size={16} aria-hidden />
-          </button>
-        </div>
-      </header>
-
-      <section id="top" className="pub-hero">
-        <div className="pub-hero-copy">
-          <p className="pub-eyebrow">
-            <Globe2 size={17} aria-hidden /> 跨境电商 · 6 大模块工作台 · 5 Agent 运营一键生成
-          </p>
-          <h1>跨境电商多 Agent 工作台：先了解，再上手。</h1>
-          <p className="pub-lead">
-            凡梦AI 将大模型封装成 <strong>6 个可切换的专业模块</strong>（选品、内容、Listing、业绩诊断、AI 客服话术、广告库存利润），另提供
-            <strong>「5 Agent 运营一键生成」</strong>：单轮输出选品—内容—Listing—业绩—利润串联方案（<strong>不含客服自动应答</strong>；客服请在「AI 客服售后」里<strong>对话式</strong>生成话术）。
-            本页为<strong>产品介绍站</strong>；需要执行 Agent 时，请通过顶部「登录 / 注册」进入<strong>独立登录页</strong>，验证成功后将进入<strong>工作台</strong>。
-          </p>
-          <div className="pub-hero-cta">
-            <button type="button" className="pub-btn pub-btn-primary pub-btn-lg" onClick={onRegisterClick}>
-              免费注册并开启试用
-            </button>
-            <button
-              type="button"
-              className="pub-btn pub-btn-secondary pub-btn-lg"
-              onClick={onLoginClick}
-            >
-              已有账号 · 登录
-            </button>
-          </div>
-          <p className="pub-footnote">
-            <BadgeCheck size={14} aria-hidden /> 数据与 API 连接遵循最小权限；下方「效果指标」为典型场景综合描述，非效果承诺。
-          </p>
-        </div>
-        <div className="pub-hero-panel" aria-label="产品能力概览">
-          <div className="pub-hero-card">
-            <div className="pub-hero-card-head">
-              <Bot size={20} />
-              <span>6 大模块 + 5 Agent 运营</span>
-            </div>
-            <ul className="pub-mini-list">
-              <li>单模块：选品 / 内容 / Listing</li>
-              <li>单模块：业绩 · 客服话术 · 利润</li>
-              <li>一键串联：5 段运营方案（无客服自动跑）</li>
-              <li>工作台：配置店铺 API、附件与任务历史</li>
-            </ul>
-          </div>
-          <div className="pub-hero-stats">
-            <div>
-              <strong>一站式</strong>
-              <span>账号内切换模块</span>
-            </div>
-            <div>
-              <strong>可订阅</strong>
-              <span>按调用量与套餐扩展</span>
-            </div>
-            <div>
-              <strong>可接店铺</strong>
-              <span>API / 手工粘贴均可</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="pub-strip" aria-label="支持的业务场景">
-        <span className="pub-strip-label">支持对接与协作</span>
-        <span>Amazon</span>
-        <span>TikTok Shop</span>
-        <span>Shopify</span>
-        <span>自建站 / ERP 导出</span>
-      </section>
-
-      <section id="flow" className="pub-section pub-section-alt" aria-labelledby="flow-h">
-        <div className="pub-section-head">
-          <h2 id="flow-h">从了解到使用：浏览、登录、再进工作台</h2>
-          <p>先在本页完成信息收集与决策；稍后在登录页验证账号，即可在控制台中运行全部能力。</p>
-        </div>
-        <div className="pub-flow-steps" role="list">
-          <article className="pub-flow-card" role="listitem">
-            <span className="pub-flow-num" aria-hidden>1</span>
-            <h3>产品介绍站</h3>
-            <p>了解 6 大模块、5 Agent 运营一键生成、定价与试用规则，无需账号即可通读。</p>
-          </article>
-          <article className="pub-flow-card" role="listitem">
-            <span className="pub-flow-num" aria-hidden>2</span>
-            <h3>登录或注册</h3>
-            <p>通过顶部按钮进入独立登录页，验证邮箱后即可启用账号。</p>
-          </article>
-          <article className="pub-flow-card" role="listitem">
-            <span className="pub-flow-num" aria-hidden>3</span>
-            <h3>工作台</h3>
-            <p>运行各 Agent、一键 5 模块方案、配置店铺 API、查看任务历史与订阅额度。</p>
-          </article>
-        </div>
-        <div className="pub-flow-cta">
-          <button type="button" className="pub-btn pub-btn-primary" onClick={onRegisterClick}>
-            前往注册
-          </button>
-          <button type="button" className="pub-btn pub-btn-secondary" onClick={onLoginClick}>
-            前往登录
-          </button>
-        </div>
-      </section>
-
-      <section id="capabilities" className="pub-section" aria-labelledby="cap-h">
-        <div className="pub-section-head">
-          <h2 id="cap-h">产品能力：6 大模块，各司其职</h2>
-          <p>
-            下方为<strong>六个独立模块</strong>，在工作台内可单独调用；也可使用<strong>「5 Agent 运营一键生成」</strong>将选品、内容、Listing、业绩诊断、广告库存利润
-            <strong>单轮串联</strong>输出。「AI 客服售后」建议<strong>单独打开、对话式</strong>生成话术与清单，不参与一键自动跑。
-          </p>
-        </div>
-        <div className="pub-agent-grid">
-          {agents.map((agent) => {
-            const Icon = agent.icon;
-            return (
-              <article key={agent.id} className="pub-agent-card">
-                <div className="pub-agent-icon">
-                  <Icon size={22} aria-hidden />
-                </div>
-                <h3>{agent.name}</h3>
-                <p>{agent.desc}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section id="cases" className="pub-section pub-section-alt" aria-labelledby="cases-h">
-        <div className="pub-section-head">
-          <h2 id="cases-h">客户场景（综合整理）</h2>
-          <p>以下为常见跨境团队结构下的使用方式归纳，便于您评估是否匹配自身阶段；非单一客户背书。</p>
-        </div>
-        <div className="pub-case-grid">
-          {caseStudies.map((item) => (
-            <a key={item.slug} className="pub-case-card pub-case-card-link" href={`#case/${item.slug}`}>
-              <Quote className="pub-quote-icon" size={22} aria-hidden />
-              <p className="pub-case-quote">「{item.quote}」</p>
-              <div className="pub-case-tags">
-                {item.tags.map((t) => (
-                  <span key={t}>{t}</span>
-                ))}
-              </div>
-              <p className="pub-case-kpi">{item.kpi}</p>
-              <p className="pub-case-title">{item.title}</p>
-              <span className="pub-case-readmore">查看案例详情 →</span>
-            </a>
-          ))}
-        </div>
-      </section>
-
-      <section id="trust" className="pub-section" aria-labelledby="trust-h">
-        <div className="pub-section-head">
-          <h2 id="trust-h">信任与安全</h2>
-          <p>我们理解跨境数据敏感，产品在架构上默认按最小可用原则接入，并向您明示边界。</p>
-        </div>
-        <div className="pub-trust-grid">
-          <div className="pub-trust-card">
-            <Users size={22} aria-hidden />
-            <h3>团队背景</h3>
-            <p>产品由具备 <strong>跨境运营</strong> 与 <strong>AI 工程</strong> 经验的团队协作迭代，聚焦「能进工作流」而非演示级对话。</p>
-          </div>
-          <div className="pub-trust-card">
-            <ShieldCheck size={22} aria-hidden />
-            <h3>数据与权限</h3>
-            <p>店铺 API 密钥服务器侧加密存储；Agent 输出包含须人工确认项时会明确提示，不冒充已代您操作后台。</p>
-          </div>
-          <div className="pub-trust-card">
-            <LockKeyhole size={22} aria-hidden />
-            <h3>账号与试用</h3>
-            <p>新用户注册后享 <strong>永久免费版</strong>（每日限额）+ <strong>7 天专业版全功能体验</strong>；体验结束后自动回到免费版，账号与数据保留。</p>
-          </div>
-          <div className="pub-trust-card">
-            <TrendingUp size={22} aria-hidden />
-            <h3>可验证的增长路径</h3>
-            <p>支持从手动粘贴数据起步，再逐步接入 API；您可以按模块小步试跑，降低一次性改造风险。</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="trial-explainer" className="pub-section pub-section-accent" aria-labelledby="trial-h">
-        <div className="pub-section-head">
-          <h2 id="trial-h">注册与上手</h2>
-          <p>注册即免费版；自动赠送 7 天专业版体验。插件 + CSV 能力以订购页为准。</p>
-        </div>
-        <div className="pub-trial-grid">
-          <div>
-            <h3>访客 · 浏览介绍</h3>
-            <p>任意阅读本页模块与价格信息；准备好后再去登录页创建或进入账号。</p>
-          </div>
-          <div>
-            <h3>登录页 · 验证身份</h3>
-            <p>在独立页面完成登录或注册；成功后自动进入工作台，开始使用全部模块。</p>
-          </div>
-          <div>
-            <h3>工作台 · 执行任务</h3>
-            <p>在控制台内运行各模块、5 Agent 运营一键生成、配置店铺 API 与本地附件。</p>
-          </div>
-          <div>
-            <h3>插件 · TikTok 卖家中心</h3>
-            <p>专业版含 Chrome 助手：工作台内按向导安装，在卖家后台自动客服与页面诊断。</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="pricing-preview" className="pub-section" aria-labelledby="price-h">
-        <div className="pub-section-head">
-          <h2 id="price-h">订阅套餐预览</h2>
-          <p>以下为前台标价与权益摘要；专业版/团队版早鸟价见登录后订购页。实际结算以订单为准。</p>
-        </div>
-        <div className="pub-pricing-grid">
-          {pricingPlans.filter((p) => p.purchasable !== false || p.id === "free").map((plan) => (
-            <article key={plan.id} className={plan.recommended ? "pub-price-card is-recommended" : "pub-price-card"}>
-              {plan.recommended ? <span className="pub-rec-badge">推荐</span> : null}
-              <h3>{plan.name}</h3>
-              <p className="pub-price-line">
-                {plan.price === "0" ? (
-                  <strong className="pub-price-custom">免费</strong>
-                ) : (
-                  <>
-                    <span className="pub-price-currency">¥</span>
-                    <strong className="pub-price-num">{plan.priceEarlyBird || plan.price}</strong>
-                    <span className="pub-price-unit">/ 月起</span>
-                    {plan.priceEarlyBird ? <span className="pub-price-strike">¥{plan.price}</span> : null}
-                  </>
-                )}
-              </p>
-              <p className="pub-price-desc">{plan.desc}</p>
-              <ul className="pub-price-features">
-                {plan.features.slice(0, 5).map((f) => (
-                  <li key={f}>
-                    <Check size={15} aria-hidden /> {f}
-                  </li>
-                ))}
-              </ul>
-              <button type="button" className={plan.recommended ? "pub-btn pub-btn-primary pub-btn-block" : "pub-btn pub-btn-secondary pub-btn-block"} onClick={onRegisterClick}>
-                {plan.id === "free" ? "免费注册" : "选择此档并注册"}
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="pub-section pub-cta-final" aria-labelledby="final-cta-h">
-        <div className="pub-cta-inner">
-          <h2 id="final-cta-h">准备好就开通账号</h2>
-          <p>若已了解产品与套餐，可通过下方按钮进入<strong>注册</strong>或<strong>登录</strong>页；验证成功后即可使用工作台。</p>
-          <div className="pub-cta-buttons">
-            <button type="button" className="pub-btn pub-btn-primary pub-btn-lg" onClick={onRegisterClick}>
-              免费注册
-            </button>
-            <button
-              type="button"
-              className="pub-btn pub-btn-secondary pub-btn-lg"
-              onClick={onLoginClick}
-            >
-              已有账号 · 登录
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <footer className="pub-footer" role="contentinfo">
-        <div className="pub-footer-inner">
-          <div className="pub-footer-brand">
-            <Sparkles size={18} aria-hidden />
-            <span>凡梦AI — 跨境电商多智能体工作台</span>
-          </div>
-          <p>本页内容用于产品介绍与 SEO；产品持续迭代，以登录后控制台为准。</p>
-          <button type="button" className="pub-footer-top" onClick={() => go("#top")}>
-            回到顶部
-          </button>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
 function LoginScreen({ onLogin, authRouteHash = "login" }) {
   const [authMode, setAuthMode] = useState("login");
   const [resetStep, setResetStep] = useState("request");
@@ -950,6 +648,7 @@ function LoginScreen({ onLogin, authRouteHash = "login" }) {
           confirmPassword: authForm.confirmPassword,
           name: authForm.name,
           storeName: authForm.storeName,
+          ref: getStoredViralRef(),
         }),
       });
       if (!response.ok) throw new Error(data.error);
@@ -2842,8 +2541,11 @@ function Workspace() {
     if (routeHash === "login") return "login";
     return null;
   }, [routeHash]);
+  const viralRoute = useMemo(() => parseViralRouteHash(routeHash), [routeHash]);
+  const enterpriseRoute = useMemo(() => parseEnterpriseRoute(routeHash), [routeHash]);
+
   const landingScrollId = useMemo(() => {
-    if (authEntryMode || caseSlug) return null;
+    if (authEntryMode || caseSlug || viralRoute || enterpriseRoute) return null;
     if (!routeHash) return null;
     const ids = new Set(["flow", "capabilities", "cases", "trust", "pricing-preview", "trial-explainer", "top"]);
     return ids.has(routeHash) ? routeHash : null;
@@ -3138,6 +2840,15 @@ function Workspace() {
     setUser(data.user);
     setTasks(data.tasks || []);
     trackEvent("login_success", {}, { token: data.token });
+
+    const enterpriseEntry = parseEnterpriseRoute(readRouteHash());
+    if (enterpriseEntry) {
+      const landing = resolveEnterpriseLandingHash(data.user, enterpriseEntry);
+      window.location.hash = landing.slice(1);
+      setRouteHash(landing.slice(1));
+      return;
+    }
+
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
     setRouteHash(readRouteHash());
   }
@@ -3178,11 +2889,24 @@ function Workspace() {
     window.scrollTo(0, 0);
   }
 
-  function goPublicRegister() {
+  function goPublicRegister(refCode) {
+    if (refCode) captureViralRef(refCode);
     trackCtaRegister();
     window.location.hash = "register";
     window.scrollTo(0, 0);
   }
+
+  function goRoastTool() {
+    window.location.hash = "roast";
+    window.scrollTo(0, 0);
+  }
+
+  useEffect(() => {
+    if (token) return;
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) captureViralRef(ref);
+  }, [token]);
 
   function goMarketingHome() {
     window.location.hash = "";
@@ -3197,6 +2921,64 @@ function Workspace() {
     return <PaymentConfirmPage token={confirmPaymentToken} />;
   }
 
+  if (viralRoute?.kind === "tool" || viralRoute?.kind === "share") {
+    function goRoastHome() {
+      window.location.hash = "";
+      setRouteHash("");
+      window.scrollTo(0, 0);
+    }
+    return (
+      <ListingRoasterPage
+        shareRefCode={viralRoute.kind === "share" ? viralRoute.refCode : null}
+        onLoginClick={token ? goRoastHome : goPublicLogin}
+        onRegisterClick={
+          token ? goRoastHome : () => goPublicRegister(viralRoute.refCode || getStoredViralRef())
+        }
+        onHomeClick={token ? goRoastHome : goMarketingHome}
+      />
+    );
+  }
+
+  if (enterpriseRoute) {
+    if (!token) {
+      if (import.meta.env.DEV) {
+        const devEntRole = new URLSearchParams(window.location.search).get("entRole");
+        const previewUser = {
+          name: devEntRole === "member" ? "子账号预览" : "本地预览",
+          email: "preview@local",
+          company: "凡梦 AI · 企业版（演示）",
+          enterpriseRole: devEntRole === "member" ? "member" : "owner",
+          enterpriseRoleLabel: devEntRole === "member" ? "子账号 · 演示" : "主账号 · 演示",
+        };
+        return (
+          <EnterpriseApp
+            user={previewUser}
+            onExit={() => {
+              window.location.hash = "";
+              setRouteHash("");
+              window.scrollTo(0, 0);
+            }}
+          />
+        );
+      }
+      return (
+        <AuthEntryShell onBackHome={goMarketingHome}>
+          <LoginScreen onLogin={handleLogin} authRouteHash="login" />
+        </AuthEntryShell>
+      );
+    }
+    return (
+      <EnterpriseApp
+        user={user}
+        onExit={() => {
+          window.location.hash = "";
+          setRouteHash("");
+          window.scrollTo(0, 0);
+        }}
+      />
+    );
+  }
+
   if (!token) {
     if (caseSlug) {
       const study = caseStudies.find((c) => c.slug === caseSlug);
@@ -3205,7 +2987,7 @@ function Workspace() {
           <CaseStudyNotFound
             onHome={goMarketingHome}
             onLoginClick={goPublicLogin}
-            onRegisterClick={goPublicRegister}
+            onRegisterClick={() => goPublicRegister(getStoredViralRef())}
           />
         );
       }
@@ -3227,9 +3009,10 @@ function Workspace() {
       );
     }
     return (
-      <PublicLanding
+      <ProductIntroPage
         onLoginClick={goPublicLogin}
-        onRegisterClick={goPublicRegister}
+        onRegisterClick={() => goPublicRegister(getStoredViralRef())}
+        onRoastClick={goRoastTool}
         scrollSectionId={landingScrollId}
       />
     );
@@ -3849,6 +3632,17 @@ function Workspace() {
             <button type="button" onClick={openExtensionInstallGuide}>安装 TikTok 插件</button>
           ) : null}
           <button type="button" onClick={() => setShowStoreApiModal(true)}>店铺 API 配置</button>
+          <button
+            type="button"
+            onClick={() => {
+              const landing = enterpriseDefaultHash(user);
+              window.location.hash = landing.slice(1);
+              setRouteHash(landing.slice(1));
+              window.scrollTo(0, 0);
+            }}
+          >
+            企业控制台
+          </button>
           <button type="button" onClick={() => setIsBetaMode((value) => !value)}>{isBetaMode ? "退出内测版" : "进入内测版"}</button>
           {user?.isAdmin && <button type="button" onClick={loadAdminSummary}>运营后台</button>}
           <button type="button" onClick={logout}>退出登录</button>

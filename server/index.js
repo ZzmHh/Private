@@ -74,11 +74,30 @@ import { validateBody, validators } from "./validate/index.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSeoRoutes } from "./routes/seo.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
+import { registerViralLeadRoutes } from "./routes/viralLead.js";
+import { recordViralConversion } from "./viralLead/store.js";
 import { startDbBackupScheduler } from "./jobs/dbBackup.js";
 import { maybeRecordFirstAgentRun, recordProductEvent } from "./productEvents.js";
 import { buildEchoTikContext, loadMarketCatalogMeta } from "./integrations/echotik/index.js";
 import { prepareAgentRunInput } from "./prepareAgentRun.js";
 import { streamChatCompletions } from "./llmStream.js";
+import {
+  ensureEnterpriseSeedAccounts,
+  getEnterpriseUserById,
+  loginEnterpriseUser,
+  sanitizeEnterpriseUser,
+} from "./enterpriseAuth.js";
+import { registerEnterpriseRoutes, completeEnterpriseTiktokOAuth, decodeEnterpriseShopOAuthState } from "./enterpriseRoutes.js";
+import { registerEnterpriseExtensionRoutes } from "./enterpriseExtensionRoutes.js";
+import { registerEnterpriseCreativeRoutes } from "./enterpriseCreativeRoutes.js";
+import { registerEnterpriseCollectRoutes } from "./enterpriseCollectRoutes.js";
+import { registerEnterpriseProductOpportunityRoutes } from "./enterpriseProductOpportunityRoutes.js";
+import {
+  completeEnterpriseShopeeOAuth,
+  completeEnterpriseLazadaOAuth,
+  completeEnterpriseWalmartOAuth,
+} from "./enterpriseShopConnections.js";
+import { ensureEnterpriseOrgShopsSeed } from "./enterpriseOrgShops.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -226,6 +245,8 @@ registerVibeClipRoutes(app, { authMiddleware });
 
 registerHealthRoutes(app, { providerName, model, apiKey });
 
+registerViralLeadRoutes(app, { callChatCompletions, apiKey, providerName, model });
+
 registerAnalyticsRoutes(app, {
   authMiddleware,
   adminMiddleware,
@@ -242,9 +263,27 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: "请先登录账号。" });
   }
 
-  const user = getUserById(decoded.sub);
+  const user = getUserById(decoded.sub) || getEnterpriseUserById(decoded.sub);
   if (!user) {
     return res.status(401).json({ error: "账号不存在，请重新登录。" });
+  }
+
+  req.user = user;
+  next();
+}
+
+function enterpriseAuthMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const decoded = verifyToken(token);
+
+  if (!decoded) {
+    return res.status(401).json({ error: "请先登录。" });
+  }
+
+  const user = getEnterpriseUserById(decoded.sub);
+  if (!user) {
+    return res.status(401).json({ error: "账号无效或已停用，请重新登录。" });
   }
 
   req.user = user;
@@ -340,6 +379,17 @@ app.post("/api/auth/register/complete", (req, res) => {
     }
 
     const user = completeRegistrationWithCode({ email, code, password, name, storeName });
+    const refCode = String(req.body?.ref || req.body?.refCode || "").trim();
+    if (refCode) {
+      recordViralConversion(refCode);
+      recordProductEvent({
+        event: "viral_ref_register",
+        userId: user.id,
+        sessionId: `user:${user.id}`,
+        path: "/register",
+        properties: { refCode },
+      });
+    }
     res.json({ token: createToken(user), user: sanitizeUser(user) });
   } catch (error) {
     handleAuthError(res, error);
@@ -403,6 +453,47 @@ app.post("/api/auth/login", validateBody(validators.login), (req, res) => {
     return handleAuthError(res, error);
   }
 });
+
+app.post("/api/enterprise/auth/login", (req, res) => {
+  try {
+    const { loginName, password } = req.body || {};
+
+    if (!loginName || !password) {
+      return res.status(400).json({ error: "请填写账号名和密码。" });
+    }
+
+    const user = loginEnterpriseUser({ loginName, password });
+    res.json({ token: createToken(user), user: sanitizeEnterpriseUser(user) });
+  } catch (error) {
+    handleAuthError(res, error);
+  }
+});
+
+app.get("/api/enterprise/auth/me", enterpriseAuthMiddleware, (req, res) => {
+  res.json({ user: sanitizeEnterpriseUser(req.user) });
+});
+
+registerEnterpriseRoutes(app, { enterpriseAuthMiddleware });
+
+registerEnterpriseExtensionRoutes(app, {
+  enterpriseAuthMiddleware,
+  apiKey,
+  providerName,
+  model,
+  callChatCompletions,
+});
+
+registerEnterpriseCreativeRoutes(app, { enterpriseAuthMiddleware });
+
+registerEnterpriseCollectRoutes(app, {
+  enterpriseAuthMiddleware,
+  apiKey,
+  providerName,
+  model,
+  callChatCompletions,
+});
+
+registerEnterpriseProductOpportunityRoutes(app, { enterpriseAuthMiddleware });
 
 app.post("/api/auth/verify-email", (req, res) => {
   try {
@@ -640,23 +731,101 @@ function publicAppRedirectPath(query) {
   return q ? `/?${q}` : "/";
 }
 
+function publicEnterpriseRedirectPath(query) {
+  const base = process.env.ENTERPRISE_APP_URL?.trim() || "http://localhost:5173/enterprise.html";
+  const hashPath = "enterprise/console/org/shops";
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(query || {})) {
+    if (v != null && v !== "") qs.set(k, String(v));
+  }
+  const q = qs.toString();
+  return q ? `${base}?${q}#${hashPath}` : `${base}#${hashPath}`;
+}
+
+/** 企业站 OAuth 浏览器回调（Shopee / Lazada / Walmart 等） */
+function registerEnterprisePlatformOAuthCallback(app, path, completeFn, extraFromQuery = () => ({})) {
+  app.get(path, async (req, res) => {
+    const q = req.query || {};
+    try {
+      const errParam = q.error || q.error_description || q.error_string;
+      if (errParam) {
+        return res.redirect(
+          302,
+          publicEnterpriseRedirectPath({
+            ent_oauth: "error",
+            ent_msg: String(errParam).slice(0, 240),
+          }),
+        );
+      }
+
+      const enterpriseState = decodeEnterpriseShopOAuthState(q.state);
+      if (!enterpriseState) {
+        return res.redirect(
+          302,
+          publicEnterpriseRedirectPath({ ent_oauth: "error", ent_msg: "state无效或已过期请重新发起连接" }),
+        );
+      }
+
+      const authCode = q.code || q.auth_code;
+      if (!authCode || !String(authCode).trim()) {
+        return res.redirect(
+          302,
+          publicEnterpriseRedirectPath({ ent_oauth: "error", ent_msg: "未返回授权码" }),
+        );
+      }
+
+      await completeFn({
+        shopId: enterpriseState.shopId,
+        userId: enterpriseState.userId,
+        authCode: String(authCode).trim(),
+        ...extraFromQuery(q),
+      });
+
+      return res.redirect(302, publicEnterpriseRedirectPath({ ent_oauth: "ok" }));
+    } catch (error) {
+      console.error(`[oauth callback ${path}]`, error);
+      return res.redirect(
+        302,
+        publicEnterpriseRedirectPath({
+          ent_oauth: "error",
+          ent_msg: (error.message || "企业店铺授权失败").slice(0, 240),
+        }),
+      );
+    }
+  });
+}
+
+registerEnterprisePlatformOAuthCallback(
+  app,
+  "/api/store/shopee/oauth/callback",
+  completeEnterpriseShopeeOAuth,
+  (q) => ({ shopIdHint: String(q.shop_id || q.shopId || "").trim() }),
+);
+registerEnterprisePlatformOAuthCallback(app, "/api/store/lazada/oauth/callback", completeEnterpriseLazadaOAuth);
+registerEnterprisePlatformOAuthCallback(app, "/api/store/walmart/oauth/callback", completeEnterpriseWalmartOAuth);
+
 /** TikTok 授权回调（浏览器直达，无 Authorization 头；靠 state 校验 User） */
 app.get("/api/store/tiktok/oauth/callback", async (req, res) => {
   const q = req.query || {};
   try {
     const errParam = q.error || q.error_string;
     if (errParam) {
-      return res.redirect(
-        302,
-        publicAppRedirectPath({
-          tiktok_oauth: "error",
-          tiktok_msg: String(errParam).slice(0, 240),
-        }),
-      );
+      const enterpriseState = decodeEnterpriseShopOAuthState(q.state);
+      const redirect = enterpriseState
+        ? publicEnterpriseRedirectPath({
+            ent_oauth: "error",
+            ent_msg: String(errParam).slice(0, 240),
+          })
+        : publicAppRedirectPath({
+            tiktok_oauth: "error",
+            tiktok_msg: String(errParam).slice(0, 240),
+          });
+      return res.redirect(302, redirect);
     }
 
-    const state = decodeTiktokOAuthState(q.state);
-    if (!state) {
+    const enterpriseState = decodeEnterpriseShopOAuthState(q.state);
+    const state = enterpriseState ? null : decodeTiktokOAuthState(q.state);
+    if (!enterpriseState && !state) {
       return res.redirect(
         302,
         publicAppRedirectPath({
@@ -668,13 +837,30 @@ app.get("/api/store/tiktok/oauth/callback", async (req, res) => {
 
     const authCode = q.code || q.auth_code;
     if (!authCode || !String(authCode).trim()) {
-      return res.redirect(
-        302,
-        publicAppRedirectPath({
-          tiktok_oauth: "error",
-          tiktok_msg: "未返回授权码",
-        }),
-      );
+      const redirect = enterpriseState
+        ? publicEnterpriseRedirectPath({ ent_oauth: "error", ent_msg: "未返回授权码" })
+        : publicAppRedirectPath({ tiktok_oauth: "error", tiktok_msg: "未返回授权码" });
+      return res.redirect(302, redirect);
+    }
+
+    if (enterpriseState) {
+      try {
+        await completeEnterpriseTiktokOAuth({
+          shopId: enterpriseState.shopId,
+          userId: enterpriseState.userId,
+          authCode: String(authCode).trim(),
+          shopCipherHint: String(q.shop_cipher || q.shopCipher || "").trim(),
+        });
+        return res.redirect(302, publicEnterpriseRedirectPath({ ent_oauth: "ok" }));
+      } catch (error) {
+        return res.redirect(
+          302,
+          publicEnterpriseRedirectPath({
+            ent_oauth: "error",
+            ent_msg: (error.message || "企业店铺授权失败").slice(0, 240),
+          }),
+        );
+      }
     }
 
     const exchanged = await exchangeTiktokAuthCodeForToken(String(authCode).trim());
@@ -1283,6 +1469,8 @@ app.use((_req, res) => {
 });
 
 syncAdminFlagsFromEnv();
+ensureEnterpriseSeedAccounts();
+ensureEnterpriseOrgShopsSeed();
 startDbBackupScheduler();
 
 app.listen(port, () => {

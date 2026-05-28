@@ -1,0 +1,238 @@
+.trend-studio {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+}
+
+.trend-hero,
+.trend-list,
+.trend-detail,
+.trend-manual-form {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 24px;
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+}
+
+.trend-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  padding: 24px;
+}
+
+.trend-eyebrow {
+  margin: 0 0 10px;
+  color: #38bdf8;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.trend-hero h1,
+.trend-list-head h2,
+.trend-detail-head h2 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.trend-hero p,
+.trend-detail-body p,
+.trend-detail-body ul {
+  color: #cbd5e1;
+  line-height: 1.7;
+}
+
+.trend-filter-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.38);
+}
+
+.trend-filter-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.trend-filter-card select,
+.trend-manual-form input,
+.trend-manual-form select,
+.trend-manual-form textarea {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  padding: 11px 12px;
+}
+
+.trend-manual-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.trend-form-wide {
+  grid-column: span 2;
+}
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: 430px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.trend-list,
+.trend-detail {
+  padding: 16px;
+}
+
+.trend-list-head,
+.trend-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.trend-list-head span,
+.trend-detail-head p {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.52);
+  text-align: left;
+}
+
+.trend-row.is-active {
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(14, 165, 233, 0.14);
+}
+
+.trend-score {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  font-weight: 800;
+}
+
+.trend-score--ok,
+.trend-metric--ok {
+  color: #86efac;
+}
+
+.trend-score--mid,
+.trend-metric--mid {
+  color: #fde68a;
+}
+
+.trend-score--warn,
+.trend-metric--warn {
+  color: #fca5a5;
+}
+
+.trend-row-main strong {
+  display: block;
+  overflow: hidden;
+  color: #f8fafc;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trend-row-main small,
+.trend-empty,
+.trend-facts dt {
+  color: #94a3b8;
+}
+
+.trend-empty {
+  padding: 30px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 18px;
+  text-align: center;
+}
+
+.trend-score-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.trend-score-card {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.34);
+}
+
+.trend-score-card span {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.trend-score-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 28px;
+}
+
+.trend-detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  gap: 18px;
+}
+
+.trend-facts {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px 12px;
+  margin: 0;
+  color: #cbd5e1;
+}
+
+.trend-facts dd {
+  margin: 0;
+}
+
+.trend-source-link {
+  display: inline-flex;
+  margin-top: 18px;
+  color: #38bdf8;
+  text-decoration: none;
+}
+
+@media (max-width: 1180px) {
+  .trend-hero,
+  .trend-grid,
+  .trend-detail-body {
+    grid-template-columns: 1fr;
+  }
+  .trend-score-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .trend-manual-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

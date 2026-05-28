@@ -1,0 +1,22 @@
+{
+  "name": "fanmeng-ai-promo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "凡梦AI 宣传动画 · Remotion 渲染 MP4",
+  "scripts": {
+    "start": "remotion studio",
+    "preview": "remotion studio",
+    "render": "node scripts/generate-audio.mjs && remotion render PromoLandscape out/fanmeng-ai-promo-landscape.mp4",
+    "render:vertical": "remotion render PromoVertical out/fanmeng-ai-promo-vertical.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.286",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.286"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.7.2"
+  }
+}

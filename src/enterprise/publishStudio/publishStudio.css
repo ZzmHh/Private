@@ -1,0 +1,455 @@
+/* 智能上架 · Publish Pipeline — 延续 ent-cs / ent-ops Studio 风格 */
+
+.ent-publish-root {
+  --ent-publish-accent: #2563eb;
+  --ent-publish-accent-soft: color-mix(in srgb, #2563eb 10%, transparent);
+}
+
+.ent-ops-brand-mark--publish {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+}
+
+.ent-publish-header .ent-cs-header-intro {
+  margin-bottom: 8px;
+}
+
+.ent-publish-scope {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ent-border);
+  background: var(--ent-surface-2);
+}
+
+.ent-publish-scope.is-ok {
+  color: var(--ent-success);
+  border-color: color-mix(in srgb, var(--ent-success) 35%, transparent);
+}
+
+.ent-publish-scope.is-warn {
+  color: var(--ent-warning);
+  border-color: color-mix(in srgb, var(--ent-warning) 35%, transparent);
+}
+
+.ent-publish-scope.is-loading {
+  color: var(--ent-muted);
+}
+
+.ent-publish-stepper {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0 4px;
+  overflow-x: auto;
+}
+
+.ent-publish-step {
+  flex: 1;
+  min-width: 88px;
+}
+
+.ent-publish-step-btn {
+  width: 100%;
+  border: 1px solid var(--ent-border);
+  background: var(--ent-surface);
+  border-radius: var(--ent-radius);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--ent-muted);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ent-publish-step.is-active .ent-publish-step-btn {
+  border-color: var(--ent-publish-accent);
+  background: var(--ent-publish-accent-soft);
+  color: var(--ent-text);
+}
+
+.ent-publish-step.is-done .ent-publish-step-btn {
+  border-color: color-mix(in srgb, var(--ent-success) 40%, transparent);
+}
+
+.ent-publish-step-num {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.ent-publish-step-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.ent-publish-panel {
+  min-height: 420px;
+}
+
+.ent-publish-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 16px;
+  min-height: 360px;
+}
+
+.ent-publish-split--single {
+  grid-template-columns: 1fr;
+}
+
+.ent-publish-form {
+  max-height: none;
+}
+
+.ent-publish-preview {
+  min-height: 320px;
+}
+
+.ent-publish-import-card {
+  padding: 14px;
+  border-radius: var(--ent-radius);
+  border: 1px solid var(--ent-border);
+  background: var(--ent-surface-2);
+  margin-bottom: 14px;
+}
+
+.ent-publish-import-card h3 {
+  margin: 8px 0 4px;
+  font-size: 15px;
+}
+
+.ent-publish-import-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ent-muted);
+}
+
+.ent-publish-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ent-publish-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ent-surface);
+  border: 1px solid var(--ent-border);
+  color: var(--ent-muted);
+}
+
+.ent-publish-tag.is-score {
+  color: var(--ent-publish-accent);
+  border-color: color-mix(in srgb, var(--ent-publish-accent) 35%, transparent);
+}
+
+.ent-publish-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ent-publish-card {
+  padding: 14px;
+  border-radius: var(--ent-radius);
+  border: 1px solid var(--ent-border);
+  background: var(--ent-surface);
+  margin-bottom: 12px;
+}
+
+.ent-publish-card h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.ent-publish-card--warn {
+  border-color: color-mix(in srgb, var(--ent-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--ent-warning) 6%, transparent);
+}
+
+.ent-publish-checklist,
+.ent-publish-card ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--ent-muted);
+}
+
+.ent-publish-empty {
+  color: var(--ent-muted);
+  font-size: 13px;
+  padding: 24px;
+  text-align: center;
+}
+
+.ent-publish-source-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ent-publish-source-tab {
+  flex: 1;
+  border: 1px solid var(--ent-border);
+  background: var(--ent-surface);
+  border-radius: var(--ent-radius);
+  padding: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ent-publish-source-tab.is-active {
+  border-color: var(--ent-publish-accent);
+  background: var(--ent-publish-accent-soft);
+  font-weight: 600;
+}
+
+.ent-publish-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.ent-publish-source-card {
+  display: flex;
+  gap: 10px;
+  text-align: left;
+  padding: 10px;
+  border: 1px solid var(--ent-border);
+  border-radius: var(--ent-radius);
+  background: var(--ent-surface);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.ent-publish-source-card.is-selected {
+  border-color: var(--ent-publish-accent);
+  box-shadow: 0 0 0 1px var(--ent-publish-accent);
+}
+
+.ent-publish-source-thumb {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ent-publish-source-body strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.ent-publish-source-body span {
+  font-size: 12px;
+  color: var(--ent-muted);
+}
+
+.ent-publish-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.ent-publish-dl dt {
+  color: var(--ent-muted);
+}
+
+.ent-publish-dl dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ent-publish-nav-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.ent-publish-nav-primary {
+  flex: 1;
+  margin-top: 0 !important;
+}
+
+.ent-publish-nav-row--center {
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.ent-publish-listing-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.ent-publish-meta {
+  font-size: 12px;
+  color: var(--ent-muted);
+  margin: 8px 0;
+}
+
+.ent-publish-image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ent-publish-image-chip {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: var(--ent-radius);
+  border: 1px solid var(--ent-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ent-publish-image-chip.is-ready {
+  border-color: color-mix(in srgb, var(--ent-success) 40%, transparent);
+  color: var(--ent-success);
+}
+
+.ent-publish-image-chip.is-pending {
+  color: var(--ent-warning);
+}
+
+.ent-publish-compliance {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ent-publish-compliance li + li {
+  margin-top: 8px;
+}
+
+.ent-publish-compliance label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ent-publish-publish-pane {
+  padding: 8px 4px;
+}
+
+.ent-publish-summary {
+  text-align: center;
+  padding: 16px;
+  border-radius: var(--ent-radius);
+  background: var(--ent-surface-2);
+  margin-bottom: 16px;
+}
+
+.ent-publish-summary h3 {
+  margin: 0 0 6px;
+}
+
+.ent-publish-timeline {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.ent-publish-timeline-item {
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ent-border);
+  color: var(--ent-muted);
+}
+
+.ent-publish-timeline-item.is-done {
+  border-color: color-mix(in srgb, var(--ent-success) 40%, transparent);
+  color: var(--ent-success);
+}
+
+.ent-publish-timeline-item.is-active {
+  border-color: var(--ent-publish-accent);
+  background: var(--ent-publish-accent-soft);
+  color: var(--ent-text);
+  font-weight: 600;
+}
+
+.ent-publish-publish-btn {
+  min-width: 200px;
+}
+
+.ent-publish-success {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.ent-publish-success-icon {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ent-success) 15%, transparent);
+  color: var(--ent-success);
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.ent-publish-jobs {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ent-border);
+}
+
+.ent-publish-jobs h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.ent-publish-job-status.is-published {
+  color: var(--ent-success);
+}
+
+.ent-publish-job-status.is-review {
+  color: var(--ent-warning);
+}
+
+.ent-publish-job-status.is-failed {
+  color: var(--ent-danger);
+}
+
+.ent-publish-nav-static {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.ent-publish-nav-item strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 960px) {
+  .ent-publish-split {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,277 @@
+/**
+ * 大模型服务商预设 · OpenAI 兼容 / Anthropic / Gemini
+ * popup 与 background 共用（importScripts 或 <script>）
+ */
+const LeadRadarProviders = (function () {
+  /** @typedef {'openai_compat'|'anthropic'|'gemini'} ApiType */
+
+  /** @type {Array<{ id: string, name: string, group: string, apiType: ApiType, baseUrl: string, defaultModel: string, models: string[], keyHint: string, keyLabel?: string, docUrl?: string, extraHeaders?: Record<string,string> }>} */
+  const LIST = [
+    // —— 聚合（一个 Key 用很多模型）——
+    {
+      id: "openrouter",
+      name: "OpenRouter",
+      group: "聚合平台",
+      apiType: "openai_compat",
+      baseUrl: "https://openrouter.ai/api/v1",
+      defaultModel: "openai/gpt-4o-mini",
+      models: [
+        "openai/gpt-4o-mini",
+        "openai/gpt-4o",
+        "anthropic/claude-3.5-sonnet",
+        "google/gemini-2.0-flash-001",
+        "deepseek/deepseek-chat",
+        "meta-llama/llama-3.3-70b-instruct",
+      ],
+      keyHint: "sk-or-…",
+      docUrl: "https://openrouter.ai/keys",
+      extraHeaders: { "HTTP-Referer": "https://lead-radar.local", "X-Title": "LeadRadar" },
+    },
+    {
+      id: "siliconflow",
+      name: "硅基流动 SiliconFlow",
+      group: "聚合平台",
+      apiType: "openai_compat",
+      baseUrl: "https://api.siliconflow.cn/v1",
+      defaultModel: "deepseek-ai/DeepSeek-V3",
+      models: [
+        "deepseek-ai/DeepSeek-V3",
+        "deepseek-ai/DeepSeek-R1",
+        "Qwen/Qwen2.5-72B-Instruct",
+        "THUDM/glm-4-9b-chat",
+        "meta-llama/Meta-Llama-3.1-8B-Instruct",
+      ],
+      keyHint: "sk-…",
+      docUrl: "https://cloud.siliconflow.cn",
+    },
+    {
+      id: "groq",
+      name: "Groq",
+      group: "聚合平台",
+      apiType: "openai_compat",
+      baseUrl: "https://api.groq.com/openai/v1",
+      defaultModel: "llama-3.3-70b-versatile",
+      models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+      keyHint: "gsk_…",
+      docUrl: "https://console.groq.com",
+    },
+
+    // —— 国际 ——
+    {
+      id: "openai",
+      name: "OpenAI",
+      group: "国际",
+      apiType: "openai_compat",
+      baseUrl: "https://api.openai.com/v1",
+      defaultModel: "gpt-4o-mini",
+      models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o3-mini"],
+      keyHint: "sk-…",
+      docUrl: "https://platform.openai.com/api-keys",
+    },
+    {
+      id: "anthropic",
+      name: "Anthropic Claude",
+      group: "国际",
+      apiType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      defaultModel: "claude-3-5-sonnet-20241022",
+      models: ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"],
+      keyHint: "sk-ant-…",
+      docUrl: "https://console.anthropic.com",
+    },
+    {
+      id: "gemini",
+      name: "Google Gemini",
+      group: "国际",
+      apiType: "gemini",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      defaultModel: "gemini-2.0-flash",
+      models: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
+      keyHint: "AIza…",
+      keyLabel: "API Key",
+      docUrl: "https://aistudio.google.com/apikey",
+    },
+    {
+      id: "azure_openai",
+      name: "Azure OpenAI",
+      group: "国际",
+      apiType: "openai_compat",
+      baseUrl: "https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT",
+      defaultModel: "gpt-4o-mini",
+      models: ["gpt-4o-mini", "gpt-4o"],
+      keyHint: "Azure Key",
+      docUrl: "https://azure.microsoft.com/products/ai-services/openai-service",
+    },
+    {
+      id: "mistral",
+      name: "Mistral AI",
+      group: "国际",
+      apiType: "openai_compat",
+      baseUrl: "https://api.mistral.ai/v1",
+      defaultModel: "mistral-small-latest",
+      models: ["mistral-small-latest", "mistral-large-latest", "codestral-latest"],
+      keyHint: "…",
+      docUrl: "https://console.mistral.ai",
+    },
+    {
+      id: "cohere",
+      name: "Cohere",
+      group: "国际",
+      apiType: "openai_compat",
+      baseUrl: "https://api.cohere.com/v2",
+      defaultModel: "command-r-plus-08-2024",
+      models: ["command-r-plus-08-2024", "command-r-08-2024"],
+      keyHint: "…",
+      docUrl: "https://dashboard.cohere.com",
+    },
+
+    // —— 国内 ——
+    {
+      id: "deepseek",
+      name: "DeepSeek 深度求索",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://api.deepseek.com",
+      defaultModel: "deepseek-chat",
+      models: ["deepseek-chat", "deepseek-reasoner"],
+      keyHint: "sk-…",
+      docUrl: "https://platform.deepseek.com",
+    },
+    {
+      id: "qwen",
+      name: "通义千问 · 阿里云百炼",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      defaultModel: "qwen-plus",
+      models: ["qwen-turbo", "qwen-plus", "qwen-max", "qwen-long"],
+      keyHint: "sk-…",
+      docUrl: "https://bailian.console.aliyun.com",
+    },
+    {
+      id: "zhipu",
+      name: "智谱 GLM",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+      defaultModel: "glm-4-flash",
+      models: ["glm-4-flash", "glm-4-plus", "glm-4-air", "glm-4-long"],
+      keyHint: "…",
+      docUrl: "https://open.bigmodel.cn",
+    },
+    {
+      id: "moonshot",
+      name: "Moonshot · Kimi",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://api.moonshot.cn/v1",
+      defaultModel: "moonshot-v1-8k",
+      models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
+      keyHint: "sk-…",
+      docUrl: "https://platform.moonshot.cn",
+    },
+    {
+      id: "doubao",
+      name: "字节 · 豆包（火山方舟）",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+      defaultModel: "doubao-pro-32k",
+      models: ["doubao-pro-32k", "doubao-lite-32k"],
+      keyHint: "方舟 API Key",
+      docUrl: "https://console.volcengine.com/ark",
+    },
+    {
+      id: "baidu",
+      name: "百度 · 千帆 ERNIE",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://qianfan.baidubce.com/v2",
+      defaultModel: "ernie-4.0-turbo-8k",
+      models: ["ernie-4.0-turbo-8k", "ernie-3.5-8k", "deepseek-v3"],
+      keyHint: "bce-v3/…",
+      docUrl: "https://console.bce.baidu.com/qianfan",
+    },
+    {
+      id: "tencent",
+      name: "腾讯 · 混元",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://api.hunyuan.cloud.tencent.com/v1",
+      defaultModel: "hunyuan-turbo",
+      models: ["hunyuan-lite", "hunyuan-standard", "hunyuan-turbo", "hunyuan-pro"],
+      keyHint: "sk-…",
+      docUrl: "https://cloud.tencent.com/product/hunyuan",
+    },
+    {
+      id: "minimax",
+      name: "MiniMax",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://api.minimax.chat/v1",
+      defaultModel: "abab6.5s-chat",
+      models: ["abab6.5s-chat", "abab6.5g-chat"],
+      keyHint: "…",
+      docUrl: "https://platform.minimaxi.com",
+    },
+    {
+      id: "stepfun",
+      name: "阶跃 · StepFun",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://api.stepfun.com/v1",
+      defaultModel: "step-2-mini",
+      models: ["step-2-mini", "step-2-16k", "step-1-8k"],
+      keyHint: "…",
+      docUrl: "https://platform.stepfun.com",
+    },
+    {
+      id: "baichuan",
+      name: "百川智能",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://api.baichuan-ai.com/v1",
+      defaultModel: "Baichuan4-Turbo",
+      models: ["Baichuan4-Turbo", "Baichuan3-Turbo"],
+      keyHint: "sk-…",
+      docUrl: "https://platform.baichuan-ai.com",
+    },
+    {
+      id: "lingyi",
+      name: "零一万物 Yi",
+      group: "国内",
+      apiType: "openai_compat",
+      baseUrl: "https://api.lingyiwanwu.com/v1",
+      defaultModel: "yi-lightning",
+      models: ["yi-lightning", "yi-medium", "yi-large"],
+      keyHint: "…",
+      docUrl: "https://platform.lingyiwanwu.com",
+    },
+
+    // —— 自定义 ——
+    {
+      id: "custom",
+      name: "自定义 OpenAI 兼容接口",
+      group: "自定义",
+      apiType: "openai_compat",
+      baseUrl: "",
+      defaultModel: "",
+      models: [],
+      keyHint: "按服务商文档填写",
+      docUrl: "",
+    },
+  ];
+
+  function get(id) {
+    return LIST.find((p) => p.id === id) || LIST.find((p) => p.id === "openai");
+  }
+
+  function groups() {
+    const order = ["聚合平台", "国际", "国内", "自定义"];
+    return order.map((g) => ({ name: g, items: LIST.filter((p) => p.group === g) }));
+  }
+
+  return { LIST, get, groups };
+})();
+
+if (typeof globalThis !== "undefined") globalThis.LeadRadarProviders = LeadRadarProviders;

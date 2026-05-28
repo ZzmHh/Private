@@ -1,0 +1,78 @@
+{
+  "manifest_version": 3,
+  "name": "企业 AI · TikTok Shop 助手",
+  "version": "0.1.0",
+  "description": "企业站专用：在 TikTok 卖家中心同步页面数据、客服话术与业绩诊断（orgId/shopId 隔离，与凡梦 C 端插件独立）。",
+  "permissions": ["storage", "activeTab", "contextMenus"],
+  "commands": {
+    "enterprise-suggest-reply": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "企业助手：为选中买家消息生成回复"
+    }
+  },
+  "host_permissions": [
+    "https://seller.tiktok.com/*",
+    "https://seller-us.tiktok.com/*",
+    "https://seller.tiktokglobalshop.com/*",
+    "https://seller-us.tiktokglobalshop.com/*",
+    "https://*.tiktokshop.com/*",
+    "https://detail.1688.com/*",
+    "https://*.1688.com/*",
+    "http://127.0.0.1:*/*",
+    "http://localhost:*/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://127.0.0.1:*/*",
+    "http://localhost:*/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "企业 AI TikTok 助手"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://seller.tiktok.com/*",
+        "https://seller-us.tiktok.com/*",
+        "https://seller.tiktokglobalshop.com/*",
+        "https://seller-us.tiktokglobalshop.com/*",
+        "https://*.tiktokshop.com/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "src/lib/config.js",
+        "src/lib/permissions.js",
+        "src/lib/tiktok.js",
+        "src/lib/storage.js",
+        "src/lib/api.js",
+        "src/lib/scrape.js",
+        "src/lib/listingFill.js",
+        "src/lib/diagnosisPack.js",
+        "src/content/main.js"
+      ],
+      "css": ["src/content/panel.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://detail.1688.com/*", "https://*.1688.com/offer/*"],
+      "js": [
+        "src/lib/config.js",
+        "src/lib/permissions.js",
+        "src/lib/storage.js",
+        "src/lib/api.js",
+        "src/lib/scrape1688.js",
+        "src/content/collectPanel.js"
+      ],
+      "css": ["src/content/panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

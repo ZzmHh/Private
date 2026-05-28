@@ -17,9 +17,34 @@ async function loadUi() {
       const me = await EnterpriseApi.request("/api/enterprise/auth/me");
       document.getElementById("userLine").textContent = `已登录：${me.user?.name || me.user?.loginName || "—"}`;
       await renderShops(s.shopId);
+      await renderPendingJobs(s.pendingFillJobId);
     } catch (e) {
       document.getElementById("userLine").textContent = `Token 可能失效：${e.message}`;
     }
+  }
+}
+
+async function renderPendingJobs(activeId = "") {
+  const sel = document.getElementById("pendingJobSelect");
+  sel.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "自动使用最新待填任务";
+  sel.appendChild(empty);
+  try {
+    const data = await EnterpriseApi.listPublishJobs("ready");
+    for (const job of data.jobs || []) {
+      const opt = document.createElement("option");
+      opt.value = job.id;
+      opt.textContent = `${job.title || "未命名"} · ${job.id.slice(0, 8)}`;
+      if (job.id === activeId) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = `任务加载失败：${e.message}`;
+    sel.appendChild(opt);
   }
 }
 
@@ -80,6 +105,17 @@ document.getElementById("apiBase").addEventListener("change", async (e) => {
 
 document.getElementById("pendingFillJobId").addEventListener("change", async (e) => {
   await EnterpriseStorage.saveSettings({ pendingFillJobId: e.target.value.trim() });
+});
+
+document.getElementById("pendingJobSelect").addEventListener("change", async (e) => {
+  const pendingFillJobId = e.target.value;
+  document.getElementById("pendingFillJobId").value = pendingFillJobId;
+  await EnterpriseStorage.saveSettings({ pendingFillJobId });
+});
+
+document.getElementById("refreshJobsBtn").addEventListener("click", async () => {
+  const s = await EnterpriseStorage.getSettings();
+  await renderPendingJobs(s.pendingFillJobId || "");
 });
 
 loadUi();

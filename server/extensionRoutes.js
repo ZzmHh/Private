@@ -6,7 +6,7 @@ import { generateBuyerReplyText } from "./autoReply/generateBuyerReply.js";
 import { routeBuyerMessage } from "./autoReply/routeBuyerMessage.js";
 import { assessNightReadiness } from "./autoReply/assessNightReadiness.js";
 import { listLanguagesForApi } from "../shared/tiktokShopLanguages.js";
-import { getCsAnalyticsSummary, recordCsRouteEvent } from "./autoReply/csAnalytics.js";
+import { getCsAnalyticsSummary, listCsSessionEvents, recordCsRouteEvent } from "./autoReply/csAnalytics.js";
 import { parseFaqImportPayload, FAQ_IMPORT_SAMPLE_CSV } from "./autoReply/parseFaqImport.js";
 import { buildFaqShopContext } from "./autoReply/buildFaqShopContext.js";
 import { generateFaqDrafts } from "./autoReply/generateFaqDrafts.js";
@@ -335,8 +335,14 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       const { buyerText, shopKey, shopName, orderContext, faqTemplates, syncFaq, dryRun } = req.body || {};
 
       const sk = String(shopKey || "").trim();
+      let faqSyncWarning = "";
       if (syncFaq !== false && Array.isArray(faqTemplates) && faqTemplates.length) {
-        syncCsFaqTemplates(req.user.id, sk, faqTemplates);
+        try {
+          syncCsFaqTemplates(req.user.id, sk, faqTemplates);
+        } catch (syncError) {
+          faqSyncWarning = syncError?.message || "FAQ 同步失败";
+          console.warn("[cs/route] FAQ sync skipped:", faqSyncWarning);
+        }
       }
 
       let ctxText = String(orderContext || "").slice(0, 2000);
@@ -379,6 +385,26 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
           action: routed.action,
           lang: routed.lang,
           faqHit: routed.tier === "faq" && routed.faqMatch?.source === "user_template",
+          buyerText,
+          replyText: routed.replyText,
+          reason: routed.reason,
+          faqName: routed.faqMatch?.name,
+        });
+      } else if (req.body?.logSession !== false) {
+        recordCsRouteEvent({
+          userId: req.user.id,
+          shopKey: sk,
+          channel: "enterprise_drill",
+          tier: routed.tier,
+          action: routed.action,
+          lang: routed.lang,
+          faqHit: routed.tier === "faq" && routed.faqMatch?.source === "user_template",
+          dryRun: true,
+          logSession: true,
+          buyerText,
+          replyText: routed.replyText,
+          reason: routed.reason,
+          faqName: routed.faqMatch?.name,
         });
       }
 
@@ -391,6 +417,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
         notifySeller: routed.notifySeller,
         sellerMessage: routed.sellerMessage,
         reason: routed.reason,
+        faqSyncWarning: faqSyncWarning || undefined,
         dryRun: Boolean(dryRun),
         usage: usage || null,
       });
@@ -412,7 +439,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
     try {
       ensureFeatureAccess(req.user, "agent", "service");
       ensureFeatureAccess(req.user, "storeApiAgents");
-      const { buyerText, shopName, shopKey, orderContext, useLegacy } = req.body || {};
+      const { buyerText, shopName, shopKey, orderContext, faqTemplates, useLegacy } = req.body || {};
 
       if (useLegacy !== true) {
         const sk = String(shopKey || "").trim();
@@ -430,6 +457,7 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
           channel: "extension",
           orderContext: ctxText,
           mergedContext: merged,
+          faqTemplates: faqTemplates?.length ? faqTemplates : listCsFaqTemplates(req.user.id, sk),
           settings: getCsSettings(req.user.id),
           planAllowsAutoSend: Boolean(getPlan(req.user).features.extensionAutoSend),
         });
@@ -449,6 +477,10 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
           action: routed.action,
           lang: routed.lang,
           faqHit: routed.tier === "faq" && routed.faqMatch?.source === "user_template",
+          buyerText,
+          replyText: routed.replyText,
+          reason: routed.reason,
+          faqName: routed.faqMatch?.name,
         });
         return res.json({
           ok: true,
@@ -543,6 +575,19 @@ export function registerExtensionRoutes(app, { authMiddleware, apiKey, providerN
       res.json({ ok: true, analytics: getCsAnalyticsSummary(req.user.id, { days }) });
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message || "读取客服数据失败。" });
+    }
+  });
+
+  app.get("/api/extension/cs/sessions", authMiddleware, (req, res) => {
+    try {
+      ensureFeatureAccess(req.user, "storeApiAgents");
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+      const shopKey = String(req.query.shopKey || "").trim();
+      const includeDrill = req.query.includeDrill !== "0";
+      const sessions = listCsSessionEvents(req.user.id, { limit, shopKey, includeDrill });
+      res.json({ ok: true, sessions });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || "读取会话流水失败。" });
     }
   });
 

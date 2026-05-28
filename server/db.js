@@ -264,12 +264,12 @@ function sign(payload) {
   return crypto.createHmac("sha256", tokenSecret).update(payload).digest("base64url");
 }
 
-function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+export function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.pbkdf2Sync(password, salt, 120000, 64, "sha512").toString("hex");
   return `${salt}:${hash}`;
 }
 
-function verifyPassword(password, storedHash) {
+export function verifyPassword(password, storedHash) {
   const [salt, hash] = storedHash.split(":");
   return hashPassword(password, salt) === `${salt}:${hash}`;
 }
