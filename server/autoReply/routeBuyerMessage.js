@@ -3,7 +3,7 @@
  */
 import { classifyBuyerIntent, detectBuyerLanguage } from "./classifyBuyerIntent.js";
 import { applyTemplateVars, getSlaText, isBeijingRestHours } from "./beijingTime.js";
-import { matchFaqTemplate } from "./matchFaq.js";
+import { matchFaqTemplate, normalizeFaqTriggers } from "./matchFaq.js";
 import {
   createCsSellerAlert,
   getCsSettings,
@@ -50,10 +50,14 @@ export async function routeBuyerMessage(input) {
   const shopName = input.shopName || "";
   const channel = input.channel || "extension";
 
-  const templates =
+  const rawTemplates =
     input.faqTemplates?.length > 0
       ? input.faqTemplates
       : listCsFaqTemplates(input.userId, input.shopKey);
+  const templates = rawTemplates.map((t) => ({
+    ...t,
+    triggers: normalizeFaqTriggers(t),
+  }));
 
   const base = {
     intent,

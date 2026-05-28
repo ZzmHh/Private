@@ -1,0 +1,119 @@
+body {
+  width: 320px;
+  margin: 0;
+  padding: 14px;
+  font: 13px/1.45 system-ui, sans-serif;
+  color: #0f172a;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sub {
+  margin: 4px 0 12px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+fieldset {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin: 0 0 10px;
+  padding: 10px;
+}
+
+legend {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #475569;
+}
+
+input[type="url"],
+input[type="password"],
+input[type="text"],
+input[type="number"],
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondary {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-row {
+  margin-bottom: 8px;
+}
+
+.provider-doc {
+  margin: -4px 0 8px;
+  font-size: 11px;
+}
+
+.provider-doc a {
+  color: #2563eb;
+}
+
+.hidden {
+  display: none;
+}
+
+select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.primary {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ea580c, #dc2626);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.msg {
+  min-height: 18px;
+  font-size: 12px;
+}
+
+.hint {
+  font-size: 11px;
+  color: #64748b;
+  margin: 8px 0 0;
+}
+
+.hint.warn {
+  color: #b45309;
+}

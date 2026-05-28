@@ -37,18 +37,23 @@ const version = manifest.version || "0.3.0";
 try {
   const u = new URL(apiBase.includes("://") ? apiBase : `https://${apiBase}`);
   if (u.origin && !u.hostname.includes("127.0.0.1") && u.hostname !== "localhost") {
-    for (const hostPerm of [`${u.origin}/*`]) {
-      if (!manifest.host_permissions.includes(hostPerm)) {
-        manifest.host_permissions.push(hostPerm);
-      }
-    }
+    const origins = [`${u.origin}/*`];
     const apex = u.hostname.startsWith("www.") ? u.hostname.slice(4) : u.hostname;
     const altOrigin = u.hostname.startsWith("www.")
       ? `${u.protocol}//${apex}`
       : `${u.protocol}//www.${u.hostname}`;
     const altPerm = `${altOrigin}/*`;
-    if (!manifest.host_permissions.includes(altPerm)) {
-      manifest.host_permissions.push(altPerm);
+    origins.push(altPerm);
+    for (const hostPerm of origins) {
+      if (!manifest.host_permissions.includes(hostPerm)) {
+        manifest.host_permissions.push(hostPerm);
+      }
+    }
+    const csMatches = manifest.content_scripts?.[0]?.matches;
+    if (Array.isArray(csMatches)) {
+      for (const perm of origins) {
+        if (!csMatches.includes(perm)) csMatches.push(perm);
+      }
     }
   }
 } catch {

@@ -120,6 +120,10 @@ export async function handleTiktokBuyerMessageWebhook(payload, options = {}) {
     action: routed.action,
     lang: routed.lang,
     faqHit: routed.tier === "faq" && routed.faqMatch?.source === "user_template",
+    buyerText: inbound.buyerText,
+    replyText: routed.replyText,
+    reason: routed.reason,
+    faqName: routed.faqMatch?.name,
   });
 
   let dryRun;

@@ -5,13 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:enterprise": "vite --open /enterprise.html",
     "dev:server": "node server/index.js",
     "build": "vite build",
     "build:extension": "node extension/scripts/build.mjs",
-    "build:all": "npm run build:extension && npm run build",
+    "build:enterprise-extension": "node enterprise-extension/scripts/build.mjs",
+    "build:all": "npm run build:extension && npm run build:enterprise-extension && npm run build",
     "preview": "vite preview",
     "start": "node server/index.js",
     "migrate:db": "node scripts/migrate-json-to-sqlite.mjs",
+    "verify:enterprise": "node scripts/verify-enterprise-shops.mjs",
+    "verify:enterprise-extension": "node scripts/verify-enterprise-extension.mjs",
     "release:extension": "node scripts/release-extension.mjs"
   },
   "dependencies": {

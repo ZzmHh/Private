@@ -19,10 +19,16 @@ function ensureEvents(db) {
  *   faqHit?: boolean,
  *   autoSend?: boolean,
  *   dryRun?: boolean,
+ *   logSession?: boolean,
+ *   buyerText?: string,
+ *   replyText?: string,
+ *   reason?: string,
+ *   faqName?: string,
  * }} row
  */
 export function recordCsRouteEvent(row) {
-  if (!row?.userId || row.dryRun) return null;
+  if (!row?.userId) return null;
+  if (row.dryRun && !row.logSession) return null;
   const db = readDb();
   ensureEvents(db);
   const event = {
@@ -35,6 +41,11 @@ export function recordCsRouteEvent(row) {
     lang: String(row.lang || "").slice(0, 12),
     faqHit: Boolean(row.faqHit),
     autoSend: row.action === "auto_send",
+    dryRun: Boolean(row.dryRun),
+    buyerText: row.buyerText ? String(row.buyerText).slice(0, 800) : "",
+    replyText: row.replyText ? String(row.replyText).slice(0, 1200) : "",
+    reason: row.reason ? String(row.reason).slice(0, 400) : "",
+    faqName: row.faqName ? String(row.faqName).slice(0, 120) : "",
     createdAt: new Date().toISOString(),
   };
   db.csRouteEvents.unshift(event);
@@ -125,4 +136,22 @@ export function getCsAnalyticsSummary(userId, { days = 30 } = {}) {
     byDay,
     byLang,
   };
+}
+
+/**
+ * 会话流水：买家消息 + AI 路由与回复（供企业站可视化）
+ * @param {string} userId
+ * @param {{ limit?: number, shopKey?: string, includeDrill?: boolean }} [opts]
+ */
+export function listCsSessionEvents(userId, { limit = 50, shopKey, includeDrill = true } = {}) {
+  const db = readDb();
+  ensureEvents(db);
+  let events = db.csRouteEvents.filter((e) => e.userId === userId);
+  if (!includeDrill) {
+    events = events.filter((e) => !e.dryRun);
+  }
+  if (shopKey) {
+    events = events.filter((e) => (e.shopKey || "") === shopKey);
+  }
+  return events.slice(0, Math.min(limit, 100));
 }

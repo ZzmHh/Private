@@ -8,6 +8,7 @@ const PUBLIC_HASH_ROUTES = [
   { loc: "#register", changefreq: "monthly", priority: "0.8" },
   { loc: "#cases", changefreq: "weekly", priority: "0.7" },
   { loc: "#subscription", changefreq: "weekly", priority: "0.7" },
+  { loc: "#roast", changefreq: "weekly", priority: "0.95" },
 ];
 
 const CASE_SLUGS = ["home-tiktok-us", "amazon-multi-listing", "cs-heavy-store"];

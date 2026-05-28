@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "获客雷达 · 社媒 AI 拓客",
+  "version": "1.2.0",
+  "description": "在 TikTok / 小红书 / X 等平台自动识别精准潜在客户，AI 生成触达话术，一键填入评论框。",
+  "permissions": ["storage", "activeTab", "alarms"],
+  "host_permissions": [
+    "https://www.tiktok.com/*",
+    "https://tiktok.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://www.xiaohongshu.com/*",
+    "https://xiaohongshu.com/*",
+    "https://www.douyin.com/*",
+    "https://douyin.com/*",
+    "https://creator.douyin.com/*",
+    "https://www.facebook.com/*",
+    "https://api.openai.com/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "获客雷达"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.tiktok.com/*",
+        "https://tiktok.com/*",
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.xiaohongshu.com/*",
+        "https://xiaohongshu.com/*",
+        "https://www.douyin.com/*",
+        "https://douyin.com/*",
+        "https://creator.douyin.com/*",
+        "https://www.facebook.com/*"
+      ],
+      "js": [
+        "src/lib/signals.js",
+        "src/lib/dom.js",
+        "src/lib/messaging.js",
+        "src/content/main.js"
+      ],
+      "css": ["src/content/panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

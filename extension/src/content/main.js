@@ -259,12 +259,7 @@
   }
 
   function isMockCsPage() {
-    try {
-      const h = location.hostname.toLowerCase();
-      return (h === "127.0.0.1" || h === "localhost") && /\/mock\/tiktok/i.test(location.pathname);
-    } catch {
-      return false;
-    }
+    return FanmengTikTok.isMockSellerPage();
   }
 
   function formatConfidence(conf) {
@@ -509,31 +504,53 @@
     return false;
   }
 
-  async function getFaqTemplatesForApi() {
-    try {
-      const res = await FanmengApi.getFaqTemplates(activeShop?.id || "");
-      if (Array.isArray(res.templates) && res.templates.length) {
-        return res.templates.map((t) => ({
-          id: t.id,
-          name: t.name,
-          text: t.text,
-          triggers: t.triggers?.length ? t.triggers : [],
-          category: t.category || "",
-          lang: t.lang || "zh",
-        }));
-      }
-    } catch {
-      /* 离线时回退本地 */
-    }
-    const templates = await FanmengStorage.getTemplates(activeShop?.id);
-    return templates.map((t) => ({
+  function normalizeFaqTemplateForApi(t) {
+    const triggers =
+      Array.isArray(t.triggers) && t.triggers.length
+        ? t.triggers
+        : String(t.name || "")
+            .split(/[,，|/;；]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+    return {
       id: t.id,
       name: t.name,
       text: t.text,
-      triggers: t.triggers?.length ? t.triggers : t.name.split(/[,，|/]/).map((s) => s.trim()).filter(Boolean),
+      triggers,
       category: t.category || "",
       lang: t.lang || "zh",
-    }));
+    };
+  }
+
+  async function getFaqTemplatesForApi() {
+    const shopId = activeShop?.id || "";
+    let serverTemplates = [];
+    try {
+      const res = await FanmengApi.getFaqTemplates(shopId);
+      if (Array.isArray(res.templates)) serverTemplates = res.templates;
+    } catch {
+      /* 离线时回退本地 */
+    }
+    const localTemplates = await FanmengStorage.getTemplates(shopId);
+    const byId = new Map();
+    for (const t of serverTemplates) {
+      if (t?.text) byId.set(t.id, normalizeFaqTemplateForApi(t));
+    }
+    for (const t of localTemplates) {
+      if (!t?.text) continue;
+      const existing = byId.get(t.id);
+      const normalized = normalizeFaqTemplateForApi(t);
+      if (!existing) {
+        byId.set(t.id, normalized);
+        continue;
+      }
+      byId.set(t.id, {
+        ...existing,
+        ...normalized,
+        triggers: normalized.triggers.length ? normalized.triggers : existing.triggers,
+      });
+    }
+    return [...byId.values()];
   }
 
   async function syncFaqToServer() {
@@ -638,6 +655,7 @@
     const shouldAutoSend = action === "auto_send";
     const shouldPending = action === "pending_confirm";
     const shouldDraft = action === "draft";
+    const faqSyncWarning = res.faqSyncWarning || routed.faqSyncWarning || "";
 
     setRouteChip(routed);
 
@@ -660,10 +678,13 @@
 
     if (shouldDraft) {
       ensureDraftActionRow(routed);
+      const draftHint = faqSyncWarning
+        ? `FAQ 同步失败（${faqSyncWarning}），已用本地模板匹配。`
+        : "";
       setStatus(
         fromAuto
-          ? `${tierLabel}草稿已生成${via}，请点「填入并发送」`
-          : `${tierLabel}：${routed.reason || "请核对草稿后发送"}${via}`,
+          ? `${tierLabel}草稿已生成${via}，请点「填入并发送」${draftHint}`
+          : `${tierLabel}：${routed.reason || "请核对草稿后发送"}${via}${draftHint ? ` · ${draftHint}` : ""}`,
         routed.notifySeller ? "err" : "ok",
       );
       if (routed.notifySeller && routed.sellerMessage) {

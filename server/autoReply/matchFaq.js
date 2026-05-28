@@ -54,11 +54,21 @@ export function matchFaqTemplate(buyerText, templates = [], intent = {}, buyerLa
   return null;
 }
 
-function normalizeTriggers(tpl) {
-  if (Array.isArray(tpl.triggers)) return tpl.triggers.map(String);
-  if (typeof tpl.triggers === "string") {
-    return tpl.triggers.split(/[,，|]/).map((s) => s.trim()).filter(Boolean);
+export function normalizeFaqTriggers(tpl) {
+  let list = [];
+  if (Array.isArray(tpl?.triggers)) {
+    list = tpl.triggers.map(String).map((s) => s.trim()).filter(Boolean);
+  } else if (typeof tpl?.triggers === "string") {
+    list = tpl.triggers.split(/[,，|/;；]+/).map((s) => s.trim()).filter(Boolean);
   }
-  if (tpl.name) return [String(tpl.name)];
-  return [];
+  if (list.length) return list.slice(0, 20);
+  const fromName = String(tpl?.name || "")
+    .split(/[,，|/;；]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return fromName.length ? fromName.slice(0, 20) : [];
+}
+
+function normalizeTriggers(tpl) {
+  return normalizeFaqTriggers(tpl);
 }

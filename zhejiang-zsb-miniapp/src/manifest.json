@@ -1,0 +1,19 @@
+{
+  "name": "浙江专升本备考",
+  "appid": "__UNI__ZSBZJ",
+  "description": "浙江专升本 AI 备考 · 坚持奖学池",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "lazyCodeLoading": "requiredComponents"
+  },
+  "vueVersion": "3"
+}

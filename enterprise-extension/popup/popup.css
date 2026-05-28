@@ -1,0 +1,57 @@
+body {
+  width: 320px;
+  margin: 0;
+  padding: 14px;
+  font: 13px/1.45 system-ui, sans-serif;
+  color: #0f172a;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.sub {
+  margin: 0 0 12px;
+  color: #64748b;
+}
+
+label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+input,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.primary {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+
+.hidden {
+  display: none;
+}
+
+.hint {
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.user-line {
+  margin: 0 0 10px;
+}

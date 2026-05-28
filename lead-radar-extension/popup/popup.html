@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>获客雷达</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>获客雷达</h1>
+    <p class="sub">社媒 AI 拓客 · 独立插件 v1.2.0</p>
+
+    <fieldset>
+      <legend>AI 大模型</legend>
+      <label>
+        服务商
+        <select id="providerId"></select>
+      </label>
+      <p id="providerDoc" class="provider-doc"></p>
+      <label>
+        模型
+        <select id="modelSelect"></select>
+      </label>
+      <label id="customModelWrap" class="hidden">
+        自定义模型 ID
+        <input id="modelCustom" type="text" placeholder="部署名 / 模型 ID" />
+      </label>
+      <label>
+        API Base
+        <input id="apiBase" type="url" placeholder="自动填充，可改" />
+      </label>
+      <label>
+        <span id="keyLabel">API Key</span>
+        <input id="apiKey" type="password" placeholder="" autocomplete="off" />
+      </label>
+      <div class="btn-row">
+        <button type="button" id="testBtn" class="secondary">测试连接</button>
+      </div>
+      <label>
+        你的产品/服务（AI 写话术时会软植入）
+        <textarea id="productDesc" rows="2" placeholder="例：跨境 Listing 工具，免费试用…"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>扫描设置</legend>
+      <label class="row">
+        <input id="autoScan" type="checkbox" checked />
+        自动扫描当前页面
+      </label>
+      <label class="row">
+        <input id="autoDraft" type="checkbox" checked />
+        高分客户自动复制话术
+      </label>
+      <label class="row">
+        <input id="looseScan" type="checkbox" checked />
+        宽松模式（不强制命中关键词，更容易出结果）
+      </label>
+      <label>
+        意向分数阈值
+        <input id="minScore" type="number" min="30" max="95" value="55" />
+      </label>
+      <label>
+        严格模式本地分（宽松模式可忽略）
+        <input id="minLocalScore" type="number" min="8" max="60" value="12" />
+      </label>
+      <label>
+        扫描间隔（秒）
+        <input id="scanSec" type="number" min="3" max="30" value="4" />
+      </label>
+    </fieldset>
+
+    <p id="msg" class="msg"></p>
+    <button type="button" id="saveBtn" class="primary">保存设置</button>
+
+    <p class="hint">推荐在 TikTok / 小红书 <b>搜索页 + 评论区</b> 使用。抖音网页版支持有限。</p>
+
+    <script src="../src/lib/providers.js"></script>
+    <script src="../src/lib/llmShared.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

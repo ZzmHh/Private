@@ -233,9 +233,7 @@ const FanmengChatSelectors = {
 
     const order = [];
     try {
-      const path = typeof location !== "undefined" ? String(location.pathname || "") : "";
-      const h = String(hostname || (typeof location !== "undefined" ? location.hostname : "")).toLowerCase();
-      if ((h === "127.0.0.1" || h === "localhost") && /\/mock\/tiktok/i.test(path)) {
+      if (FanmengTikTok.isMockSellerPage()) {
         order.push("mock");
       }
     } catch {
