@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>企业 AI · TikTok 助手</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>企业 AI</h1>
+    <p class="sub" id="versionLine">TikTok Shop 企业助手</p>
+
+    <label>
+      企业 API 地址
+      <input id="apiBase" type="url" placeholder="http://127.0.0.1:8787" />
+    </label>
+
+    <div id="loginBlock">
+      <label>
+        账号
+        <input id="loginName" type="text" autocomplete="username" />
+      </label>
+      <label>
+        密码
+        <input id="password" type="password" autocomplete="current-password" />
+      </label>
+      <button type="button" id="loginBtn" class="primary">登录企业站</button>
+    </div>
+
+    <div id="loggedBlock" class="hidden">
+      <p id="userLine" class="user-line"></p>
+      <label>
+        同步目标店铺
+        <select id="shopSelect"></select>
+      </label>
+      <label>
+        待填表任务 ID（可选）
+        <input id="pendingFillJobId" type="text" placeholder="智能上架创建的任务 ID" />
+      </label>
+      <button type="button" id="logoutBtn">退出登录</button>
+    </div>
+
+    <p class="hint">采集箱 <code>/api/enterprise/collect/*</code> · 发布 <code>/api/enterprise/publish/*</code> · 1688 页点「采集到企业站」</p>
+
+    <script src="../src/lib/config.js"></script>
+    <script src="../src/lib/permissions.js"></script>
+    <script src="../src/lib/storage.js"></script>
+    <script src="../src/lib/api.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
